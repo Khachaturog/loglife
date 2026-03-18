@@ -429,7 +429,6 @@ export function DeedFormPage() {
           <IconButton
             size="3"
             variant="classic"
-            color="accent"
             radius='full'
             disabled={!canSave || saving}
             onClick={() => formRef.current?.requestSubmit()}

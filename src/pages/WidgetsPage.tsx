@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Avatar, Box, Card, Flex, Link as RadixLink, Text } from '@radix-ui/themes'
+import { Avatar, Box, Card, Flex, Text } from '@radix-ui/themes'
 import { AppBar } from '@/components/AppBar'
 import layoutStyles from '@/styles/layout.module.css'
 

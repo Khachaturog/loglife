@@ -96,7 +96,7 @@ export function DeedsListPage() {
       <AppBar 
       title="Дела" 
       actions={
-      <IconButton size="3" color="accent" variant="classic" radius="full" asChild aria-label="Создать дело">
+      <IconButton size="3" variant="classic" radius="full" asChild aria-label="Создать дело">
         <Link to="/deeds/new">
           <PlusIcon width={18} height={18} />
         </Link>
