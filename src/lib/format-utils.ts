@@ -29,7 +29,11 @@ export function formatAnswer(
   optionsOverride?: { id: string; label: string }[]
 ): string {
   if ('number' in value && value.number !== undefined) return String(value.number)
-  if ('text' in value) return value.text ?? '—'
+  // Пустой или только пробелы — как «нет значения» (иначе в списках join даёт лишний «·» в конце).
+  if ('text' in value) {
+    const t = value.text ?? ''
+    return t.trim() === '' ? '—' : t
+  }
   if ('optionId' in value) {
     const opts = optionsOverride ?? getBlockOptions(block)
     const o = opts.find((x) => x.id === value.optionId)
@@ -70,8 +74,11 @@ export function formatDate(isoDate: string): string {
   const today = new Date()
   const yesterday = new Date(today)
   yesterday.setDate(yesterday.getDate() - 1)
+  const dayBeforeYesterday = new Date(today)
+  dayBeforeYesterday.setDate(dayBeforeYesterday.getDate() - 2)
   if (d.toDateString() === today.toDateString()) return 'Сегодня'
   if (d.toDateString() === yesterday.toDateString()) return 'Вчера'
+  if (d.toDateString() === dayBeforeYesterday.toDateString()) return 'Позавчера'
   return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }).replace(/\s*г\.?\s*$/, '')
 }
 
@@ -86,4 +93,17 @@ export function previewAnswer(value: ValueJson | null | undefined, maxTextLen = 
   if ('yesNo' in value) return value.yesNo ? 'Да' : 'Нет'
   if ('durationHms' in value) return (value as { durationHms: string }).durationHms || '—'
   return '—'
+}
+
+/**
+ * Одна «ячейка» для строки превью в списке записей (RecordCard): пустой текст не даёт сегмента,
+ * чтобы склейка через « · » не заканчивалась разделителем без текста.
+ */
+export function formatAnswerPreviewSegment(
+  value: ValueJson,
+  block: BlockRow | undefined
+): string {
+  if (!block) return previewAnswer(value)
+  if ('text' in value && (value.text ?? '').trim() === '') return ''
+  return formatAnswer(value, block)
 }

@@ -1,16 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { MinusIcon, PlusIcon } from '@radix-ui/react-icons'
 import { Avatar, Box, Button, Card, Flex, IconButton, Select, Text } from '@radix-ui/themes'
 import { AppBar } from '@/components/AppBar'
 import { PageLoading } from '@/components/PageLoading'
 import { api } from '@/lib/api'
+import { useHoldRepeat } from '@/lib/useHoldRepeat'
 import { todayLocalISO, nowTimeLocal } from '@/lib/format-utils'
 import type { BlockRow, DeedWithBlocks } from '@/types/database'
 import layoutStyles from '@/styles/layout.module.css'
 import styles from './ClickerPage.module.css'
-
-const HOLD_DELAY_MS = 350
-const HOLD_INTERVAL_MS = 80
 
 /** Дела, у которых ровно один блок типа number */
 function deedsWithSingleNumberBlock(deeds: DeedWithBlocks[]): DeedWithBlocks[] {
@@ -31,8 +29,9 @@ export function ClickerPage() {
   const [selectedDeedId, setSelectedDeedId] = useState<string>('')
   const [count, setCount] = useState(0)
   const [saving, setSaving] = useState(false)
-  const holdTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const holdIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const holdPlus = useHoldRepeat(() => setCount((c) => c + 1))
+  const holdMinus = useHoldRepeat(() => setCount((c) => Math.max(0, c - 1)))
 
   // --- Загрузка дел ---
   useEffect(() => {
@@ -59,45 +58,6 @@ export function ClickerPage() {
   )
   const numberBlock = selectedDeed?.blocks?.[0] ?? null
 
-  const clearHoldTimers = () => {
-    if (holdTimeoutRef.current) {
-      clearTimeout(holdTimeoutRef.current)
-      holdTimeoutRef.current = null
-    }
-    if (holdIntervalRef.current) {
-      clearInterval(holdIntervalRef.current)
-      holdIntervalRef.current = null
-    }
-  }
-
-  useEffect(() => {
-    return () => clearHoldTimers()
-  }, [])
-
-  const handlePointerDown = () => {
-    setCount((c) => c + 1)
-    holdTimeoutRef.current = setTimeout(() => {
-      holdTimeoutRef.current = null
-      holdIntervalRef.current = setInterval(() => {
-        setCount((c) => c + 1)
-      }, HOLD_INTERVAL_MS)
-    }, HOLD_DELAY_MS)
-  }
-
-  const handlePointerDownMinus = () => {
-    setCount((c) => Math.max(0, c - 1))
-    holdTimeoutRef.current = setTimeout(() => {
-      holdTimeoutRef.current = null
-      holdIntervalRef.current = setInterval(() => {
-        setCount((c) => Math.max(0, c - 1))
-      }, HOLD_INTERVAL_MS)
-    }, HOLD_DELAY_MS)
-  }
-
-  const handlePointerUp = () => {
-    clearHoldTimers()
-  }
-
   const handleSave = async () => {
     if (!selectedDeedId || !numberBlock || saving) return
     setSaving(true)
@@ -117,7 +77,7 @@ export function ClickerPage() {
 
   // --- Рендер ---
   if (loading) {
-    return <PageLoading title="Кликер" backHref="/widgets" />
+    return <PageLoading title="" backHref="/widgets" titleReserve />
   }
 
   return (
@@ -200,10 +160,10 @@ export function ClickerPage() {
             <div
               role="button"
               tabIndex={0}
-              onPointerDown={handlePointerDown}
-              onPointerUp={handlePointerUp}
-              onPointerLeave={handlePointerUp}
-              onPointerCancel={handlePointerUp}
+              onPointerDown={holdPlus.handlePointerDown}
+              onPointerUp={holdPlus.handlePointerUp}
+              onPointerLeave={holdPlus.handlePointerUp}
+              onPointerCancel={holdPlus.handlePointerUp}
               onContextMenu={(e) => e.preventDefault()}
               onKeyDown={(e) => {
                 if (e.key === ' ' || e.key === 'Enter') {
@@ -229,10 +189,10 @@ export function ClickerPage() {
               className={styles.counterButton}
               size="4"
               variant="soft"
-              onPointerDown={handlePointerDownMinus}
-              onPointerUp={handlePointerUp}
-              onPointerLeave={handlePointerUp}
-              onPointerCancel={handlePointerUp}
+              onPointerDown={holdMinus.handlePointerDown}
+              onPointerUp={holdMinus.handlePointerUp}
+              onPointerLeave={holdMinus.handlePointerUp}
+              onPointerCancel={holdMinus.handlePointerUp}
               disabled={count === 0}
               aria-label="Уменьшить"
             >
@@ -242,10 +202,10 @@ export function ClickerPage() {
               className={styles.counterButton}
               size="4"
               variant="soft"
-              onPointerDown={handlePointerDown}
-              onPointerUp={handlePointerUp}
-              onPointerLeave={handlePointerUp}
-              onPointerCancel={handlePointerUp}
+              onPointerDown={holdPlus.handlePointerDown}
+              onPointerUp={holdPlus.handlePointerUp}
+              onPointerLeave={holdPlus.handlePointerUp}
+              onPointerCancel={holdPlus.handlePointerUp}
               aria-label="Увеличить"
             >
               <PlusIcon width={24} height={24} />

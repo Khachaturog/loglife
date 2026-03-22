@@ -1,76 +1,176 @@
 /*
- * Адаптация air-datepicker под текущую тему Radix (@radix-ui/themes).
+ * Адаптация air-datepicker под Radix Themes: подмена --adp-* на токены темы.
+ * Подключается после air-datepicker.css (main.tsx).
+ * Полный список переменных — в node_modules/air-datepicker/air-datepicker.css
+ * (ниже не заданы, остаются дефолты: --adp-time-track-color, размеры, шрифты — по необходимости добавьте сюда).
  *
- * air-datepicker использует собственные CSS-переменные (--adp-*).
- * Мы подменяем их значениями из Radix, поэтому календарь начинает
- * менять цвета вместе со всем приложением (light/dark + accent/gray).
- *
- * Файл подключается ПОСЛЕ air-datepicker.css (см. main.tsx), поэтому переопределения имеют приоритет.
+ * Важно: попап календаря должен монтироваться внутри корня Radix Theme (см. container в DatePicker.tsx),
+ * иначе --accent-* / --gray-* не наследуются (типичный случай — вложенность в document.body).
  */
 
 .air-datepicker {
-  /* Общая "карточка" календаря */
+  /* ------ Панель календаря (фон «карточки» попапа) ------ */
+
+  /* Фон попапа календаря (панель с сеткой) */
   --adp-background-color: var(--color-panel-solid);
+
+  /* ------ Оболочка: навигация, timepicker (hover/active не по ячейкам сетки) ------ */
+
+  /* Фон при hover на стрелках навигации, заголовке месяца/года, подсветке часов/минут в timepicker */
   --adp-background-color-hover: var(--gray-a3);
+
+  /* Фон при active на тех же элементах chrome */
   --adp-background-color-active: var(--gray-a4);
 
-  /* Цвета текста */
+  /* ------ Текст: основной, вторичный, акцент, состояния ячеек (цвет цифр и подписей) ------ */
+
+  /* Основной текст (числа дней и т.д.); в исходнике же токен для «сегодня + .-focus-» */
   --adp-color: var(--gray-11);
+
+  /* Вторичный текст в шапке (например год рядом с месяцем) */
   --adp-color-secondary: var(--gray-11);
+
+  /* Базовый акцент библиотеки (часть дефолтов ссылается на него) */
   --adp-accent-color: var(--accent-9);
+
+  /* Цвет числа «сегодня» (.-current-), пока ячейка без фокуса */
   --adp-color-current-date: var(--accent-9);
 
-  /* Текст/оформление "других месяцев" и disabled */
+  /* Числа из соседних месяцев в сетке */
   --adp-color-other-month: var(--gray-a9);
+
+  /* Недоступные дни */
   --adp-color-disabled: var(--gray-a8);
+
+  /* Недоступные дни внутри выделенного диапазона */
   --adp-color-disabled-in-range: var(--gray-a8);
+
+  /* «Чужие» месяцы при hover */
   --adp-color-other-month-hover: var(--gray-a9);
 
-  /* Границы */
+  /* ------ Границы внешние и внутренние ------ */
+
+  /* Внешняя обводка блока календаря */
   --adp-border-color: var(--gray-a4);
+
+  /* Разделители: низ шапки, верх зоны времени/кнопок */
   --adp-border-color-inner: var(--gray-a3);
+
+  /* Inline-режим и границы хвоста попапа (.air-datepicker--pointer:after) */
   --adp-border-color-inline: var(--gray-a5);
 
-  /* Акцент/выделения */
+  /* ------ Строка дней недели (Пн … Вс) ------ */
+
+  /* Подписи дней недели (Пн … Вс) */
   --adp-day-name-color: var(--accent-9);
+
+  /* Имя дня при hover, если оно кликабельно */
   --adp-day-name-color-hover: var(--accent-10);
 
+  /* ------ Выбранная дата (один день) ------ */
+
+  /* Фон выбранного дня */
   --adp-cell-background-color-selected: var(--accent-9);
+
+  /* Текст выбранной ячейки (в air-datepicker захардкожен #fff; наш токен — расширение) */
+  --adp-cell-color-selected: var(--accent-contrast);
+
+  /* Фон выбранного дня при hover */
   --adp-cell-background-color-selected-hover: var(--accent-10);
 
-  /* Выделение диапазона */
+  /* ------ Диапазон дат (основная сетка дней) ------ */
+
+  /* Заливка дней внутри диапазона дат */
   --adp-cell-background-color-in-range: color-mix(in srgb, var(--accent-9) 10%, transparent);
+
+  /* То же в диапазоне при hover / focus */
   --adp-cell-background-color-in-range-hover: color-mix(in srgb, var(--accent-9) 20%, transparent);
+
+  /* Обводка краёв диапазона (range-from / range-to) */
   --adp-cell-border-color-in-range: var(--accent-9);
 
-  /* Hover/focus у ячеек (когда выделяется фокусом/курсор) */
+  /* ------ Ячейка сетки: hover/focus (любой день/месяц/год) ------ */
+
+  /* Фон ячейки дня/месяца/года в состоянии .-focus- (наведение или фокус) */
   --adp-cell-background-color-hover: var(--gray-a3);
 
-  /* Навигация */
+  /* ------ Шапка навигации (стрелки, заголовок месяца/года) ------ */
+
+  /* Обводка линий в SVG стрелок навигации */
   --adp-nav-arrow-color: var(--gray-11);
+
+  /* Вторая часть заголовка навигации (например год) */
   --adp-nav-color-secondary: var(--gray-11);
+
+  /* ------ Нижние кнопки («Сегодня», «Очистить» и т.д.) ------ */
+
+  /* Текст нижних кнопок («Сегодня», «Очистить» и т.д.) */
   --adp-btn-color: var(--accent-9);
+
+  /* Текст той же кнопки при hover/focus */
   --adp-btn-color-hover: var(--gray-11);
+
+  /* Фон нижней кнопки при hover */
   --adp-btn-background-color-hover: var(--gray-a3);
+
+  /* Фон нижней кнопки при active */
   --adp-btn-background-color-active: var(--gray-a4);
 
-  /* Состояния in-range для остальных сценариев */
+  /* ------ «Чужой» месяц/декада: диапазон и выбранная дата вне текущего месяца ------ */
+
+  /* Заливка «чужих» месяцев/декад в режиме диапазона */
   --adp-background-color-in-range: color-mix(in srgb, var(--accent-9) 10%, transparent);
+
+  /* То же при focus внутри диапазона */
   --adp-background-color-in-range-focused: color-mix(in srgb, var(--accent-9) 20%, transparent);
+
+  /* Выбранный день, отображённый как число другого месяца */
   --adp-background-color-selected-other-month: var(--accent-9);
+
+  /* То же при hover/focus */
   --adp-background-color-selected-other-month-focused: var(--accent-10);
 
-  /* Overlay (в т.ч. mobile mode) */
+  /* ------ Mobile: затемнение фона под календарём ------ */
+
+  /* Затемнение фона в mobile-режиме при открытом календаре */
   --adp-overlay-background-color: rgba(0, 0, 0, 0.35);
 }
 
-/* Стрелка-поинтер у попапа: в исходнике она белая, меняем под тему. */
+/* ------ Переопределения селекторами (текст выбранной ячейки; в библиотеке #fff и выше специфичность у «чужого месяца») ------ */
+
+/* Цвет текста выбранного дня: в air-datepicker — color: #fff с более высокой специфичностью
+ * для «чужого месяца», поэтому переопределяем явно. */
+.air-datepicker .air-datepicker-cell.-selected- {
+  color: var(--adp-cell-color-selected);
+}
+
+.air-datepicker .air-datepicker-cell.-selected-.-day-.-other-month-,
+.air-datepicker .air-datepicker-cell.-selected-.-year-.-other-decade- {
+  color: var(--adp-cell-color-selected);
+}
+
+/* ------ Хвост попапа (pointer): заливка как у панели ------ */
+
+/* В исходнике заливка #fff — подменяем на фон панели */
 .air-datepicker--pointer:after {
   background: var(--adp-background-color);
 }
 
-/* На тёмной теме чуть более заметная тень/оверлей. */
+/* ------ Тёмная тема: оверлей mobile ------ */
+
+/* Сильнее затемняем оверлей в mobile на тёмной теме */
 .dark .air-datepicker,
 .dark-theme .air-datepicker {
   --adp-overlay-background-color: rgba(0, 0, 0, 0.55);
+}
+
+/* ------ Тёмная тема: «сегодня» при hover/focus (в библиотеке color: var(--adp-color)) ------ */
+
+/*
+ * «Сегодня» при .-focus-: в библиотеке color: var(--adp-color); на тёмном фоне — акцент.
+ * :not(.-selected-) — не перебиваем белый текст у выбранного дня. Отдельной --adp-* нет.
+ */
+.dark .air-datepicker .air-datepicker-cell.-day-.-current-.-focus-:not(.-selected-),
+.dark-theme .air-datepicker .air-datepicker-cell.-day-.-current-.-focus-:not(.-selected-) {
+  color: var(--accent-10);
 }

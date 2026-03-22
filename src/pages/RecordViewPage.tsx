@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
-import { useParams, useNavigate, useLocation } from 'react-router-dom'
-import { Box, Button, Checkbox, CheckboxGroup, Flex, Heading, IconButton, RadioGroup, Select, SegmentedControl, Separator, Text, TextArea, TextField } from '@radix-ui/themes'
+import { Link, useParams, useNavigate, useLocation } from 'react-router-dom'
+import { Box, Button, CheckboxGroup, Flex, Heading, IconButton, RadioGroup, Select, SegmentedControl, Separator, Text, TextArea, TextField } from '@radix-ui/themes'
 import { AppBar } from '@/components/AppBar'
+import { DeedSummaryCard } from '@/components/DeedSummaryCard'
+import { FillFormNumberStepper } from '@/components/FillFormNumberStepper'
 import { PageLoading } from '@/components/PageLoading'
-import { CheckIcon, Pencil1Icon, TrashIcon } from '@radix-ui/react-icons'
+import { ArrowTopLeftIcon, BackpackIcon, CheckIcon, Pencil1Icon, PlusIcon, TrashIcon } from '@radix-ui/react-icons'
 import { api } from '@/lib/api'
 import type { BlockConfig, BlockRow, DeedWithBlocks, RecordAnswerRow, RecordWithAnswers, ValueJson } from '@/types/database'
 import { DatePicker } from '@/components/DatePicker'
@@ -48,6 +50,24 @@ function formatScaleConfig(cfg: ConfigVersionData['scale']): string {
   return parts.join(' · ')
 }
 
+/** Сравнение ответа блока со снимком при открытии правки (для «Сбросить»). */
+function valueJsonEqual(a: ValueJson | undefined, b: ValueJson | undefined): boolean {
+  if (a === b) return true
+  if (a === undefined || b === undefined) return false
+  try {
+    return JSON.stringify(a) === JSON.stringify(b)
+  } catch {
+    return false
+  }
+}
+
+/** Ответы из сущности записи — единый источник с сервера для просмотра и отката без сохранения. */
+function answersFromRecord(rec: RecordWithAnswers): Record<string, ValueJson> {
+  const ans: Record<string, ValueJson> = {}
+  for (const a of rec.record_answers ?? []) ans[a.block_id] = a.value_json
+  return ans
+}
+
 export function RecordViewPage() {
   const { id: recordId } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -62,6 +82,11 @@ export function RecordViewPage() {
   const [recordDate, setRecordDate] = useState('')
   const [recordTime, setRecordTime] = useState('')
   const [answers, setAnswers] = useState<Record<string, ValueJson>>({})
+  /**
+   * Снимок ответов на момент входа в правку — для «Сбросить» по блоку и для dirty.
+   * Дата/время при «Назад» без сохранения берём из `record` (последний fetch/save), а не из снимка.
+   */
+  const [editAnswersBaseline, setEditAnswersBaseline] = useState<Record<string, ValueJson> | null>(null)
   const [updateDraft, setUpdateDraft] = useState<Record<string, ValueJson>>({})
   const [savingOutdated, setSavingOutdated] = useState(false)
 
@@ -76,9 +101,7 @@ export function RecordViewPage() {
         setRecord(rec)
         setRecordDate(rec.record_date)
         setRecordTime(rec.record_time?.slice(0, 5) ?? '')
-        const ans: Record<string, ValueJson> = {}
-        for (const a of rec.record_answers ?? []) ans[a.block_id] = a.value_json
-        setAnswers(ans)
+        setAnswers(answersFromRecord(rec))
         return rec
       })
       .then(async (rec) => {
@@ -138,21 +161,38 @@ export function RecordViewPage() {
       const updated = await api.records.get(recordId)
       if (updated) {
         setRecord(updated)
-        const ans: Record<string, ValueJson> = {}
-        for (const a of updated.record_answers ?? []) ans[a.block_id] = a.value_json
-        setAnswers(ans)
+        setAnswers(answersFromRecord(updated))
         const versionIds = (updated.record_answers ?? [])
           .map((a) => (a as RecordAnswerRow & { config_version_id?: string | null }).config_version_id)
           .filter((v): v is string => !!v)
         const configMap = versionIds.length ? await api.records.getConfigForVersions(versionIds) : {}
         setConfigByVersion(configMap)
       }
+      setEditAnswersBaseline(null)
       setEditing(false)
     } catch (err: unknown) {
       console.error(err instanceof Error ? err.message : 'Ошибка сохранения')
     } finally {
       setSaving(false)
     }
+  }
+
+  /** Текущее значение блока отличается от снимка при открытии формы правки. */
+  function isEditBlockDirty(blockId: string): boolean {
+    if (!editAnswersBaseline) return false
+    return !valueJsonEqual(answers[blockId], editAnswersBaseline[blockId])
+  }
+
+  /** Вернуть один блок к значению из снимка (или убрать ключ, если ответа не было). */
+  function resetEditBlock(blockId: string) {
+    if (!editAnswersBaseline) return
+    setAnswers((prev) => {
+      const next = { ...prev }
+      const base = editAnswersBaseline[blockId]
+      if (base === undefined) delete next[blockId]
+      else next[blockId] = structuredClone(base) as ValueJson
+      return next
+    })
   }
 
   function setAnswer(blockId: string, value: ValueJson) {
@@ -186,21 +226,34 @@ export function RecordViewPage() {
   function isDraftValidForBlock(block: BlockRow, draft: ValueJson | undefined): boolean {
     if (draft == null) return false
     switch (block.block_type) {
-      case 'number':
-        return typeof (draft as { number?: number }).number === 'number'
+      case 'number': {
+        // 0 и пустой ввод (через `|| 0` в onChange) считаем незаполненным — как на форме добавления записи.
+        const n = (draft as { number?: number }).number
+        return typeof n === 'number' && Number.isFinite(n) && n !== 0
+      }
       case 'text_short':
-      case 'text_paragraph':
-        return typeof (draft as { text?: string }).text === 'string'
-      case 'single_select':
-        return typeof (draft as { optionId?: string }).optionId === 'string'
-      case 'multi_select':
-        return Array.isArray((draft as { optionIds?: string[] }).optionIds)
-      case 'scale':
-        return typeof (draft as { scaleValue?: number }).scaleValue === 'number'
+      case 'text_paragraph': {
+        const t = (draft as { text?: string }).text
+        return typeof t === 'string' && t.trim().length > 0
+      }
+      case 'single_select': {
+        const id = (draft as { optionId?: string }).optionId
+        return typeof id === 'string' && id.length > 0
+      }
+      case 'multi_select': {
+        const ids = (draft as { optionIds?: string[] }).optionIds
+        return Array.isArray(ids) && ids.length > 0
+      }
+      case 'scale': {
+        const n = (draft as { scaleValue?: number }).scaleValue
+        return typeof n === 'number' && n >= 1
+      }
       case 'yes_no':
         return typeof (draft as { yesNo?: boolean }).yesNo === 'boolean'
-      case 'duration':
-        return typeof (draft as { durationHms?: string }).durationHms === 'string'
+      case 'duration': {
+        const hms = (draft as { durationHms?: string }).durationHms ?? ''
+        return hms.length >= 8 && /^\d{2}:\d{2}:\d{2}$/.test(hms)
+      }
       default:
         return false
     }
@@ -251,6 +304,7 @@ export function RecordViewPage() {
       const updated = await api.records.get(recordId)
       if (updated) {
         setRecord(updated)
+        setAnswers(answersFromRecord(updated))
         const versionIds = (updated.record_answers ?? [])
           .map((a) => (a as RecordAnswerRow & { config_version_id?: string | null }).config_version_id)
           .filter((v): v is string => !!v)
@@ -273,8 +327,17 @@ export function RecordViewPage() {
     setUpdateDraft((prev) => ({ ...prev, [blockId]: value }))
   }
 
+  /** Убрать черновик блока — снова показываются значение по умолчанию / миграция с сохранённого ответа */
+  function clearUpdateDraft(blockId: string) {
+    setUpdateDraft((prev) => {
+      const next = { ...prev }
+      delete next[blockId]
+      return next
+    })
+  }
+
   if (loading) {
-    return <PageLoading title="Запись" />
+    return <PageLoading title="" titleReserve actionsReserveCount={4} />
   }
 
   const backLink = fromHistory ? '/history' : (record?.deed_id ? `/deeds/${record.deed_id}` : '/')
@@ -294,57 +357,104 @@ export function RecordViewPage() {
     <Box className={layoutStyles.pageContainer} >
       <AppBar
         backHref={editing ? undefined : backLink}
-        onBack={editing ? () => setEditing(false) : undefined}
-        title={`Запись`}
+        onBack={
+          editing
+            ? () => {
+                // Состояние формы = последняя запись с сервера (`record`), а не черновик в state.
+                setAnswers(answersFromRecord(record))
+                setRecordDate(record.record_date)
+                setRecordTime(record.record_time?.slice(0, 5) ?? '')
+                setEditAnswersBaseline(null)
+                setEditing(false)
+              }
+            : undefined
+        }
+        backButtonIcon={editing ? 'close' : 'arrow'}
+        title={editing ? 'Редактирование записи' : 'Запись'}
         actions={
           editing ? (
-            <IconButton 
-            variant="classic" 
-              color="indigo" 
-            radius='full'
-            size="3" 
-            onClick={handleSave} 
-            disabled={saving} 
-            aria-label={saving ? 'Сохранение…' : 'Сохранить'}
+            <IconButton
+              variant="classic"
+              radius="full"
+              size="3"
+              disabled={saving}
+              onClick={handleSave}
+              aria-label={saving ? 'Сохранение…' : 'Сохранить'}
             >
               <CheckIcon width={18} height={18} />
             </IconButton>
           ) : (
             <>
-              <IconButton 
-              variant="classic" 
-                color="indigo" 
-              radius='full' 
+              {/* Новая запись по тому же делу (например, после просмотра похожей записи) */}
+              <IconButton asChild 
+              variant="soft" 
+              color="gray"
+              radius="full" 
               size="3" 
-              onClick={() => setEditing(true)} 
-              aria-label="Редактировать">
+              aria-label="Добавить запись">
+                <Link to={`/deeds/${record.deed_id}/fill`}>
+                  <PlusIcon width={18} height={18} />
+                </Link>
+              </IconButton>
+
+              {/* К делу — только если открыли запись с вкладки «История» (state.from === 'history') */}
+              {fromHistory && (
+                <>
+                  <IconButton
+                    variant="soft"
+                    color="gray"
+                    radius="full"
+                    size="3"
+                    onClick={() => navigate(`/deeds/${record.deed_id}`)}
+                    aria-label="Перейти к делу"
+                  >
+                    <BackpackIcon width={18} height={18} />
+                  </IconButton>
+                  <Separator orientation="vertical" />
+                </>
+              )}
+
+              <IconButton
+                variant="classic"
+                color="gray"
+                radius="full"
+                size="3"
+                onClick={() => {
+                  setEditAnswersBaseline(structuredClone(answers))
+                  setEditing(true)
+                }}
+                aria-label="Редактировать"
+              >
                 <Pencil1Icon width={18} height={18} />
               </IconButton>
 
-              <IconButton 
-              variant="classic" 
-              radius='full' size="3" 
-              color="red" 
-              onClick={handleDelete} 
-              aria-label="Удалить">
+              <IconButton
+                variant="classic"
+                color="red"
+                radius="full"
+                size="3"
+                onClick={handleDelete}
+                aria-label="Удалить"
+              >
                 <TrashIcon width={18} height={18} />
               </IconButton>
 
               {/* Актуализировать — только в режиме просмотра при устаревших блоках */}
-              <Separator orientation="vertical" size="1" />
-
               {hasBlocksToUpdate && (
-                <IconButton
-                  size="3"
-                  variant="classic"
-                  color="indigo"
-                  radius='full'
-                  disabled={!hasAnyValidDraft || savingOutdated}
-                  onClick={handleUpdateAllOutdated}
-                  aria-label={savingOutdated ? 'Сохранение…' : 'Актуализировать'}
-                >
-                  <CheckIcon width={18} height={18} />
-                </IconButton>
+                <>
+                  <Separator orientation="vertical" size="1" />
+                  <IconButton
+                    variant="classic"
+                    color="indigo"
+                    radius="full"
+                    size="3"
+                    disabled={!hasAnyValidDraft || savingOutdated}
+                    onClick={handleUpdateAllOutdated}
+                    aria-label={savingOutdated ? 'Сохранение…' : 'Актуализировать'}
+                  >
+                    <CheckIcon width={18} height={18} />
+                  </IconButton>
+                </>
               )}
             </>
           )
@@ -352,13 +462,11 @@ export function RecordViewPage() {
       />
 
       {editing ? (
-        <Flex direction="column" >
+        <Flex direction="column" gap="3">
 
-          {/* Заголовок дела (чтобы было понятно, с чем работаем) */}
-          {deed?.name && (
-            <Heading size="4" weight="medium">
-              {deed.name}
-            </Heading>
+          {/* Явный контекст дела при правке записи: эмодзи, название, категория, описание. */}
+          {deed && (
+            <DeedSummaryCard deed={deed} />
           )}
 
           <Flex gap="3" wrap="wrap">
@@ -380,14 +488,52 @@ export function RecordViewPage() {
 
           {blocks.filter((b) => !b.deleted_at).map((block) => (
             <Flex key={block.id} direction="column" gap="1">
-              <Text size="2" weight="medium">{block.title}</Text>
+              <Flex direction="row" align="center" gap="3" wrap="wrap">
+                <Text size="2" weight="medium">{block.title}</Text>
+                {isEditBlockDirty(block.id) && (
+                  <Button
+                    type="button"
+                    size="2"
+                    variant="ghost"
+                    color="gray"
+                    onClick={() => resetEditBlock(block.id)}
+                  >
+                    Сбросить
+                  </Button>
+                )}
+              </Flex>
               {block.block_type === 'number' && (
-                <TextField.Root
-                  size="3"
-                  type="number"
-                  value={(answers[block.id] as { number?: number } | undefined)?.number ?? ''}
-                  onChange={(e) => setAnswer(block.id, { number: Number(e.target.value) || 0 })}
-                />
+                <Flex gap="2" align="center">
+                  <TextField.Root
+                    style={{ flex: 1 }}
+                    size="3"
+                    type="number"
+                    inputMode="decimal"
+                    min={0}
+                    value={
+                      (answers[block.id] as { number?: number } | undefined)?.number !== undefined
+                        ? String((answers[block.id] as { number?: number }).number)
+                        : ''
+                    }
+                    onChange={(e) => {
+                      const raw = e.target.value
+                      // Режим редактирования: 0 — осмысленное значение; пустое поле → 0 (см. docs 13).
+                      if (raw === '') {
+                        setAnswer(block.id, { number: 0 })
+                        return
+                      }
+                      const parsed = Number(raw)
+                      if (!Number.isFinite(parsed)) return
+                      setAnswer(block.id, { number: Math.max(0, parsed) })
+                    }}
+                  />
+                  <FillFormNumberStepper
+                    blockId={block.id}
+                    value={(answers[block.id] as { number?: number } | undefined)?.number ?? 0}
+                    setAnswers={setAnswers}
+                    zeroBehavior="storeZero"
+                  />
+                </Flex>
               )}
               {block.block_type === 'text_short' && (
                 <TextField.Root
@@ -405,6 +551,8 @@ export function RecordViewPage() {
               )}
               {block.block_type === 'single_select' && (
                 <Select.Root
+                  // После сброса Radix Select может не обновить триггер — key как у актуализации.
+                  key={`${block.id}-edit-ss-${isEditBlockDirty(block.id) ? 'd' : 's'}-${(answers[block.id] as { optionId?: string } | undefined)?.optionId ?? 'none'}`}
                   size="3"
                   value={(answers[block.id] as { optionId?: string } | undefined)?.optionId || undefined}
                   onValueChange={(v) => setAnswer(block.id, { optionId: v })}
@@ -419,6 +567,7 @@ export function RecordViewPage() {
               )}
               {block.block_type === 'multi_select' && (
                 <CheckboxGroup.Root
+                  key={`${block.id}-edit-ms-${isEditBlockDirty(block.id) ? 'd' : 's'}`}
                   size="3"
                   value={
                     (answers[block.id] as { optionIds?: string[] } | undefined)?.optionIds ?? []
@@ -438,6 +587,7 @@ export function RecordViewPage() {
               )}
               {block.block_type === 'scale' && (
                 <SegmentedControl.Root
+                  key={`${block.id}-edit-scale-${isEditBlockDirty(block.id) ? 'd' : 's'}`}
                   value={
                     (answers[block.id] as { scaleValue?: number } | undefined)?.scaleValue?.toString()
                   }
@@ -463,6 +613,7 @@ export function RecordViewPage() {
               )}
               {block.block_type === 'yes_no' && (
                 <RadioGroup.Root
+                  key={`${block.id}-edit-yn-${isEditBlockDirty(block.id) ? 'd' : 's'}`}
                   size="3"
                   value={
                     (answers[block.id] as { yesNo?: boolean } | undefined)?.yesNo === true
@@ -491,17 +642,14 @@ export function RecordViewPage() {
       ) : (
         <Flex direction="column" gap="4" >
 
-          <Flex direction="column" gap="1">
-            {/* Заголовок дела */}
-            {deed?.name && (
-            <Heading size="4" weight="medium">
-              {deed.name}
-            </Heading>
-            )}
-            <Text size="2" color="gray">
-              Дата: {record.record_date} {record.record_time?.slice(0, 5)}
-            </Text>
-          </Flex>
+          {deed && (
+            <DeedSummaryCard deed={deed} />
+          )}
+
+          <Box>
+            <Text weight="bold" size="2">Дата</Text>
+            <Text as="p" size="2">{record.record_date} {record.record_time?.slice(0, 5)}</Text>
+          </Box>
 
           {blocks.filter((b) => !b.deleted_at).map((block) => {
             const ans = answersByBlockId[block.id] as (RecordAnswerRow & { config_version_id?: string | null }) | undefined
@@ -522,37 +670,87 @@ export function RecordViewPage() {
 
             const currentOptions = getBlockOptions(block)
             const divisions = Math.min(10, Math.max(1, (block.config as BlockConfig | null)?.divisions ?? 5))
-            const labels = (block.config as BlockConfig | null)?.labels ?? []
             const oldVal = value as ValueJson | undefined
             const draft = updateDraft[block.id] ?? (unfilled ? undefined : getMigratedValue(block, oldVal))
 
             return (
               <Box key={block.id}>
-                <Text weight="bold" size="2">{block.title}{outdated ? ' (устарело)' : unfilled ? ' (не заполнено)' : ''}</Text>
+                <Text weight="bold" size="2">{block.title}{outdated ? ' · Устарело' : unfilled ? ' · Не заполнено' : ''}</Text>
                 <Text as="p" size="2">{value ? formatAnswer(value, block, optionsOverride) : '—'}</Text>
-                <Flex direction="column" gap="2" mt="2">
-                  <Text weight="medium" size="2">Актуальные варианты</Text>
+                <Flex direction="column" gap="1">
+                  <Flex direction="row" align="center" gap="3" wrap="wrap">
+                    <Flex direction="row" align="center" gap="1">
+                      <ArrowTopLeftIcon />
+                      <Text weight="medium" size="2">Обнови блок</Text>
+                    </Flex>
+                    {updateDraft[block.id] != null && (
+                      <Button
+                        type="button"
+                        size="2"
+                        variant="ghost"
+                        color="gray"
+                        onClick={() => clearUpdateDraft(block.id)}
+                      >
+                        Сбросить
+                      </Button>
+                    )}
+                  </Flex>
                   {block.block_type === 'number' && (
-                    <TextField.Root
-                      type="number"
-                      value={(draft as { number?: number } | undefined)?.number ?? ''}
-                      onChange={(e) => setUpdateDraftValue(block.id, { number: Number(e.target.value) || 0 })}
-                    />
+                    <Flex gap="2" align="center">
+                      <TextField.Root
+                        style={{ flex: 1 }}
+                        size="3"
+                        type="number"
+                        inputMode="decimal"
+                        min={0}
+                        value={
+                          (draft as { number?: number } | undefined)?.number !== undefined
+                            ? String((draft as { number?: number }).number)
+                            : ''
+                        }
+                        onChange={(e) => {
+                          const raw = e.target.value
+                          // Как FillForm: пусто / 0 / нечисло → убрать черновик по блоку.
+                          if (raw === '') {
+                            clearUpdateDraft(block.id)
+                            return
+                          }
+                          const parsed = Number(raw)
+                          if (!Number.isFinite(parsed) || parsed === 0) {
+                            clearUpdateDraft(block.id)
+                            return
+                          }
+                          setUpdateDraftValue(block.id, { number: Math.max(0, parsed) })
+                        }}
+                      />
+                      <FillFormNumberStepper
+                        blockId={block.id}
+                        value={(draft as { number?: number } | undefined)?.number ?? 0}
+                        setAnswers={setUpdateDraft}
+                        zeroBehavior="clearKey"
+                      />
+                    </Flex>
                   )}
                   {block.block_type === 'text_short' && (
                     <TextField.Root
+                      size="3"
                       value={(draft as { text?: string } | undefined)?.text ?? ''}
                       onChange={(e) => setUpdateDraftValue(block.id, { text: e.target.value })}
                     />
                   )}
                   {block.block_type === 'text_paragraph' && (
                     <TextArea
+                      size="3"
                       value={(draft as { text?: string } | undefined)?.text ?? ''}
                       onChange={(e) => setUpdateDraftValue(block.id, { text: e.target.value })}
                     />
                   )}
                   {block.block_type === 'single_select' && (
                     <Select.Root
+                      // Radix Select не всегда сбрасывает отображение при value → undefined после «Сбросить»;
+                      // смена key принудительно перемонтирует и показывает placeholder.
+                      key={`${block.id}-single-${(updateDraft[block.id] as { optionId?: string } | undefined)?.optionId ?? 'cleared'}`}
+                      size="3"
                       value={(draft as { optionId?: string } | undefined)?.optionId || undefined}
                       onValueChange={(v) => setUpdateDraftValue(block.id, { optionId: v })}
                     >
@@ -565,38 +763,41 @@ export function RecordViewPage() {
                     </Select.Root>
                   )}
                   {block.block_type === 'multi_select' && (
-                    <Flex direction="column" gap="2">
-                      {currentOptions.map((opt) => {
-                        const current = (draft as { optionIds?: string[] } | undefined)?.optionIds ?? []
-                        return (
+                    <CheckboxGroup.Root
+                      size="3"
+                      value={
+                        (draft as { optionIds?: string[] } | undefined)?.optionIds ?? []
+                      }
+                      onValueChange={(nextValues) => {
+                        setUpdateDraftValue(block.id, { optionIds: nextValues })
+                      }}
+                    >
+                      <Flex direction="column" gap="1">
+                        {currentOptions.map((opt) => (
                           <Text as="label" key={opt.id} size="2" className={styles.checkboxLabel}>
-                            <Checkbox
-                              checked={current.includes(opt.id)}
-                              onCheckedChange={(checked) => {
-                                const next = checked ? [...current, opt.id] : current.filter((id) => id !== opt.id)
-                                setUpdateDraftValue(block.id, { optionIds: next })
-                              }}
-                            />
-                            {opt.label}
+                            <CheckboxGroup.Item value={opt.id}>{opt.label}</CheckboxGroup.Item>
                           </Text>
-                        )
-                      })}
-                    </Flex>
+                        ))}
+                      </Flex>
+                    </CheckboxGroup.Root>
                   )}
                   {block.block_type === 'scale' && (
-                    <Flex gap="2" wrap="wrap">
+                    <SegmentedControl.Root
+                      // Как у Select выше: после «Сбросить» value приходит из миграции, но Radix может
+                      // оставить визуально старый сегмент — key синхронизирует с черновиком/сбросом.
+                      key={`${block.id}-scale-${updateDraft[block.id] != null ? 'draft' : 'migrated'}`}
+                      value={
+                        (draft as { scaleValue?: number } | undefined)?.scaleValue?.toString()
+                      }
+                      onValueChange={(v) => setUpdateDraftValue(block.id, { scaleValue: Number(v) })}
+                      size="2"
+                    >
                       {Array.from({ length: divisions }, (_, i) => i + 1).map((n) => (
-                        <Button
-                          key={n}
-                          type="button"
-                          variant="soft"
-                          size="2"
-                          onClick={() => setUpdateDraftValue(block.id, { scaleValue: n })}
-                        >
-                          {labels[n - 1] ?? n}
-                        </Button>
+                        <SegmentedControl.Item key={n} value={String(n)}>
+                          {n}
+                        </SegmentedControl.Item>
                       ))}
-                    </Flex>
+                    </SegmentedControl.Root>
                   )}
                   {block.block_type === 'duration' && (
                     <DurationInput
@@ -607,6 +808,7 @@ export function RecordViewPage() {
                   )}
                   {block.block_type === 'yes_no' && (
                     <RadioGroup.Root
+                      size="3"
                       value={
                         (draft as { yesNo?: boolean } | undefined)?.yesNo === true
                           ? 'true'

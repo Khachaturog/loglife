@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Box, CheckboxGroup, Flex, IconButton, RadioGroup, Select, SegmentedControl, Text, TextArea, TextField } from '@radix-ui/themes'
+import { Box, Button, CheckboxGroup, Flex, IconButton, RadioGroup, Select, SegmentedControl, Text, TextArea, TextField } from '@radix-ui/themes'
 import { AppBar } from '@/components/AppBar'
+import { DeedSummaryCard } from '@/components/DeedSummaryCard'
+import { FillFormNumberStepper } from '@/components/FillFormNumberStepper'
 import { PageLoading } from '@/components/PageLoading'
-import { CheckIcon, MinusIcon, PlusIcon } from '@radix-ui/react-icons'
+import { CheckIcon } from '@radix-ui/react-icons'
 import { api } from '@/lib/api'
 import { DatePicker } from '@/components/DatePicker'
 import { DurationInput } from '@/components/DurationInput'
@@ -16,6 +18,23 @@ function getBlockOptions(block: BlockRow): { id: string; label: string }[] {
   const fromConfig = (block.config as BlockConfig | null)?.options
   if (fromConfig?.length) return fromConfig.map((o) => ({ id: o.id, label: o.label }))
   return []
+}
+
+/** Одна и та же логика, что раньше была в цикле `requiredMissing`, для подсветки конкретного блока. */
+function isRequiredBlockInvalid(block: BlockRow, answers: Record<string, ValueJson>): boolean {
+  const v = answers[block.id]
+  if (v === undefined) return true
+  if ('number' in v && v.number === 0) return true
+  if ('text' in v && (v.text ?? '').trim() === '') return true
+  if ('optionId' in v && !v.optionId) return true
+  if ('optionIds' in v && (!v.optionIds || v.optionIds.length === 0)) return true
+  if ('scaleValue' in v && (v.scaleValue === undefined || v.scaleValue < 1)) return true
+  if ('yesNo' in v && v.yesNo === undefined) return true
+  if ('durationHms' in v) {
+    const hms = v.durationHms ?? ''
+    if (hms.length < 8 || !/^\d{2}:\d{2}:\d{2}$/.test(hms)) return true
+  }
+  return false
 }
 
 /**
@@ -33,6 +52,8 @@ export function FillFormPage() {
   const [recordDate, setRecordDate] = useState(todayLocalISO())
   const [recordTime, setRecordTime] = useState(nowTimeLocal())
   const [answers, setAnswers] = useState<Record<string, ValueJson>>({})
+  /** После первой попытки отправки показываем ошибки по обязательным блокам (и общее правило «хотя бы один ответ»). */
+  const [validationAttempted, setValidationAttempted] = useState(false)
 
   // --- Загрузка дела ---
   useEffect(() => {
@@ -95,31 +116,15 @@ export function FillFormPage() {
     return next
   }, [answers])
 
-  const requiredMissing = useMemo(() => {
-    for (const b of blocks) {
-      if (!b.is_required) continue
-      const v = answers[b.id]
-      if (v === undefined) return true
-      // Для `number` считаем 0 эквивалентом "не заполнено" (и не отправляем такое значение).
-      if ('number' in v && v.number === 0) return true
-      if ('text' in v && (v.text ?? '').trim() === '') return true
-      if ('optionId' in v && !v.optionId) return true
-      if ('optionIds' in v && (!v.optionIds || v.optionIds.length === 0)) return true
-      if ('scaleValue' in v && (v.scaleValue === undefined || v.scaleValue < 1)) return true
-      if ('yesNo' in v && v.yesNo === undefined) return true
-      if ('durationHms' in v) {
-        const hms = (v as { durationHms?: string }).durationHms ?? ''
-        if (hms.length < 8 || !/^\d{2}:\d{2}:\d{2}$/.test(hms)) return true
-      }
-    }
-    return false
-  }, [blocks, answers])
+  const requiredMissing = useMemo(
+    () => blocks.some((b) => b.is_required && isRequiredBlockInvalid(b, answers)),
+    [blocks, answers]
+  )
 
   const hasAnyAnswer = Object.keys(sanitizedAnswers).length > 0
-  // Правило:
-  // - если есть обязательные блоки — можно сохранять только когда они заполнены
-  // - если обязательных блоков нет — можно сохранять только когда есть хотя бы один непустой ответ
-  const canSubmit = !saving && (hasRequiredBlocks ? !requiredMissing : hasAnyAnswer)
+  // Правило отправки (см. handleSubmit):
+  // - если есть обязательные блоки — сохраняем только когда они заполнены
+  // - если обязательных блоков нет — нужен хотя бы один непустой ответ
 
   function setAnswer(blockId: string, value: ValueJson) {
     setAnswers((prev) => ({ ...prev, [blockId]: value }))
@@ -137,7 +142,10 @@ export function FillFormPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!deedId || !canSubmit) return
+    if (!deedId || saving) return
+    setValidationAttempted(true)
+    const formValid = hasRequiredBlocks ? !requiredMissing : hasAnyAnswer
+    if (!formValid) return
     setSaving(true)
     try {
       // Используем единый набор "чистых" значений (включая удаление пустых текстов/массивов).
@@ -156,13 +164,21 @@ export function FillFormPage() {
 
   // --- Рендер ---
   if (loading) {
-    return <PageLoading onBack={() => navigate(-1)} message="Загружаем форму…" />
+    return (
+      <PageLoading
+        onBack={() => navigate(-1)}
+        backButtonIcon="close"
+        message="Загружаем форму…"
+        titleReserve
+        actionsReserveCount={1}
+      />
+    )
   }
 
   if (!deed) {
     return (
       <Box p="4">
-        <AppBar onBack={() => navigate(-1)} />
+        <AppBar onBack={() => navigate(-1)} backButtonIcon="close" />
         <Text as="p" color="crimson">
           Дело не найдено.
         </Text>
@@ -173,17 +189,18 @@ export function FillFormPage() {
   return (
     <Box className={layoutStyles.pageContainer} >
       <form onSubmit={handleSubmit}>
-        
+        <Flex direction="column" gap="3">
         <AppBar
           onBack={() => navigate(-1)}
-          title={`${deed.emoji} ${deed.name}`}
+          backButtonIcon="close"
+          title={`Добавление записи`}
           actions={
             <IconButton
               size="3"
               radius='full'
               variant="classic"
               type="submit"
-              disabled={!canSubmit}
+              disabled={saving}
               aria-label={saving ? 'Сохранение…' : 'Добавить запись'}
             >
               <CheckIcon width={18} height={18} />
@@ -191,13 +208,9 @@ export function FillFormPage() {
           }
         />
 
-        <Flex direction="column" >
-          {deed.description && (
-            <Text as="p" size="2" color="gray" >
-              {deed.description}
-            </Text>
-          )}
-        </Flex>
+        {/* Контекст: к какому делу относится форма (название и описание не теряются среди полей). */}
+        <DeedSummaryCard deed={deed} />
+
         <Flex direction="column" gap="4" >
           {/* Дата и время */}
           <Flex gap="4">
@@ -219,11 +232,26 @@ export function FillFormPage() {
           {/* Поля по блокам */}
           {blocks.map((block) => (
             <Flex key={block.id} direction="column" gap="1">
-              <Text size="2" weight="medium">
-                {block.title}{block.is_required && ' *'}
-              </Text>
+              <Flex direction="row" align="center" gap="3" wrap="wrap">
+                <Text size="2" weight="medium">
+                  {block.title}{block.is_required && ' *'}
+                </Text>
+                {answers[block.id] !== undefined && (
+                  <Button
+                    type="button"
+                    size="2"
+                    variant="ghost"
+                    color="gray"
+                    onClick={() => clearAnswer(block.id)}
+                  >
+                    Сбросить
+                  </Button>
+                )}
+              </Flex>
               {block.block_type === 'number' && (
-                <Flex gap="2" align="center" >
+                // Не вешаем key от «пусто/заполнено»: иначе при первом шаге ± или первой цифре
+                // весь блок remount’ится — сбрасывается удержание кнопок и фокус в поле ввода.
+                <Flex gap="2" align="center">
                   <TextField.Root 
                     style={{ flex: 1 }}
                     size="3"
@@ -248,38 +276,11 @@ export function FillFormPage() {
                       setAnswer(block.id, { number: Math.max(0, parsed) })
                     }}
                   />
-                  <IconButton
-                    size="3"
-                    color="gray"
-                    variant="classic"
-                    radius='full'
-                    type="button"
-                    aria-label="Уменьшить значение"
-                    onClick={() => {
-                      const current =
-                        (answers[block.id] as { number?: number } | undefined)?.number ?? 0
-                      const next = Math.max(0, current - 1)
-                      if (next === 0) clearAnswer(block.id)
-                      else setAnswer(block.id, { number: next })
-                    }}
-                  >
-                    <MinusIcon />
-                  </IconButton>
-                  <IconButton
-                    size="3"
-                    color="gray"
-                    variant="classic"
-                    radius='full'
-                    type="button"
-                    aria-label="Увеличить значение"
-                    onClick={() => {
-                      const current =
-                        (answers[block.id] as { number?: number } | undefined)?.number ?? 0
-                      setAnswer(block.id, { number: current + 1 })
-                    }}
-                  >
-                    <PlusIcon />
-                  </IconButton>
+                  <FillFormNumberStepper
+                    blockId={block.id}
+                    value={(answers[block.id] as { number?: number } | undefined)?.number ?? 0}
+                    setAnswers={setAnswers}
+                  />
                 </Flex>
               )}
               {block.block_type === 'text_short' && (
@@ -299,6 +300,7 @@ export function FillFormPage() {
               )}
               {block.block_type === 'single_select' && (
                 <Select.Root
+                  key={`${block.id}-fill-ss-${(answers[block.id] as { optionId?: string } | undefined)?.optionId ?? 'cleared'}`}
                   size="3"
                   value={(answers[block.id] as { optionId?: string } | undefined)?.optionId || undefined}
                   onValueChange={(v) => setAnswer(block.id, { optionId: v })}
@@ -313,6 +315,7 @@ export function FillFormPage() {
               )}
               {block.block_type === 'multi_select' && (
                 <CheckboxGroup.Root
+                  key={`${block.id}-fill-ms-${answers[block.id] !== undefined ? 'set' : 'none'}`}
                   size="3"
                   value={
                     (answers[block.id] as { optionIds?: string[] } | undefined)?.optionIds ?? []
@@ -333,6 +336,7 @@ export function FillFormPage() {
               )}
               {block.block_type === 'scale' && (
                 <SegmentedControl.Root
+                  key={`${block.id}-fill-scale-${answers[block.id] !== undefined ? 'set' : 'none'}`}
                   value={
                     (answers[block.id] as { scaleValue?: number } | undefined)?.scaleValue?.toString()
                   }
@@ -358,6 +362,7 @@ export function FillFormPage() {
               )}
               {block.block_type === 'yes_no' && (
                 <RadioGroup.Root
+                  key={`${block.id}-fill-yn-${answers[block.id] !== undefined ? 'set' : 'none'}`}
                   size="3"
                   value={
                     (answers[block.id] as { yesNo?: boolean } | undefined)?.yesNo === true
@@ -380,14 +385,20 @@ export function FillFormPage() {
                   </Flex>
                 </RadioGroup.Root>
               )}
+              {block.is_required && validationAttempted && isRequiredBlockInvalid(block, answers) && (
+                <Text size="1" color="crimson" role="alert">
+                  Заполни поле
+                </Text>
+              )}
             </Flex>
           ))}
 
-          {requiredMissing && (
-            <Text size="2" color="crimson">
-              Заполните все обязательные поля.
+          {validationAttempted && !hasRequiredBlocks && !hasAnyAnswer && (
+            <Text size="2" color="crimson" role="alert">
+              Укажи хотя бы один ответ
             </Text>
           )}
+        </Flex>
         </Flex>
       </form>
     </Box>

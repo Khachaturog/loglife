@@ -3,13 +3,21 @@ import AirDatepicker from 'air-datepicker'
 import localeRu from 'air-datepicker/locale/ru'
 import { TextField } from '@radix-ui/themes'
 
-/** Формат даты для API: YYYY-MM-DD */
-const DATE_FORMAT = 'yyyy-MM-dd'
+/** Отображение в поле (десктоп, Air Datepicker): дд.мм.гггг */
+const DATE_FORMAT_DISPLAY = 'dd.MM.yyyy'
 
 function parseDate(value: string): Date | null {
   if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null
   const d = new Date(value + 'T12:00:00')
   return isNaN(d.getTime()) ? null : d
+}
+
+/** value/onChange остаются в YYYY-MM-DD — собираем из локальной даты выбора. */
+function dateToISOStringLocal(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
 }
 
 /** Определение iOS/Android для использования нативного date picker */
@@ -58,14 +66,20 @@ export function DatePicker({
     const parsed = value ? parseDate(value) : null
     const dp = new AirDatepicker(inputRef.current, {
       locale: localeRu,
-      dateFormat: DATE_FORMAT,
+      dateFormat: DATE_FORMAT_DISPLAY,
       selectedDates: parsed ? [parsed] : [],
       startDate: parsed ?? new Date(),
       minDate: minDate ? parseDate(minDate) ?? undefined : undefined,
       maxDate: maxDate ? parseDate(maxDate) ?? undefined : undefined,
       autoClose: true,
-      onSelect: ({ formattedDate, date }) => {
-        if (date && formattedDate) onChange(formattedDate as string)
+      /*
+       * По умолчанию попап вешается на body — вне Radix Theme, поэтому var(--accent-*), var(--gray-*)
+       * из air-datepicker-overrides.css не резолвятся и смена акцента в профиле не видна.
+       */
+      container: '[data-is-root-theme="true"]',
+      onSelect: ({ date }) => {
+        const d = Array.isArray(date) ? date[0] : date
+        if (d) onChange(dateToISOStringLocal(d))
       },
     })
 
@@ -114,6 +128,9 @@ export function DatePicker({
       id={id}
       placeholder={placeholder}
       disabled={disabled}
+      // Только выбор из календаря: без ручного ввода и вставки (формат жёстко dd.MM.yyyy)
+      readOnly
+      onPaste={(e) => e.preventDefault()}
     />
   )
 }

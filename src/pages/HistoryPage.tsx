@@ -73,7 +73,7 @@ export function HistoryPage() {
 
   // --- Рендер состояний ---
   if (loading) {
-    return <PageLoading title="История" />
+    return <PageLoading title="" titleReserve actionsReserveCount={1} />
   }
 
   if (error) {

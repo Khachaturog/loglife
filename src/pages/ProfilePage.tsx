@@ -134,6 +134,7 @@ export function ProfilePage() {
         <form onSubmit={handleChangePassword}>
           <Flex direction="column" gap="2">
             <TextField.Root
+              size="3"
               placeholder="Новый пароль (минимум 6 символов)"
               type="password"
               value={newPassword}
@@ -143,6 +144,7 @@ export function ProfilePage() {
               disabled={passwordChanging}
             />
             <TextField.Root
+              size="3"
               placeholder="Подтвердите пароль"
               type="password"
               value={confirmPassword}
@@ -163,7 +165,7 @@ export function ProfilePage() {
               <Button 
               size="3"
               color="gray"
-              variant="outline"
+              variant="soft"
               type="submit" 
               disabled={passwordChanging}
               >
@@ -184,8 +186,12 @@ export function ProfilePage() {
             Скачать дела и записи в один CSV‑файл
           </Text>
         </Flex>
-        <RadioGroup.Root value={periodMode} onValueChange={(v) => setPeriodMode(v as 'all' | 'custom')}>
-          <Flex direction="column" gap="1">
+        <RadioGroup.Root 
+        value={periodMode} 
+        onValueChange={(v) => setPeriodMode(v as 'all' | 'custom')}
+        size="3"
+        >
+          <Flex direction="column" gap="2">
             <Text as="label" size="3" className={styles.radioLabel}>
               <RadioGroup.Item value="all" />
               Весь период
@@ -212,7 +218,7 @@ export function ProfilePage() {
           <Button 
           size="3" 
           color="gray" 
-          variant="outline"
+          variant="soft"
           onClick={handleExportCsv} 
           disabled={exporting}>
             {exporting ? 'Экспорт…' : 'Скачать CSV'}

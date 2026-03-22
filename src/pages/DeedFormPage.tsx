@@ -415,7 +415,10 @@ export function DeedFormPage() {
     return (
       <PageLoading
         backHref="/"
-        title="Дело"
+        backButtonIcon="close"
+        title=""
+        titleReserve
+        actionsReserveCount={1}
       />
     );
   }
@@ -424,6 +427,7 @@ export function DeedFormPage() {
     <Box className={layoutStyles.pageContainer}>
       <AppBar
         backHref={id ? `/deeds/${id}` : "/"}
+        backButtonIcon="close"
         title={isNew ? "Новое дело" : "Редактирование дела"}
         actions={
           <IconButton

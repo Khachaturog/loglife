@@ -25,12 +25,27 @@
   transition: box-shadow 0.3s ease;
 }
 
+/* Одна строка — иначе при появлении заголовка/кнопок перенос дёргает layout */
 .row {
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .title {
   flex: 1;
+  min-width: 0;
+}
+
+/* Невидимый резерв под заголовок при загрузке — та же типографика, без скачка высоты */
+.titleReserve {
+  visibility: hidden;
+  user-select: none;
+}
+
+/* Невидимые «кнопки» того же размера, что IconButton size="3" */
+.actionReserve {
+  visibility: hidden;
+  pointer-events: none;
+  flex-shrink: 0;
 }
 
 .actions {

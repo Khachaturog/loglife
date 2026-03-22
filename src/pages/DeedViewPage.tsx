@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
-import { Badge, Box, Card, DropdownMenu, Flex, Heading, IconButton, Text } from '@radix-ui/themes'
+import { Badge, Box, Card, Flex, Heading, IconButton, Separator, Text } from '@radix-ui/themes'
 import { AppBar } from '@/components/AppBar'
 import { PageLoading } from '@/components/PageLoading'
-import { DotsHorizontalIcon, Pencil1Icon, PlusIcon, TrashIcon } from '@radix-ui/react-icons'
+import { Pencil1Icon, PlusIcon, TrashIcon } from '@radix-ui/react-icons'
 import { api } from '@/lib/api'
 import { RecordCard } from '@/components/RecordCard'
 import type { DeedWithBlocks, RecordRow } from '@/types/database'
@@ -100,7 +100,8 @@ export function DeedViewPage() {
     const todayISO = todayLocalISO()
 
     const getValueFromAnswer = (valueJson: unknown, blockType: 'number' | 'scale' | 'duration'): number => {
-      // value_json приходит как JSON; здесь просто безопасно достаем нужное поле.
+      // value_json приходит как JSON; нет ответа по блоку или пустой JSON — не падаем на v.number.
+      if (valueJson == null || typeof valueJson !== 'object') return 0
       const v = valueJson as Partial<{ number: number; scaleValue: number; durationHms: string }>
       if (blockType === 'number' && typeof v.number === 'number') return Number(v.number) || 0
       if (blockType === 'scale' && typeof v.scaleValue === 'number') return Number(v.scaleValue) || 0
@@ -138,7 +139,7 @@ export function DeedViewPage() {
 
   // --- Рендер состояний загрузки и ошибки ---
   if (loading) {
-    return <PageLoading backHref="/" title="" />
+    return <PageLoading backHref="/" title="" actionsReserveCount={3} />
   }
 
   if (error || !deed) {
@@ -159,29 +160,30 @@ export function DeedViewPage() {
         backHref="/"
         title=""
         actions={
-          <DropdownMenu.Root>
-            <DropdownMenu.Trigger>
-              <IconButton variant="classic" color="gray" size="3" radius="full" aria-label="Действия">
-                <DotsHorizontalIcon width={18} height={18} />
-              </IconButton>
-            </DropdownMenu.Trigger>
-            <DropdownMenu.Content>
-              <DropdownMenu.Item asChild>
-                <Link to={`/deeds/${id}/fill`}>
-                  <PlusIcon /> Добавить
-                </Link>
-              </DropdownMenu.Item>
-              <DropdownMenu.Item asChild>
-                <Link to={`/deeds/${id}/edit`}>
-                  <Pencil1Icon /> Редактировать
-                </Link>
-              </DropdownMenu.Item>
-              <DropdownMenu.Separator />
-              <DropdownMenu.Item color="red" onSelect={handleDelete}>
-                <TrashIcon /> Удалить
-              </DropdownMenu.Item>
-            </DropdownMenu.Content>
-          </DropdownMenu.Root>
+          <Flex gap="2" align="center">
+            <IconButton asChild size="3" variant="classic" radius="full" aria-label="Добавить запись">
+              <Link to={`/deeds/${id}/fill`}>
+                <PlusIcon width={18} height={18} />
+              </Link>
+            </IconButton>
+            <IconButton asChild size="3" color="gray" variant="classic" radius="full" aria-label="Редактировать дело">
+              <Link to={`/deeds/${id}/edit`}>
+                <Pencil1Icon width={18} height={18} />
+              </Link>
+            </IconButton>
+            <Separator orientation="vertical"/>
+            <IconButton
+              type="button"
+              size="3"
+              color="red"
+              variant="classic"
+              radius="full"
+              aria-label="Удалить дело"
+              onClick={handleDelete}
+            >
+              <TrashIcon width={18} height={18} />
+            </IconButton>
+          </Flex>
         }
       />
     <Flex direction="column" gap="2">
@@ -204,9 +206,6 @@ export function DeedViewPage() {
       </Flex>
 
       <Box py="3" className={styles.analyticsSection}>
-        <Heading size="3" mb="2">
-          Аналитика
-        </Heading>
 
         <Flex direction="row" gap="2" wrap="wrap" mb="2">
           <Card style={{ flex: '1' }}>
@@ -285,7 +284,7 @@ export function DeedViewPage() {
         color="gray" 
         variant="soft" 
         radius="full">
-          {pluralRecords(records.length)}
+          {records.length}
         </Badge>
       </Flex>
 
@@ -302,7 +301,7 @@ export function DeedViewPage() {
                   {formatDate(date)}
                 </Text>
                 <Badge 
-                size="1" 
+                size="2" 
                 color="gray" 
                 variant="soft" 
                 radius="full">

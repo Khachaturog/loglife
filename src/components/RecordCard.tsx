@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { Avatar, Card, Flex, Text } from '@radix-ui/themes'
 import type { BlockRow, RecordRow, ValueJson } from '@/types/database'
-import { formatAnswer, previewAnswer } from '@/lib/format-utils'
+import { formatAnswerPreviewSegment } from '@/lib/format-utils'
 import styles from './RecordCard.module.css'
 
 type RecordAnswer = { block_id: string; value_json: unknown }
@@ -36,8 +36,9 @@ export function RecordCard({ record, blocks = [], deedPrefix, avatarFallback, li
   const preview = sortedAnswers
     .map((a) => {
       const block = blocks.find((b) => b.id === a.block_id)
-      return block ? formatAnswer(a.value_json as ValueJson, block) : previewAnswer(a.value_json as ValueJson)
+      return formatAnswerPreviewSegment(a.value_json as ValueJson, block)
     })
+    .filter((s) => s.trim() !== '')
     .join(' · ') || '—'
 
   const timeStr = record.record_time?.slice(0, 5) ?? ''
