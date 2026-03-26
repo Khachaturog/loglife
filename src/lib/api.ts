@@ -370,6 +370,28 @@ export const api = {
       return data ?? []
     },
 
+    /** Последние N записей дела с ответами — для подсказок на экране добавления записи (без полной истории). */
+    async recentRecords(
+      deedId: string,
+      limit = 10
+    ): Promise<(RecordRow & { record_answers?: RecordAnswerRow[] })[]> {
+      const uid = await getUserIdOrThrow()
+      const { data: deed } = await supabase.from('deeds').select('id').eq('id', deedId).eq('user_id', uid).single()
+      if (!deed) return []
+      const { data, error } = await supabase
+        .from('records')
+        .select('*, record_answers(*)')
+        .eq('deed_id', deedId)
+        .order('record_date', { ascending: false })
+        .order('record_time', { ascending: false })
+        .limit(limit)
+      if (error) {
+        console.error(error.message ?? 'Ошибка загрузки последних записей')
+        throw error
+      }
+      return data ?? []
+    },
+
     /** Записи по нескольким делам одним запросом (для главной и истории).
      * @param opts.skipDeedCheck — если true, не проверять deeds (id уже от listWithBlocks); RLS на records всё равно ограничит доступ */
     async recordsByDeedIds(

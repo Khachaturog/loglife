@@ -161,17 +161,6 @@ export function DeedViewPage() {
         title=""
         actions={
           <Flex gap="2" align="center">
-            <IconButton asChild size="3" variant="classic" radius="full" aria-label="Добавить запись">
-              <Link to={`/deeds/${id}/fill`}>
-                <PlusIcon width={18} height={18} />
-              </Link>
-            </IconButton>
-            <IconButton asChild size="3" color="gray" variant="classic" radius="full" aria-label="Редактировать дело">
-              <Link to={`/deeds/${id}/edit`}>
-                <Pencil1Icon width={18} height={18} />
-              </Link>
-            </IconButton>
-            <Separator orientation="vertical"/>
             <IconButton
               type="button"
               size="3"
@@ -183,13 +172,38 @@ export function DeedViewPage() {
             >
               <TrashIcon width={18} height={18} />
             </IconButton>
+            <IconButton 
+            asChild 
+            size="3" 
+            color="gray" 
+            variant="classic" 
+            radius="full" 
+            aria-label="Редактировать дело">
+              <Link to={`/deeds/${id}/edit`}>
+                <Pencil1Icon width={18} height={18} />
+              </Link>
+            </IconButton>
+            <Separator orientation="vertical"/>
+            <IconButton 
+            asChild 
+            size="3"
+            variant="classic" 
+            radius="full" 
+            aria-label="Добавить запись">
+              <Link to={`/deeds/${id}/fill`}>
+                <PlusIcon width={18} height={18} />
+              </Link>
+            </IconButton>
           </Flex>
         }
       />
-    <Flex direction="column" gap="2">
-      <Flex direction="column" gap="2">
-        <Heading size="5">
-          {`${deed.emoji} ${deed.name}`}
+    <Flex direction="column" gap="1">
+
+      <Flex align="center" direction="row" gap="3">
+     {/* <Avatar size="5" radius="large" color="gray" variant="soft" fallback={deed.emoji?.trim() || '📋'} /> */}
+      <Flex direction="column">
+        <Heading size="7">
+          {`${deed.name}`}
         </Heading>
 
         {/* {deed.category && (
@@ -199,10 +213,11 @@ export function DeedViewPage() {
           )} */}
 
         {deed.description && (
-          <Text as="p" size="2">
+          <Text as="p" color="gray" size="2">
             {deed.description}
           </Text>
         )}
+      </Flex>
       </Flex>
 
       <Box py="3" className={styles.analyticsSection}>
@@ -258,17 +273,17 @@ export function DeedViewPage() {
                 <Text size="4">{pluralRecords(records.length)}</Text> 
               </Flex>
 
-              <Flex direction="row" gap="2">
-                <Flex direction="row" gap="1">
-                  <Text size="2" color="gray">Рабочие:</Text>
-                  <Text size="2" >{analytics.workdayWeekend.workday}</Text>
+                <Flex direction="row" gap="2">
+                  <Flex direction="row" gap="1">
+                    <Text size="2" color="gray">Будни:</Text>
+                    <Text size="2" >{analytics.workdayWeekend.workday}</Text>
+                  </Flex>
+                  <Text size="2" color="gray">·</Text>
+                  <Flex direction="row" gap="1">
+                    <Text size="2" color="gray">Выходные:</Text>
+                    <Text size="2" >{analytics.workdayWeekend.weekend}</Text>
+                  </Flex>
                 </Flex>
-                <Text size="2" color="gray">·</Text>
-                <Flex direction="row" gap="1">
-                  <Text size="2" color="gray">Выходные:</Text>
-                  <Text size="2" >{analytics.workdayWeekend.weekend}</Text>
-                </Flex>
-              </Flex>
             </Card>
             
           </Flex>
@@ -279,13 +294,13 @@ export function DeedViewPage() {
       {/* История записей по датам */}
       <Flex align="center" justify="between" gap="2" mt="4" mb="2">
         <Heading size="3">История</Heading>
-        <Badge 
+        {/* <Badge 
         size="2" 
         color="gray" 
         variant="soft" 
         radius="full">
           {records.length}
-        </Badge>
+        </Badge> */}
       </Flex>
 
       {records.length === 0 ? (
@@ -315,7 +330,7 @@ export function DeedViewPage() {
                     key={rec.id}
                     record={rec}
                     blocks={deed.blocks ?? []}
-                    avatarFallback={deed.emoji}
+                    hideAvatar
                   />
                 ))}
               </Flex>

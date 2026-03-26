@@ -6,3 +6,20 @@ body {
   /* Резервируем место под вертикальный скроллбар, чтобы контент не скакал */
   scrollbar-gutter: stable both-edges;
 }
+
+/*
+ * iOS Safari при фокусе на поле ввода увеличивает масштаб страницы, если font-size < 16px.
+ * У TextArea Radix задаёт font-size на связке .rt-TextAreaRoot … .rt-TextAreaInput (2 класса) —
+ * одного .rt-TextAreaInput недостаточно, плюс global.css подключается после themes/styles.css (main.tsx).
+ * Порог 768px совпадает с мобильной вёрсткой AppBar.
+ */
+@media (max-width: 768px) {
+  .rt-TextFieldRoot .rt-TextFieldInput,
+  .rt-TextAreaRoot .rt-TextAreaInput,
+  /* Нативные поля даты/времени (DatePicker на мобильных — прозрачный оверлей) */
+  input[type='date'],
+  input[type='datetime-local'],
+  input[type='time'] {
+    font-size: 16px;
+  }
+}

@@ -79,7 +79,18 @@ export function formatDate(isoDate: string): string {
   if (d.toDateString() === today.toDateString()) return 'Сегодня'
   if (d.toDateString() === yesterday.toDateString()) return 'Вчера'
   if (d.toDateString() === dayBeforeYesterday.toDateString()) return 'Позавчера'
-  return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }).replace(/\s*г\.?\s*$/, '')
+  // Текущий год — только день и месяц; иначе добавляем год (без суффикса « г.» из Intl)
+  const sameCalendarYear = d.getFullYear() === today.getFullYear()
+  const parts = new Intl.DateTimeFormat(
+    'ru-RU',
+    sameCalendarYear
+      ? { day: 'numeric', month: 'long' }
+      : { day: 'numeric', month: 'long', year: 'numeric' },
+  ).formatToParts(d)
+  return parts
+    .filter((p) => p.type === 'day' || p.type === 'month' || p.type === 'year')
+    .map((p) => p.value)
+    .join(' ')
 }
 
 /** Краткий превью ответа для списков (число, текст до 20–25 символов, галочки и т.д.) */

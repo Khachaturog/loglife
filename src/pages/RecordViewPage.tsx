@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { Link, useParams, useNavigate, useLocation } from 'react-router-dom'
-import { Box, Button, CheckboxGroup, Flex, Heading, IconButton, RadioGroup, Select, SegmentedControl, Separator, Text, TextArea, TextField } from '@radix-ui/themes'
+import { Box, Button, CheckboxGroup, Flex, Heading, IconButton, RadioGroup, Select, SegmentedControl, Separator, Text, TextArea, TextField, Badge } from '@radix-ui/themes'
 import { AppBar } from '@/components/AppBar'
-import { DeedSummaryCard } from '@/components/DeedSummaryCard'
 import { FillFormNumberStepper } from '@/components/FillFormNumberStepper'
 import { PageLoading } from '@/components/PageLoading'
 import { ArrowTopLeftIcon, BackpackIcon, CheckIcon, Pencil1Icon, PlusIcon, TrashIcon } from '@radix-ui/react-icons'
@@ -11,6 +11,8 @@ import type { BlockConfig, BlockRow, DeedWithBlocks, RecordAnswerRow, RecordWith
 import { DatePicker } from '@/components/DatePicker'
 import { DurationInput } from '@/components/DurationInput'
 import { formatAnswer } from '@/lib/format-utils'
+import { blurInputOnEnter } from '@/lib/ios-input-blur'
+import scaleSegmentedStyles from '@/components/ScaleSegmentedControl.module.css'
 import layoutStyles from '@/styles/layout.module.css'
 import styles from './RecordViewPage.module.css'
 
@@ -370,7 +372,7 @@ export function RecordViewPage() {
             : undefined
         }
         backButtonIcon={editing ? 'close' : 'arrow'}
-        title={editing ? 'Редактирование записи' : 'Запись'}
+        title={editing ? 'Редактирование' : 'Запись'}
         actions={
           editing ? (
             <IconButton
@@ -396,7 +398,7 @@ export function RecordViewPage() {
                   <PlusIcon width={18} height={18} />
                 </Link>
               </IconButton>
-
+              <Separator orientation="vertical" />
               {/* К делу — только если открыли запись с вкладки «История» (state.from === 'history') */}
               {fromHistory && (
                 <>
@@ -462,26 +464,27 @@ export function RecordViewPage() {
       />
 
       {editing ? (
-        <Flex direction="column" gap="3">
+        <Flex direction="column" gap="4">
 
-          {/* Явный контекст дела при правке записи: эмодзи, название, категория, описание. */}
-          {deed && (
-            <DeedSummaryCard deed={deed} />
-          )}
+          <Flex direction="column" gap="1">
+            <Text size="2" weight="medium" as="label" htmlFor="deed">Дело</Text>
+            <Text size="3">{deed?.name}</Text>
+          </Flex>
 
           <Flex gap="3" wrap="wrap">
-            <Flex direction="column" gap="1" className={styles.dateTimeField}>
+            <Flex direction="column" gap="1">
               <Text size="2" weight="medium" as="label" htmlFor="date">Дата</Text>
               <DatePicker value={recordDate} onChange={setRecordDate} />
             </Flex>
 
-            <Flex direction="column" gap="1" className={styles.dateTimeField}>
+            <Flex direction="column" gap="1">
               <Text size="2" weight="medium" as="label" htmlFor="time">Время</Text>
               <TextField.Root
                 size="3"
                 type="time"
                 value={recordTime}
                 onChange={(e) => setRecordTime(e.target.value)}
+                onKeyDown={blurInputOnEnter}
               />
             </Flex>
           </Flex>
@@ -507,9 +510,12 @@ export function RecordViewPage() {
                   <TextField.Root
                     style={{ flex: 1 }}
                     size="3"
-                    type="number"
+                    type="text"
                     inputMode="decimal"
-                    min={0}
+                    enterKeyHint="done"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    onKeyDown={blurInputOnEnter}
                     value={
                       (answers[block.id] as { number?: number } | undefined)?.number !== undefined
                         ? String((answers[block.id] as { number?: number }).number)
@@ -540,6 +546,7 @@ export function RecordViewPage() {
                   size="3"
                   value={(answers[block.id] as { text?: string } | undefined)?.text ?? ''}
                   onChange={(e) => setAnswer(block.id, { text: e.target.value })}
+                  onKeyDown={blurInputOnEnter}
                 />
               )}
               {block.block_type === 'text_paragraph' && (
@@ -573,26 +580,33 @@ export function RecordViewPage() {
                     (answers[block.id] as { optionIds?: string[] } | undefined)?.optionIds ?? []
                   }
                   onValueChange={(nextValues) => {
-                    setAnswer(block.id, { optionIds: nextValues })
+                    flushSync(() => {
+                      setAnswer(block.id, { optionIds: nextValues })
+                    })
                   }}
                 >
-                  <Flex direction="column" gap="1">
+                  <Flex direction="column" gap="2">
                     {getBlockOptions(block).map((opt) => (
-                      <Text as="label" key={opt.id} size="2" className={styles.checkboxLabel}>
-                        <CheckboxGroup.Item value={opt.id}>{opt.label}</CheckboxGroup.Item>
-                      </Text>
+                      <CheckboxGroup.Item
+                        key={opt.id}
+                        value={opt.id}
+                        className={styles.checkboxLabel}
+                      >
+                        {opt.label}
+                      </CheckboxGroup.Item>
                     ))}
                   </Flex>
                 </CheckboxGroup.Root>
               )}
               {block.block_type === 'scale' && (
                 <SegmentedControl.Root
+                  className={scaleSegmentedStyles.root}
                   key={`${block.id}-edit-scale-${isEditBlockDirty(block.id) ? 'd' : 's'}`}
                   value={
                     (answers[block.id] as { scaleValue?: number } | undefined)?.scaleValue?.toString()
                   }
                   onValueChange={(v) => setAnswer(block.id, { scaleValue: Number(v) })}
-                  size="2"
+                  size={{ initial: '1', sm: '3' }}
                 >
                   {Array.from(
                     { length: Math.min(10, Math.max(1, (block.config as BlockConfig | null)?.divisions ?? 5)) },
@@ -642,13 +656,14 @@ export function RecordViewPage() {
       ) : (
         <Flex direction="column" gap="4" >
 
-          {deed && (
-            <DeedSummaryCard deed={deed} />
-          )}
+          <Box>
+            <Text size="3" color="gray" weight="medium">Дело</Text>
+            <Text as="p" size="3">{deed?.name}</Text>
+          </Box>
 
           <Box>
-            <Text weight="bold" size="2">Дата</Text>
-            <Text as="p" size="2">{record.record_date} {record.record_time?.slice(0, 5)}</Text>
+            <Text size="3" color="gray" weight="medium">Дата</Text>
+            <Text as="p" size="3">{record.record_date} {record.record_time?.slice(0, 5)}</Text>
           </Box>
 
           {blocks.filter((b) => !b.deleted_at).map((block) => {
@@ -662,8 +677,8 @@ export function RecordViewPage() {
             if (!outdated && !unfilled) {
               return (
                 <Box key={block.id}>
-                  <Text weight="bold" size="2">{block.title}</Text>
-                  <Text as="p" size="2">{value ? formatAnswer(value, block, optionsOverride) : '—'}</Text>
+                  <Text size="3" color="gray" weight="medium">{block.title}</Text>
+                  <Text as="p" size="3">{value ? formatAnswer(value, block, optionsOverride) : '—'}</Text>
                 </Box>
               )
             }
@@ -675,8 +690,8 @@ export function RecordViewPage() {
 
             return (
               <Box key={block.id}>
-                <Text weight="bold" size="2">{block.title}{outdated ? ' · Устарело' : unfilled ? ' · Не заполнено' : ''}</Text>
-                <Text as="p" size="2">{value ? formatAnswer(value, block, optionsOverride) : '—'}</Text>
+                <Text size="3" color="gray" weight="medium">{block.title}{outdated ? ' · Устарело' : unfilled ? ' · Не заполнено' : ''}</Text>
+                <Text as="p" size="3">{value ? formatAnswer(value, block, optionsOverride) : '—'}</Text>
                 <Flex direction="column" gap="1">
                   <Flex direction="row" align="center" gap="3" wrap="wrap">
                     <Flex direction="row" align="center" gap="1">
@@ -700,9 +715,12 @@ export function RecordViewPage() {
                       <TextField.Root
                         style={{ flex: 1 }}
                         size="3"
-                        type="number"
+                        type="text"
                         inputMode="decimal"
-                        min={0}
+                        enterKeyHint="done"
+                        autoComplete="off"
+                        autoCorrect="off"
+                        onKeyDown={blurInputOnEnter}
                         value={
                           (draft as { number?: number } | undefined)?.number !== undefined
                             ? String((draft as { number?: number }).number)
@@ -736,6 +754,7 @@ export function RecordViewPage() {
                       size="3"
                       value={(draft as { text?: string } | undefined)?.text ?? ''}
                       onChange={(e) => setUpdateDraftValue(block.id, { text: e.target.value })}
+                      onKeyDown={blurInputOnEnter}
                     />
                   )}
                   {block.block_type === 'text_paragraph' && (
@@ -769,20 +788,27 @@ export function RecordViewPage() {
                         (draft as { optionIds?: string[] } | undefined)?.optionIds ?? []
                       }
                       onValueChange={(nextValues) => {
-                        setUpdateDraftValue(block.id, { optionIds: nextValues })
+                        flushSync(() => {
+                          setUpdateDraftValue(block.id, { optionIds: nextValues })
+                        })
                       }}
                     >
                       <Flex direction="column" gap="1">
                         {currentOptions.map((opt) => (
-                          <Text as="label" key={opt.id} size="2" className={styles.checkboxLabel}>
-                            <CheckboxGroup.Item value={opt.id}>{opt.label}</CheckboxGroup.Item>
-                          </Text>
+                          <CheckboxGroup.Item
+                            key={opt.id}
+                            value={opt.id}
+                            className={styles.checkboxLabel}
+                          >
+                            {opt.label}
+                          </CheckboxGroup.Item>
                         ))}
                       </Flex>
                     </CheckboxGroup.Root>
                   )}
                   {block.block_type === 'scale' && (
                     <SegmentedControl.Root
+                      className={scaleSegmentedStyles.root}
                       // Как у Select выше: после «Сбросить» value приходит из миграции, но Radix может
                       // оставить визуально старый сегмент — key синхронизирует с черновиком/сбросом.
                       key={`${block.id}-scale-${updateDraft[block.id] != null ? 'draft' : 'migrated'}`}
@@ -790,7 +816,7 @@ export function RecordViewPage() {
                         (draft as { scaleValue?: number } | undefined)?.scaleValue?.toString()
                       }
                       onValueChange={(v) => setUpdateDraftValue(block.id, { scaleValue: Number(v) })}
-                      size="2"
+                      size={{ initial: '1', sm: '3' }}
                     >
                       {Array.from({ length: divisions }, (_, i) => i + 1).map((n) => (
                         <SegmentedControl.Item key={n} value={String(n)}>
@@ -835,9 +861,8 @@ export function RecordViewPage() {
             )
           })}
           {outdatedAnswers.filter(({ block }) => block?.deleted_at != null).length > 0 && (
-            <Box py="3">
-              <Separator size="4" />
-              <Heading size="3" mb="2">Удалённые блоки</Heading>
+            <>
+              {/* <Badge size="3">Удалённые блоки</Badge> */}
               {outdatedAnswers
                 .filter(({ block }) => block?.deleted_at != null)
                 .map(({ block, ans, title, optionsOverride }) => {
@@ -847,15 +872,21 @@ export function RecordViewPage() {
                   const scaleConfig = versionConfig?.scale
                   const configStr = scaleConfig ? formatScaleConfig(scaleConfig) : null
                   return (
-                    <Box key={ans.id} mb="2">
-                      <Text weight="bold" size="2">{title}</Text>
-                      <Text as="p" size="2">{ans.value_json ? formatAnswer(ans.value_json, block ?? ({} as BlockRow), optionsOverride) : '—'}</Text>
-                      {configStr && <Text as="p" size="1" color="gray">Конфиг: {configStr}</Text>}
-                      <Text as="p" size="1" color="gray">Блок удалён</Text>
-                    </Box>
+                    <Flex direction="column" gap="1" key={ans.id}>
+                      <Flex direction="row" align="center" gap="2" wrap="wrap"> 
+                        <Text weight="medium" size="3" color="gray">{title}</Text>
+                        <Badge size="2" color="red" variant="surface">Удалено</Badge>
+                      </Flex>
+                      <Flex direction="row" align="center" gap="2" wrap="wrap">
+                        <Text as="p" size="3">{ans.value_json ? formatAnswer(ans.value_json, block ?? ({} as BlockRow), optionsOverride) : '—'}</Text>
+                        <Text size="3" color="gray">·</Text>
+                        {configStr && <Text as="p" size="3">Раньше было от 1 до {configStr}</Text>}
+                      </Flex>
+                    </Flex>
                   )
                 })}
-            </Box>
+
+            </>
           )}
         </Flex>
       )}

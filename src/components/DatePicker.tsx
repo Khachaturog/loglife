@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import AirDatepicker from 'air-datepicker'
 import localeRu from 'air-datepicker/locale/ru'
-import { TextField } from '@radix-ui/themes'
+import { Box, TextField } from '@radix-ui/themes'
 
 /** Отображение в поле (десктоп, Air Datepicker): дд.мм.гггг */
 const DATE_FORMAT_DISPLAY = 'dd.MM.yyyy'
@@ -101,21 +101,49 @@ export function DatePicker({
     })
   }, [value, minDate, maxDate, disabled, isMobile])
 
-  // На iOS/Android — нативный date picker, но в оболочке Radix TextField
+  // На iOS/Android — нативный date picker через прозрачный input поверх текстового отображения.
+  // Нативный UI на iOS/Android отображает год в системной локали с «г.» — поэтому
+  // показываем отформатированное значение в своём TextField, а прозрачный type="date"
+  // только открывает системный пикер и принимает выбор.
   if (isMobile) {
+    const displayValue = value
+      ? `${value.slice(8, 10)}.${value.slice(5, 7)}.${value.slice(0, 4)}`
+      : ''
+
     return (
-      <TextField.Root
-        size="3"
-        type="date"
-        id={id}
-        value={value || ''}
-        onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
-          onChange(event.target.value)
-        }
-        min={minDate}
-        max={maxDate}
-        disabled={disabled}
-      />
+      <Box position="relative" style={{ display: 'inline-flex', width: '7.5rem' }}>
+        <TextField.Root
+          size="3"
+          type="text"
+          id={id}
+          value={displayValue}
+          placeholder={placeholder}
+          disabled={disabled}
+          readOnly
+          style={{ width: '100%' }}
+        />
+        {/* Прозрачный нативный input: открывает системный пикер, но не показывает свой текст */}
+        <input
+          type="date"
+          value={value || ''}
+          onChange={(e) => onChange(e.target.value)}
+          min={minDate}
+          max={maxDate}
+          disabled={disabled}
+          tabIndex={-1}
+          aria-hidden
+          style={{
+            position: 'absolute',
+            inset: 0,
+            opacity: 0,
+            width: '100%',
+            height: '100%',
+            cursor: 'pointer',
+            border: 'none',
+            background: 'transparent',
+          }}
+        />
+      </Box>
     )
   }
 
@@ -131,6 +159,7 @@ export function DatePicker({
       // Только выбор из календаря: без ручного ввода и вставки (формат жёстко dd.MM.yyyy)
       readOnly
       onPaste={(e) => e.preventDefault()}
+      style={{ width: '7.5rem' }}
     />
   )
 }

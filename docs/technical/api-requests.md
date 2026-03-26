@@ -8,7 +8,7 @@
 
 | Источник | Запрос | Таблицы | Где используется |
 |----------|--------|---------|------------------|
-| Auth | `getSession()` | — | App, каждый вызов api |
+| Auth | `getSession()` | — | AuthProvider (первая гидратация сессии), каждый вызов api |
 | Auth | `onAuthStateChange` | — | AuthProvider |
 | Auth | `signOut()` | — | ProfilePage |
 | api.deeds | `list()` | deeds | export-csv |
@@ -19,6 +19,7 @@
 | api.deeds | `delete()` | deeds | DeedViewPage |
 | api.deeds | `deleteBlock()` | deeds, blocks | DeedFormPage |
 | api.deeds | `records(deedId)` | deeds, records, record_answers | DeedViewPage, export-csv |
+| api.deeds | `recentRecords(deedId, limit?)` | deeds, records, record_answers | FillFormPage |
 | api.deeds | `recordsByDeedIds(ids)` | deeds, records, record_answers | DeedsListPage |
 | api.deeds | `listAllRecordsWithDeedInfo()` | records, record_answers, deeds | HistoryPage |
 | api.deeds | `createRecord()` | deeds, records, record_answers | FillFormPage |
@@ -33,6 +34,7 @@
 
 - **Используется:** App (через AuthProvider), каждый метод api (через `getUserIdOrThrow`)
 - **Частота:** 1 раз при загрузке (далее api использует cachedUserId из AuthProvider)
+- **Поведение:** до завершения первого `getSession()` в `AuthProvider` флаг `loading` остаётся `true`, чтобы не редиректить на `/login` пока Supabase успеет обновить сессию по refresh-токену (истёкший access-токен в localStorage сам по себе не означает «вышел из аккаунта»).
 
 ### `onAuthStateChange`
 
@@ -158,6 +160,24 @@ ORDER BY record_date DESC, record_time DESC
 
 ---
 
+### `api.deeds.recentRecords(deedId, limit?)`
+
+**Запросы:**
+1. `SELECT deeds` — проверка доступа
+2. `SELECT records, record_answers` — не более `limit` последних записей (по умолчанию 10), та же сортировка, что у `records`
+
+```sql
+SELECT *, record_answers(*)
+FROM records
+WHERE deed_id = :deedId
+ORDER BY record_date DESC, record_time DESC
+LIMIT :limit
+```
+
+**Используется:** FillFormPage (чипы «недавние значения» для числа и одиночного выбора)
+
+---
+
 ### `api.deeds.createRecord(deedId, payload)`
 
 **Запросы:**
@@ -232,6 +252,9 @@ ORDER BY record_date DESC, record_time DESC
 | # | Запрос | Таблицы |
 |---|--------|---------|
 | 1 | deeds.get | deeds, blocks |
+| 2 | deeds.recentRecords | deeds, records, record_answers |
+
+Загрузка: `get` и `recentRecords` параллельно (ошибка `recentRecords` не блокирует форму — чипы просто не показываются).
 
 При отправке: createRecord (deeds + records + record_answers)
 

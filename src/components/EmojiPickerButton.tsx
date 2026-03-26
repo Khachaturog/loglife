@@ -36,7 +36,6 @@ export function EmojiPickerButton({ value, onChange }: EmojiPickerButtonProps) {
           highContrast={true}
           size="3"
           aria-label="Выбрать эмодзи"
-          className={styles.emojiPickerButton}
         >
           {displayEmoji}
         </Button>
@@ -47,7 +46,7 @@ export function EmojiPickerButton({ value, onChange }: EmojiPickerButtonProps) {
       >
         <Flex>
           {open && (
-            <Suspense fallback={<Spinner size="2" />}>
+            <Suspense>
               <EmojiPickerContent onEmojiSelect={handleEmojiSelect} />
             </Suspense>
           )}

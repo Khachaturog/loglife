@@ -3,30 +3,13 @@
   max-width: 382px;
   margin: 0 auto;
   position: fixed;
-  bottom: 2px;
   left: var(--space-4);
   right: var(--space-4);
+  bottom: 1px;
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-1);
   padding-bottom: env(safe-area-inset-bottom, 0px);
-}
-
-/* Кнопка «Назад» — отдельная панель слева */
-.backButton {
-  width: 48px;
-  height: 48px;
-  /* display: flex;
-  border-radius: var(--radius-thumb);
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  background: var(--color-panel-solid);
-  border: 1px solid var(--gray-a6);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  color: var(--gray-11);
-  text-decoration: none;
-  transition: color 0.15s ease; */
 }
 
 /* .backButton:hover {

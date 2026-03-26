@@ -1,6 +1,7 @@
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Button, Card, Flex, Heading, Link as RadixLink, Text, TextField } from '@radix-ui/themes'
+import { useAuth } from '@/lib/auth-context'
 import { supabase } from '@/lib/supabase'
 import styles from './LoginPage.module.css'
 
@@ -19,6 +20,12 @@ export function LoginPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const redirectTo = safeRedirectPath(searchParams.get('redirect'))
+  const { user } = useAuth()
+
+  // Уже есть сессия (например, зашли по закладке /login) — уводим на целевой маршрут без формы
+  useEffect(() => {
+    if (user) navigate(redirectTo, { replace: true })
+  }, [user, navigate, redirectTo])
 
   // --- Состояние формы ---
   const [email, setEmail] = useState('')

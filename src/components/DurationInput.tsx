@@ -1,4 +1,5 @@
 import { TextField } from '@radix-ui/themes'
+import { blurInputOnEnter } from '@/lib/ios-input-blur'
 
 /**
  * Input with 00:00:00 mask (hours:minutes:seconds).
@@ -60,6 +61,7 @@ export function DurationInput({
       value={value}
       onChange={handleChange}
       onBlur={handleBlur}
+      onKeyDown={blurInputOnEnter}
       disabled={disabled}
       maxLength={8}
     />

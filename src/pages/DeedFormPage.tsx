@@ -22,6 +22,7 @@ import { PageLoading } from "@/components/PageLoading";
 import { EmojiPickerButton } from "@/components/EmojiPickerButton";
 import { ArrowBottomRightIcon, ArrowDownIcon, ArrowUpIcon, CheckIcon, PlusIcon, TrashIcon } from "@radix-ui/react-icons";
 import { api } from "@/lib/api";
+import { blurActiveInputInForm, blurInputOnEnter } from "@/lib/ios-input-blur";
 import type { BlockConfig, BlockType, DeedWithBlocks } from "@/types/database";
 import layoutStyles from "@/styles/layout.module.css";
 import styles from "./DeedFormPage.module.css";
@@ -137,10 +138,13 @@ function ScaleBlockConfig({
       </Text>
       <TextField.Root
         size="3"
-        type="number"
-        min={1}
-        max={10}
-        value={divisions}
+        type="text"
+        inputMode="numeric"
+        enterKeyHint="done"
+        autoComplete="off"
+        autoCorrect="off"
+        value={String(divisions)}
+        onKeyDown={blurInputOnEnter}
         onChange={(e) =>
           onChangeDivisions(
             Math.min(10, Math.max(1, Number(e.target.value) || 1)),
@@ -157,6 +161,7 @@ function ScaleBlockConfig({
         placeholder="Введите подпись"
         size="3"
         value={labels[0] ?? ""}
+        onKeyDown={blurInputOnEnter}
         onChange={(e) => setLabel(0, e.target.value)}
         />
         </Flex>
@@ -186,6 +191,7 @@ function ScaleBlockConfig({
                       placeholder="Введите подпись"
                       size="3"
                       value={labels[i] ?? ""}
+                      onKeyDown={blurInputOnEnter}
                       onChange={(e) => setLabel(i, e.target.value)}
                     />
                   </Flex>
@@ -202,6 +208,7 @@ function ScaleBlockConfig({
             placeholder="Введите подпись"
             size="3"
             value={labels[divisions - 1] ?? ""}
+            onKeyDown={blurInputOnEnter}
             onChange={(e) => setLabel(divisions - 1, e.target.value)}
             />
             </Flex>
@@ -366,8 +373,9 @@ export function DeedFormPage() {
   }
 
   /** Отправка формы: создание или обновление дела через API */
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault(); // без этого страница перезагрузится
+    blurActiveInputInForm(e.currentTarget);
     if (!canSave || saving) return;
     setSaving(true);
     try {
@@ -462,6 +470,7 @@ export function DeedFormPage() {
                 id="name"
                 size="3"
                 value={name}
+                onKeyDown={blurInputOnEnter}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Название"
                 />
@@ -522,6 +531,7 @@ export function DeedFormPage() {
               <TextField.Root
                 size="3"
                 value={category}
+                onKeyDown={blurInputOnEnter}
                 onChange={(e) => setCategory(e.target.value)}
                 placeholder="Введите категорию"
               />
@@ -529,7 +539,7 @@ export function DeedFormPage() {
           </Flex>
 
           {/* Палитра: готовые цвета + native color picker + hex-поле */}
-          <Flex direction="column" gap="2">
+          {/* <Flex direction="column" gap="2">
             <Text size="2" weight="medium">
               Цвет карточки
             </Text>
@@ -556,7 +566,7 @@ export function DeedFormPage() {
                 />
               ))}
             </Flex>
-          </Flex>
+          </Flex> */}
 
 
           {/* Список блоков: каждый блок — карточка с настройками */}
@@ -682,6 +692,7 @@ export function DeedFormPage() {
                   <TextField.Root
                     size="3"
                     value={block.title}
+                    onKeyDown={blurInputOnEnter}
                     onChange={(e) =>
                       updateBlock(index, (b) => ({
                         ...b,
@@ -744,6 +755,7 @@ export function DeedFormPage() {
                           className={styles.single_select_textField}
                           size="3"
                           value={opt.label}
+                          onKeyDown={blurInputOnEnter}
                           onChange={(e) =>
                             updateBlock(index, (b) => {
                               const nextOptions = [

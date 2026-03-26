@@ -1,0 +1,9 @@
+/**
+ * Шкала: `size={{ initial: '1', sm: '3' }}` — узкие сегменты на мобилке, но высота как у size 3
+ * (удобнее для тапа). Брейкпоинт `sm` в Radix Themes — 768px (см. @radix-ui/themes/components.css).
+ */
+@media (max-width: 767px) {
+  .root:global(.rt-r-size-1) {
+    height: var(--space-7);
+  }
+}

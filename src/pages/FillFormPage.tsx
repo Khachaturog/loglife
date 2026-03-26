@@ -1,16 +1,24 @@
 import { useEffect, useMemo, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Box, Button, CheckboxGroup, Flex, IconButton, RadioGroup, Select, SegmentedControl, Text, TextArea, TextField } from '@radix-ui/themes'
 import { AppBar } from '@/components/AppBar'
-import { DeedSummaryCard } from '@/components/DeedSummaryCard'
 import { FillFormNumberStepper } from '@/components/FillFormNumberStepper'
 import { PageLoading } from '@/components/PageLoading'
 import { CheckIcon } from '@radix-ui/react-icons'
 import { api } from '@/lib/api'
+import {
+  recentNumberSuggestions,
+  recentSingleSelectSuggestions,
+  type RecordWithAnswersForSuggestions,
+} from '@/lib/fill-form-recent-suggestions'
 import { DatePicker } from '@/components/DatePicker'
 import { DurationInput } from '@/components/DurationInput'
 import { todayLocalISO, nowTimeLocal } from '@/lib/format-utils'
+import { blurActiveInputInForm, blurInputOnEnter } from '@/lib/ios-input-blur'
+import { triggerHaptic } from '@/lib/haptics'
 import type { BlockConfig, BlockRow, DeedWithBlocks, ValueJson } from '@/types/database'
+import scaleSegmentedStyles from '@/components/ScaleSegmentedControl.module.css'
 import layoutStyles from '@/styles/layout.module.css'
 import styles from './FillFormPage.module.css'
 
@@ -52,17 +60,29 @@ export function FillFormPage() {
   const [recordDate, setRecordDate] = useState(todayLocalISO())
   const [recordTime, setRecordTime] = useState(nowTimeLocal())
   const [answers, setAnswers] = useState<Record<string, ValueJson>>({})
+  /** Последние записи дела — источник чипов «недавние значения» для number / single_select. */
+  const [recentRecords, setRecentRecords] = useState<RecordWithAnswersForSuggestions[]>([])
   /** После первой попытки отправки показываем ошибки по обязательным блокам (и общее правило «хотя бы один ответ»). */
   const [validationAttempted, setValidationAttempted] = useState(false)
 
-  // --- Загрузка дела ---
+  // --- Загрузка дела и последних записей (подсказки на форме) ---
   useEffect(() => {
     if (!deedId) return
     let cancelled = false
     setLoading(true)
-    api.deeds
-      .get(deedId)
-      .then((data) => { if (!cancelled) setDeed(data ?? null) })
+    Promise.all([
+      api.deeds.get(deedId),
+      api.deeds.recentRecords(deedId, 10).catch((e) => {
+        console.error(e instanceof Error ? e.message : 'Ошибка подсказок из записей')
+        return [] as RecordWithAnswersForSuggestions[]
+      }),
+    ])
+      .then(([data, recent]) => {
+        if (!cancelled) {
+          setDeed(data ?? null)
+          setRecentRecords(recent)
+        }
+      })
       .catch((e) => {
         if (!cancelled) {
           console.error(e?.message ?? 'Ошибка загрузки дела')
@@ -74,6 +94,28 @@ export function FillFormPage() {
   }, [deedId, navigate])
 
   const blocks = useMemo(() => deed?.blocks ?? [], [deed])
+
+  // Подсказки по блокам: какие значения взять — по недавности записей; числа на экране — от большего к меньшему.
+  const quickPickNumbersByBlockId = useMemo(() => {
+    const m: Record<string, number[]> = {}
+    for (const b of blocks) {
+      if (b.block_type === 'number') m[b.id] = recentNumberSuggestions(recentRecords, b.id)
+    }
+    return m
+  }, [blocks, recentRecords])
+
+  const quickPickSelectIdsByBlockId = useMemo(() => {
+    const m: Record<string, string[]> = {}
+    for (const b of blocks) {
+      if (b.block_type === 'single_select') {
+        const opts = getBlockOptions(b)
+        const valid = new Set(opts.map((o) => o.id))
+        const labelById = Object.fromEntries(opts.map((o) => [o.id, o.label]))
+        m[b.id] = recentSingleSelectSuggestions(recentRecords, b.id, valid, labelById)
+      }
+    }
+    return m
+  }, [blocks, recentRecords])
 
   const hasRequiredBlocks = useMemo(() => blocks.some((b) => b.is_required), [blocks])
 
@@ -140,8 +182,9 @@ export function FillFormPage() {
     })
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
+    blurActiveInputInForm(e.currentTarget)
     if (!deedId || saving) return
     setValidationAttempted(true)
     const formValid = hasRequiredBlocks ? !requiredMissing : hasAnyAnswer
@@ -154,6 +197,7 @@ export function FillFormPage() {
         record_time: recordTime,
         answers: Object.keys(sanitizedAnswers).length ? sanitizedAnswers : undefined,
       })
+      triggerHaptic('success')
       navigate(-1)
     } catch (err: unknown) {
       console.error(err instanceof Error ? err.message : 'Ошибка сохранения')
@@ -193,7 +237,7 @@ export function FillFormPage() {
         <AppBar
           onBack={() => navigate(-1)}
           backButtonIcon="close"
-          title={`Добавление записи`}
+          title={`Добавление`}
           actions={
             <IconButton
               size="3"
@@ -208,16 +252,21 @@ export function FillFormPage() {
           }
         />
 
-        {/* Контекст: к какому делу относится форма (название и описание не теряются среди полей). */}
-        <DeedSummaryCard deed={deed} />
-
         <Flex direction="column" gap="4" >
+
+          <Flex direction="column" gap="1">
+            <Text size="2" weight="medium" as="label" htmlFor="deed">Дело</Text>
+            <Text size="3">{deed?.name}</Text>
+          </Flex>
+
           {/* Дата и время */}
           <Flex gap="4">
+
             <Flex direction="column" gap="1">
-              <Text size="2" weight="medium">Дата</Text>
+              <Text size="2" weight="medium" as="label" htmlFor="date">Дата</Text>
               <DatePicker value={recordDate} onChange={setRecordDate} />
             </Flex>
+
             <Flex direction="column" gap="1">
               <Text size="2" weight="medium">Время</Text>
               <TextField.Root
@@ -225,12 +274,24 @@ export function FillFormPage() {
                 type="time"
                 value={recordTime}
                 onChange={(e) => setRecordTime(e.target.value)}
+                onKeyDown={blurInputOnEnter}
               />
             </Flex>
           </Flex>
 
           {/* Поля по блокам */}
-          {blocks.map((block) => (
+          {blocks.map((block) => {
+            const numberChipValues = quickPickNumbersByBlockId[block.id]
+            const selectChipIds = quickPickSelectIdsByBlockId[block.id]
+            const numberAns = (answers[block.id] as { number?: number } | undefined)?.number
+            const numberFilled =
+              numberAns !== undefined && Number.isFinite(numberAns) && numberAns > 0
+            const selectOptionId = (answers[block.id] as { optionId?: string } | undefined)?.optionId
+            const selectOptionLabelById =
+              block.block_type === 'single_select'
+                ? Object.fromEntries(getBlockOptions(block).map((o) => [o.id, o.label]))
+                : ({} as Record<string, string>)
+            return (
             <Flex key={block.id} direction="column" gap="1">
               <Flex direction="row" align="center" gap="3" wrap="wrap">
                 <Text size="2" weight="medium">
@@ -242,52 +303,85 @@ export function FillFormPage() {
                     size="2"
                     variant="ghost"
                     color="gray"
-                    onClick={() => clearAnswer(block.id)}
+                    onClick={() => {
+                      triggerHaptic('light', { intensity: 1 })
+                      clearAnswer(block.id)
+                    }}
                   >
                     Сбросить
                   </Button>
                 )}
               </Flex>
               {block.block_type === 'number' && (
-                // Не вешаем key от «пусто/заполнено»: иначе при первом шаге ± или первой цифре
-                // весь блок remount’ится — сбрасывается удержание кнопок и фокус в поле ввода.
-                <Flex gap="2" align="center">
-                  <TextField.Root 
-                    style={{ flex: 1 }}
-                    size="3"
-                    type="number"
-                    inputMode="decimal"
-                    min={0}
-                    value={(answers[block.id] as { number?: number } | undefined)?.number ?? ''}
-                    onChange={(e) => {
-                      const raw = e.target.value
-                      if (raw === '') {
-                        clearAnswer(block.id)
-                        return
-                      }
+                <>
+                  {/*
+                    Не вешаем key от «пусто/заполнено» на поле/stepper: иначе при первом шаге ± или первой цифре
+                    весь блок remount’ится — сбрасывается удержание кнопок и фокус.
+                    Чипы «недавние значения» показываем только пока число пустое; после выбора чипа или ввода скрываются.
+                  */}
+                  <Flex gap="2" align="center">
+                    <TextField.Root
+                      style={{ flex: 1 }}
+                      size="3"
+                      /* type="number" на iOS часто ломает «Готово» на клавиатуре; ввод и так парсим в onChange */
+                      type="text"
+                      inputMode="decimal"
+                      enterKeyHint="done"
+                      autoComplete="off"
+                      autoCorrect="off"
+                      onKeyDown={blurInputOnEnter}
+                      value={numberAns === undefined ? '' : String(numberAns)}
+                      onChange={(e) => {
+                        const raw = e.target.value
+                        if (raw === '') {
+                          clearAnswer(block.id)
+                          return
+                        }
 
-                      const parsed = Number(raw)
-                      // Если браузер возвращает нечисло/0 — считаем это очисткой.
-                      if (!Number.isFinite(parsed) || parsed === 0) {
-                        clearAnswer(block.id)
-                        return
-                      }
+                        const parsed = Number(raw)
+                        // Если браузер возвращает нечисло/0 — считаем это очисткой.
+                        if (!Number.isFinite(parsed) || parsed === 0) {
+                          clearAnswer(block.id)
+                          return
+                        }
 
-                      setAnswer(block.id, { number: Math.max(0, parsed) })
-                    }}
-                  />
-                  <FillFormNumberStepper
-                    blockId={block.id}
-                    value={(answers[block.id] as { number?: number } | undefined)?.number ?? 0}
-                    setAnswers={setAnswers}
-                  />
-                </Flex>
+                        setAnswer(block.id, { number: Math.max(0, parsed) })
+                      }}
+                    />
+                    <FillFormNumberStepper
+                      blockId={block.id}
+                      value={(answers[block.id] as { number?: number } | undefined)?.number ?? 0}
+                      setAnswers={setAnswers}
+                    />
+                  </Flex>
+                  {!numberFilled && numberChipValues && numberChipValues.length > 0 && (
+                    <Flex gap="1" wrap="wrap">
+                      {numberChipValues.map((val) => (
+                        <Button
+                          key={val}
+                          type="button"
+                          size="3"
+                          color="gray"
+                          variant="soft"
+                          radius="full"
+                          onClick={() => {
+                            triggerHaptic('light', { intensity: 1 })
+                            setAnswer(block.id, { number: val })
+                          }}
+                        >
+                          {val}
+                        </Button>
+                      ))}
+                    </Flex>
+                  )}
+                </>
               )}
               {block.block_type === 'text_short' && (
                 <TextField.Root
                   size="3"
                   value={(answers[block.id] as { text?: string } | undefined)?.text ?? ''}
                   onChange={(e) => setAnswer(block.id, { text: e.target.value })}
+                  onKeyDown={blurInputOnEnter}
                 />
               )}
               {block.block_type === 'text_paragraph' && (
@@ -299,49 +393,88 @@ export function FillFormPage() {
                 />
               )}
               {block.block_type === 'single_select' && (
-                <Select.Root
-                  key={`${block.id}-fill-ss-${(answers[block.id] as { optionId?: string } | undefined)?.optionId ?? 'cleared'}`}
-                  size="3"
-                  value={(answers[block.id] as { optionId?: string } | undefined)?.optionId || undefined}
-                  onValueChange={(v) => setAnswer(block.id, { optionId: v })}
-                >
-                  <Select.Trigger placeholder="Выберите" />
-                  <Select.Content>
-                    {getBlockOptions(block).map((opt) => (
-                      <Select.Item key={opt.id} value={opt.id}>{opt.label}</Select.Item>
-                    ))}
-                  </Select.Content>
-                </Select.Root>
+                <>
+                  <Select.Root
+                    key={`${block.id}-fill-ss-${(answers[block.id] as { optionId?: string } | undefined)?.optionId ?? 'cleared'}`}
+                    size="3"
+                    value={(answers[block.id] as { optionId?: string } | undefined)?.optionId || undefined}
+                    onValueChange={(v) => {
+                      triggerHaptic('light', { intensity: 1 })
+                      setAnswer(block.id, { optionId: v })
+                    }}
+                  >
+                    <Select.Trigger placeholder="Выберите" />
+                    <Select.Content>
+                      {getBlockOptions(block).map((opt) => (
+                        <Select.Item key={opt.id} value={opt.id}>{opt.label}</Select.Item>
+                      ))}
+                    </Select.Content>
+                  </Select.Root>
+                  {!selectOptionId && selectChipIds && selectChipIds.length > 0 && (
+                    <Flex gap="1" wrap="wrap" mt="1">
+                      {selectChipIds.map((optId) => (
+                        <Button
+                          key={optId}
+                          type="button"
+                          size="3"
+                          color="gray"
+                          variant="soft"
+                          radius="full"
+                          onClick={() => {
+                            triggerHaptic('light', { intensity: 1 })
+                            setAnswer(block.id, { optionId: optId })
+                          }}
+                        >
+                          {selectOptionLabelById[optId] ?? optId}
+                        </Button>
+                      ))}
+                    </Flex>
+                  )}
+                </>
               )}
               {block.block_type === 'multi_select' && (
                 <CheckboxGroup.Root
-                  key={`${block.id}-fill-ms-${answers[block.id] !== undefined ? 'set' : 'none'}`}
+                  // Не вешаем key от «пусто/есть ответ»: при первом выборе remount ломает контролируемую группу Radix
+                  // (сброс выбора или «слипание» чекбоксов при втором клике).
                   size="3"
                   value={
                     (answers[block.id] as { optionIds?: string[] } | undefined)?.optionIds ?? []
                   }
                   onValueChange={(nextValues) => {
-                    // Сохраняем выбранные опции блока в ответе
-                    setAnswer(block.id, { optionIds: nextValues })
+                    triggerHaptic('light', { intensity: 1 })
+                    // Без flushSync при быстрых кликах по разным пунктам Radix считает следующий шаг
+                    // от устаревшего `value` (батч React) — в onValueChange приходит урезанный массив.
+                    flushSync(() => {
+                      setAnswer(block.id, { optionIds: nextValues })
+                    })
                   }}
                 >
-                  <Flex direction="column" gap="1">
+                  <Flex direction="column" gap="2">
                     {getBlockOptions(block).map((opt) => (
-                      <Text as="label" key={opt.id} size="1" className={styles.checkboxLabel}>
-                        <CheckboxGroup.Item value={opt.id}>{opt.label}</CheckboxGroup.Item>
-                      </Text>
+                      <CheckboxGroup.Item
+                        key={opt.id}
+                        value={opt.id}
+                        className={styles.checkboxLabel}
+                      >
+                        {opt.label}
+                      </CheckboxGroup.Item>
                     ))}
                   </Flex>
                 </CheckboxGroup.Root>
               )}
               {block.block_type === 'scale' && (
                 <SegmentedControl.Root
+                  className={scaleSegmentedStyles.root}
                   key={`${block.id}-fill-scale-${answers[block.id] !== undefined ? 'set' : 'none'}`}
                   value={
                     (answers[block.id] as { scaleValue?: number } | undefined)?.scaleValue?.toString()
                   }
-                  onValueChange={(v) => setAnswer(block.id, { scaleValue: Number(v) })}
-                  size="2"
+                  onValueChange={(v) => {
+                    triggerHaptic('light', { intensity: 1 })
+                    setAnswer(block.id, { scaleValue: Number(v) })
+                  }}
+                  // Узкий экран — компактнее по ширине; высота — через ScaleSegmentedControl.module.css.
+                  size={{ initial: '1', sm: '3' }}
                 >
                   {Array.from(
                     { length: Math.min(10, Math.max(1, (block.config as BlockConfig | null)?.divisions ?? 5)) },
@@ -371,7 +504,10 @@ export function FillFormPage() {
                         ? 'false'
                         : ''
                   }
-                  onValueChange={(v) => setAnswer(block.id, { yesNo: v === 'true' })}
+                  onValueChange={(v) => {
+                    triggerHaptic('light', { intensity: 1 })
+                    setAnswer(block.id, { yesNo: v === 'true' })
+                  }}
                 >
                   <Flex gap="4">
                     <Text as="label" size="3" className={styles.checkboxLabel}>
@@ -391,7 +527,8 @@ export function FillFormPage() {
                 </Text>
               )}
             </Flex>
-          ))}
+            )
+          })}
 
           {validationAttempted && !hasRequiredBlocks && !hasAnyAnswer && (
             <Text size="2" color="crimson" role="alert">

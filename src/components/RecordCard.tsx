@@ -15,6 +15,8 @@ type RecordCardProps = {
   deedPrefix?: { emoji: string; name: string }
   /** Эмодзи для аватарки, когда deedPrefix не передан (например на странице дела) */
   avatarFallback?: string
+  /** Скрыть аватар (на странице дела эмодзи дела уже в шапке) */
+  hideAvatar?: boolean
   /** state для Link (например { from: 'history' }) */
   linkState?: Record<string, string>
 }
@@ -24,7 +26,14 @@ type RecordCardProps = {
  * Вся карточка = ссылка (Card asChild + Link): паддинги и hover от Radix, клик по любой области ведёт на /records/:id.
  * Используется на странице истории и на странице просмотра дела.
  */
-export function RecordCard({ record, blocks = [], deedPrefix, avatarFallback, linkState }: RecordCardProps) {
+export function RecordCard({
+  record,
+  blocks = [],
+  deedPrefix,
+  avatarFallback,
+  hideAvatar = false,
+  linkState,
+}: RecordCardProps) {
   const sortedAnswers = [...(record.record_answers ?? [])].sort((a, b) => {
     const blockA = blocks.find((x) => x.id === a.block_id)
     const blockB = blocks.find((x) => x.id === b.block_id)
@@ -54,28 +63,28 @@ export function RecordCard({ record, blocks = [], deedPrefix, avatarFallback, li
         className={styles.recordLink}
       >
         <Flex align="start" gap="2">
-          <Avatar
-            size="1"
-            radius="large"
-            color="gray"
-            variant="soft"
-            fallback={emoji}
-          />
+          {!hideAvatar ? (
+            <Avatar
+              size="1"
+              radius="large"
+              color="gray"
+              variant="soft"
+              fallback={emoji}
+            />
+          ) : null}
           <Flex direction="column" gap="1" flexGrow="1">
-            <Flex justify="between" align="center" gap="3">
               {title ? (
                 <Text weight="medium" truncate>
                   {title}
                 </Text>
               ) : null}
+            <Text as="p" size="2">
+              {preview}
+            </Text>
+            </Flex>
               <Text as="p" size="2" color="gray">
                 {timeStr}
               </Text>
-            </Flex>
-            <Text as="p" size="2" color="gray">
-              {preview}
-            </Text>
-          </Flex>
         </Flex>
       </Link>
     </Card>

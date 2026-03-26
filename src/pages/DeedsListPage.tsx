@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Box, Button, Flex, IconButton, Link as RadixLink, Text } from '@radix-ui/themes'
+import { Box, Button, Flex, Link as RadixLink, Text } from '@radix-ui/themes'
 import { AppBar } from '@/components/AppBar'
 import { PageLoading } from '@/components/PageLoading'
-import { PlusIcon } from '@radix-ui/react-icons'
 import { api } from '@/lib/api'
 import { DeedCard } from '@/components/DeedCard'
 import type { DeedWithBlocks } from '@/types/database'
@@ -96,11 +95,11 @@ export function DeedsListPage() {
       <AppBar 
       title="Дела" 
       actions={
-      <IconButton size="3" variant="classic" radius="full" color="gray" asChild aria-label="Создать дело">
+      <Button size="3" variant="ghost" radius="large" color="gray" asChild aria-label="Создать дело">
         <Link to="/deeds/new">
-          <PlusIcon width={18} height={18} />
+          Создать
         </Link>
-      </IconButton>} />
+      </Button>} />
 
       {/* Фильтр по категориям (скрыт, если нет дел или категорий) */}
       {deeds.length > 0 && categories.length > 0 && (

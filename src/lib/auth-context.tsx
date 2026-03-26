@@ -8,7 +8,7 @@ type AuthContextValue = {
   loading: boolean
 }
 
-const AuthContext = createContext<AuthContextValue>({ user: null, loading: false })
+const AuthContext = createContext<AuthContextValue>({ user: null, loading: true })
 
 /**
  * Синхронно читает пользователя из localStorage (Supabase JS v2 хранит сессию там).
@@ -30,17 +30,31 @@ function getInitialUser(): User | null {
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  // Инициализируем из localStorage синхронно — нет блокирующей «Загрузки…»
+  // Синхронный кеш из localStorage — только для начального состояния; истёкший access-токен
+  // здесь обнуляется, но refresh по-прежнему сработает в getSession() ниже.
   const [user, setUser] = useState<User | null>(getInitialUser)
-  const [loading, _setLoading] = useState(false)
+  // Пока не завершилась первая getSession(), App не решает «редирект на логин» — иначе при
+  // просроченном access-токене и валидном refresh показывался бы лишний экран входа.
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Фоновая проверка/обновление сессии (в т.ч. refresh токена если нужен)
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      const u = session?.user ?? null
-      setUser(u)
-      setApiUserId(u?.id ?? null)
-    })
+    let cancelled = false
+
+    async function hydrateSession() {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        if (cancelled) return
+        const u = session?.user ?? null
+        setUser(u)
+        setApiUserId(u?.id ?? null)
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    void hydrateSession()
 
     const {
       data: { subscription },
@@ -49,7 +63,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(u)
       setApiUserId(u?.id ?? null)
     })
-    return () => subscription.unsubscribe()
+    return () => {
+      cancelled = true
+      subscription.unsubscribe()
+    }
   }, [])
 
   const value = useMemo(() => ({ user, loading }), [user, loading])
