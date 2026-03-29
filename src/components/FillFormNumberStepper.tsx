@@ -2,7 +2,6 @@ import { useCallback } from 'react'
 import { IconButton } from '@radix-ui/themes'
 import { MinusIcon, PlusIcon } from '@radix-ui/react-icons'
 import type { ValueJson } from '@/types/database'
-import { triggerHaptic } from '@/lib/haptics'
 import { useHoldRepeat } from '@/lib/useHoldRepeat'
 
 export type NumberStepperZeroBehavior = 'clearKey' | 'storeZero'
@@ -59,16 +58,6 @@ export function FillFormNumberStepper({
   const minusHold = useHoldRepeat(decrement)
   const plusHold = useHoldRepeat(increment)
 
-  // Вибрация только в начале жеста (не на каждом тике удержания).
-  const onMinusPointerDown = useCallback(() => {
-    triggerHaptic('heavy', { intensity: 1 })
-    minusHold.handlePointerDown()
-  }, [minusHold])
-  const onPlusPointerDown = useCallback(() => {
-    triggerHaptic('heavy', { intensity: 1 })
-    plusHold.handlePointerDown()
-  }, [plusHold])
-
   return (
     <>
       <IconButton
@@ -79,7 +68,7 @@ export function FillFormNumberStepper({
         type="button"
         aria-label="Уменьшить значение"
         disabled={value === 0}
-        onPointerDown={onMinusPointerDown}
+        onPointerDown={minusHold.handlePointerDown}
         onPointerUp={minusHold.handlePointerUp}
         onPointerLeave={minusHold.handlePointerUp}
         onPointerCancel={minusHold.handlePointerUp}
@@ -93,7 +82,7 @@ export function FillFormNumberStepper({
         radius="full"
         type="button"
         aria-label="Увеличить значение"
-        onPointerDown={onPlusPointerDown}
+        onPointerDown={plusHold.handlePointerDown}
         onPointerUp={plusHold.handlePointerUp}
         onPointerLeave={plusHold.handlePointerUp}
         onPointerCancel={plusHold.handlePointerUp}

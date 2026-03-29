@@ -27,7 +27,7 @@ export function TabBar() {
       <nav className={styles.tabBar}>
       <NavLink
         to="/"
-        onClick={() => triggerHaptic('heavy', { intensity: 1 })}
+        onClick={() => triggerHaptic('medium', { intensity: 1 })}
         className={({ isActive }) => (isActive ? styles.tabActive : styles.tab)}
       >
         <HomeIcon width={20} height={20} />
@@ -36,7 +36,7 @@ export function TabBar() {
       <NavLink
         to="/widgets"
         end={false}
-        onClick={() => triggerHaptic('heavy', { intensity: 1 })}
+        onClick={() => triggerHaptic('medium', { intensity: 1 })}
         className={({ isActive }) => (isActive ? styles.tabActive : styles.tab)}
       >
         <ViewGridIcon width={20} height={20} />
@@ -44,7 +44,7 @@ export function TabBar() {
       </NavLink>
       <NavLink
         to="/history"
-        onClick={() => triggerHaptic('heavy', { intensity: 1 })}
+        onClick={() => triggerHaptic('medium', { intensity: 1 })}
         className={({ isActive }) => (isActive ? styles.tabActive : styles.tab)}
       >
         <ClockIcon width={20} height={20} />
@@ -52,7 +52,7 @@ export function TabBar() {
       </NavLink>
       <NavLink
         to="/profile"
-        onClick={() => triggerHaptic('heavy', { intensity: 1 })}
+        onClick={() => triggerHaptic('medium', { intensity: 1 })}
         className={({ isActive }) => (isActive ? styles.tabActive : styles.tab)}
       >
         <PersonIcon width={20} height={20} />

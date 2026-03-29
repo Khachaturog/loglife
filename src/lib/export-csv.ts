@@ -15,7 +15,7 @@ function formatValueForCsv(value: ValueJson): string {
   if ('optionId' in value) return value.optionId ?? ''
   if ('optionIds' in value && Array.isArray(value.optionIds)) return value.optionIds.join('; ')
   if ('scaleValue' in value) return String(value.scaleValue)
-  if ('yesNo' in value) return value.yesNo ? 'Да' : 'Нет'
+  if ('yesNo' in value) return value.yesNo ? 'Выполнено' : 'Не выполнено'
   if ('durationHms' in value) return (value as { durationHms: string }).durationHms ?? ''
   return ''
 }

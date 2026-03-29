@@ -29,7 +29,7 @@
 | deed_id    | uuid FK → deeds |              |
 | sort_order | int4        | Порядок в форме |
 | title      | text        | Текст вопроса   |
-| block_type | text        | number, text_short, text_paragraph, single_select, multi_select, scale, yes_no |
+| block_type | text        | number, text_paragraph, single_select, multi_select, scale, yes_no, duration |
 | is_required| boolean     | default false   |
 | config     | jsonb       | Для scale: { divisions, labelLeft, labelRight } |
 | deleted_at | timestamptz | null = активен  |

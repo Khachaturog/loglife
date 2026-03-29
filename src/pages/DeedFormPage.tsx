@@ -13,9 +13,13 @@ import {
   IconButton,
   Select,
   Text,
-  TextArea,
   TextField,
 } from "@radix-ui/themes";
+import {
+  AutoGrowTextArea,
+  AUTO_GROW_TEXTAREA_MAX_PX,
+  AUTO_GROW_TEXTAREA_MIN_TWO_LINES_PX,
+} from "@/components/AutoGrowTextArea";
 import { AppBar } from "@/components/AppBar";
 import { PageLoading } from "@/components/PageLoading";
 import { EmojiPickerButton } from "@/components/EmojiPickerButton";
@@ -38,8 +42,7 @@ type UiBlock = {
 /** Человекочитаемые названия типов блоков для Select */
 const BLOCK_TYPE_LABEL: Record<BlockType, string> = {
   number: "Число",
-  text_short: "Текст (строка)",
-  text_paragraph: "Текст (абзац)",
+  text_paragraph: "Текст",
   single_select: "Один из списка",
   multi_select: "Несколько из списка",
   scale: "Шкала",
@@ -467,12 +470,14 @@ export function DeedFormPage() {
             <Text size="2" weight="medium" as="label" htmlFor="description">
               Описание
             </Text>
-            <TextArea
+            <AutoGrowTextArea
               id="description"
-              size="3"
+              className={styles.descriptionTextarea}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Опишите дело"
+              minHeightPx={AUTO_GROW_TEXTAREA_MIN_TWO_LINES_PX}
+              maxHeightPx={AUTO_GROW_TEXTAREA_MAX_PX}
             />
           </Flex>
           <Flex direction="column" gap="1">

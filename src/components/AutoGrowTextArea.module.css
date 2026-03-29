@@ -1,0 +1,23 @@
+/*
+ * Высота задаётся в JS (scrollHeight); здесь базовая вёрстка.
+ * Верхний предел — inline maxHeight из maxHeightPx в AutoGrowTextArea.tsx.
+ */
+.root {
+  resize: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/*
+ * В themes/components.css для size 3 у .rt-TextAreaRoot задано min-height: 80px —
+ * из-за этого и визуально, и при измерении scrollHeight поле оставалось «многострочным».
+ * Сбрасываем минимум корня и textarea в flex-контейнере, реальную высоту задаёт эффект в TSX.
+ */
+.root:global(.rt-TextAreaRoot) {
+  min-height: 0 !important;
+}
+
+.root :global(.rt-TextAreaInput) {
+  min-height: 0;
+  flex-grow: 0;
+}

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { Link, useParams, useNavigate, useLocation } from 'react-router-dom'
-import { Box, Button, CheckboxGroup, Flex, IconButton, RadioGroup, Select, SegmentedControl, Separator, Text, TextArea, TextField, Badge } from '@radix-ui/themes'
+import { AlertDialog, Box, Button, Checkbox, CheckboxGroup, Flex, IconButton, Select, SegmentedControl, Separator, Text, TextField, Badge } from '@radix-ui/themes'
+import { AUTO_GROW_TEXTAREA_MIN_ONE_LINE_PX, AutoGrowTextArea } from '@/components/AutoGrowTextArea'
 import { AppBar } from '@/components/AppBar'
 import { FillFormNumberStepper } from '@/components/FillFormNumberStepper'
 import { PageLoading } from '@/components/PageLoading'
@@ -10,7 +11,7 @@ import { api } from '@/lib/api'
 import type { BlockConfig, BlockRow, DeedWithBlocks, RecordAnswerRow, RecordWithAnswers, ValueJson } from '@/types/database'
 import { DatePicker } from '@/components/DatePicker'
 import { DurationInput } from '@/components/DurationInput'
-import { formatAnswer } from '@/lib/format-utils'
+import { formatAnswer, formatRecordDateTimeDisplay } from '@/lib/format-utils'
 import { blurInputOnEnter } from '@/lib/ios-input-blur'
 import scaleSegmentedStyles from '@/components/ScaleSegmentedControl.module.css'
 import layoutStyles from '@/styles/layout.module.css'
@@ -91,6 +92,10 @@ export function RecordViewPage() {
   const [editAnswersBaseline, setEditAnswersBaseline] = useState<Record<string, ValueJson> | null>(null)
   const [updateDraft, setUpdateDraft] = useState<Record<string, ValueJson>>({})
   const [savingOutdated, setSavingOutdated] = useState(false)
+  /** Подтверждение удаления записи — без `window.confirm` (совместимость с встроенным браузером Cursor). */
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleteLoading, setDeleteLoading] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!recordId) return
@@ -201,11 +206,24 @@ export function RecordViewPage() {
     setAnswers((prev) => ({ ...prev, [blockId]: value }))
   }
 
-  async function handleDelete() {
+  function openDeleteDialog() {
+    setDeleteError(null)
+    setDeleteOpen(true)
+  }
+
+  async function confirmDeleteRecord() {
     if (!recordId) return
-    if (!confirm('Удалить запись?')) return
-    await api.records.delete(recordId)
-    navigate(backLink)
+    setDeleteLoading(true)
+    setDeleteError(null)
+    try {
+      await api.records.delete(recordId)
+      setDeleteOpen(false)
+      navigate(backLink)
+    } catch (e) {
+      setDeleteError(e instanceof Error ? e.message : 'Не удалось удалить запись')
+    } finally {
+      setDeleteLoading(false)
+    }
   }
 
   function getMigratedValue(block: BlockRow, oldVal: ValueJson | undefined): ValueJson | undefined {
@@ -233,7 +251,6 @@ export function RecordViewPage() {
         const n = (draft as { number?: number }).number
         return typeof n === 'number' && Number.isFinite(n) && n !== 0
       }
-      case 'text_short':
       case 'text_paragraph': {
         const t = (draft as { text?: string }).text
         return typeof t === 'string' && t.trim().length > 0
@@ -435,7 +452,7 @@ export function RecordViewPage() {
                 color="red"
                 radius="full"
                 size="3"
-                onClick={handleDelete}
+                onClick={openDeleteDialog}
                 aria-label="Удалить"
               >
                 <TrashIcon width={18} height={18} />
@@ -493,7 +510,7 @@ export function RecordViewPage() {
             <Flex key={block.id} direction="column" gap="1">
               <Flex direction="row" align="center" gap="3" wrap="wrap">
                 <Text size="2" weight="medium">{block.title}</Text>
-                {isEditBlockDirty(block.id) && (
+                {isEditBlockDirty(block.id) && block.block_type !== 'yes_no' && (
                   <Button
                     type="button"
                     size="2"
@@ -541,19 +558,12 @@ export function RecordViewPage() {
                   />
                 </Flex>
               )}
-              {block.block_type === 'text_short' && (
-                <TextField.Root
-                  size="3"
-                  value={(answers[block.id] as { text?: string } | undefined)?.text ?? ''}
-                  onChange={(e) => setAnswer(block.id, { text: e.target.value })}
-                  onKeyDown={blurInputOnEnter}
-                />
-              )}
               {block.block_type === 'text_paragraph' && (
-                <TextArea
+                <AutoGrowTextArea
                   size="3"
                   value={(answers[block.id] as { text?: string } | undefined)?.text ?? ''}
                   onChange={(e) => setAnswer(block.id, { text: e.target.value })}
+                  minHeightPx={AUTO_GROW_TEXTAREA_MIN_ONE_LINE_PX}
                 />
               )}
               {block.block_type === 'single_select' && (
@@ -626,29 +636,16 @@ export function RecordViewPage() {
                 />
               )}
               {block.block_type === 'yes_no' && (
-                <RadioGroup.Root
-                  key={`${block.id}-edit-yn-${isEditBlockDirty(block.id) ? 'd' : 's'}`}
-                  size="3"
-                  value={
-                    (answers[block.id] as { yesNo?: boolean } | undefined)?.yesNo === true
-                      ? 'true'
-                      : (answers[block.id] as { yesNo?: boolean } | undefined)?.yesNo === false
-                        ? 'false'
-                        : ''
-                  }
-                  onValueChange={(v) => setAnswer(block.id, { yesNo: v === 'true' })}
-                >
-                  <Flex gap="4">
-                    <Text as="label" size="3" className={styles.checkboxLabel}>
-                      <RadioGroup.Item value="true" />
-                      Да
-                    </Text>
-                    <Text as="label" size="3" className={styles.checkboxLabel}>
-                      <RadioGroup.Item value="false" />
-                      Нет
-                    </Text>
+                <Text as="label" size="3" className={styles.checkboxLabel}>
+                  <Flex align="center" gap="2">
+                    <Checkbox
+                      size="3"
+                      checked={(answers[block.id] as { yesNo?: boolean } | undefined)?.yesNo === true}
+                      onCheckedChange={(c) => setAnswer(block.id, { yesNo: c === true })}
+                    />
+                    Выполнено
                   </Flex>
-                </RadioGroup.Root>
+                </Text>
               )}
             </Flex>
           ))}
@@ -663,7 +660,7 @@ export function RecordViewPage() {
 
           <Box>
             <Text size="3" color="gray" weight="medium">Дата</Text>
-            <Text as="p" size="3">{record.record_date} {record.record_time?.slice(0, 5)}</Text>
+            <Text as="p" size="3">{formatRecordDateTimeDisplay(record.record_date, record.record_time)}</Text>
           </Box>
 
           {blocks.filter((b) => !b.deleted_at).map((block) => {
@@ -675,6 +672,18 @@ export function RecordViewPage() {
             const optionsOverride = versionConfig?.options?.map((o) => ({ id: o.id, label: o.label }))
 
             if (!outdated && !unfilled) {
+              if (block.block_type === 'yes_no' && value) {
+                const done = (value as { yesNo: boolean }).yesNo === true
+                return (
+                  <Box key={block.id}>
+                    <Text size="3" color="gray" weight="medium">{block.title}</Text>
+                    <Flex align="center" gap="2" mt="1">
+                      <Checkbox size="3" disabled checked={done} />
+                      <Text size="3">{done ? 'Выполнено' : 'Не выполнено'}</Text>
+                    </Flex>
+                  </Box>
+                )
+              }
               return (
                 <Box key={block.id}>
                   <Text size="3" color="gray" weight="medium">{block.title}</Text>
@@ -690,15 +699,40 @@ export function RecordViewPage() {
 
             return (
               <Box key={block.id}>
-                <Text size="3" color="gray" weight="medium">{block.title}{outdated ? ' · Устарело' : unfilled ? ' · Не заполнено' : ''}</Text>
-                <Text as="p" size="3">{value ? formatAnswer(value, block, optionsOverride) : '—'}</Text>
+                <Flex align="center" gap="2" wrap="wrap">
+                  <Text size="3" color="gray" weight="medium">
+                    {block.title}
+                  </Text>
+                  {outdated && (
+                    <Badge size="2" color="amber" variant="surface">
+                      Устарело
+                    </Badge>
+                  )}
+                  {unfilled && (
+                    <Badge size="2" color="orange" variant="surface">
+                      Не заполнено
+                    </Badge>
+                  )}
+                </Flex>
+                {value && block.block_type === 'yes_no' ? (
+                  <Flex align="center" gap="2" mt="1">
+                    <Checkbox
+                      size="3"
+                      disabled
+                      checked={(value as { yesNo: boolean }).yesNo === true}
+                    />
+                    <Text size="3">{(value as { yesNo: boolean }).yesNo ? 'Выполнено' : 'Не выполнено'}</Text>
+                  </Flex>
+                ) : (
+                  <Text as="p" size="3">{value ? formatAnswer(value, block, optionsOverride) : '—'}</Text>
+                )}
                 <Flex direction="column" gap="1">
                   <Flex direction="row" align="center" gap="3" wrap="wrap">
                     <Flex direction="row" align="center" gap="1">
                       <ArrowTopLeftIcon />
                       <Text weight="medium" size="2">Обнови блок</Text>
                     </Flex>
-                    {updateDraft[block.id] != null && (
+                    {updateDraft[block.id] != null && block.block_type !== 'yes_no' && (
                       <Button
                         type="button"
                         size="2"
@@ -749,19 +783,12 @@ export function RecordViewPage() {
                       />
                     </Flex>
                   )}
-                  {block.block_type === 'text_short' && (
-                    <TextField.Root
-                      size="3"
-                      value={(draft as { text?: string } | undefined)?.text ?? ''}
-                      onChange={(e) => setUpdateDraftValue(block.id, { text: e.target.value })}
-                      onKeyDown={blurInputOnEnter}
-                    />
-                  )}
                   {block.block_type === 'text_paragraph' && (
-                    <TextArea
+                    <AutoGrowTextArea
                       size="3"
                       value={(draft as { text?: string } | undefined)?.text ?? ''}
                       onChange={(e) => setUpdateDraftValue(block.id, { text: e.target.value })}
+                      minHeightPx={AUTO_GROW_TEXTAREA_MIN_ONE_LINE_PX}
                     />
                   )}
                   {block.block_type === 'single_select' && (
@@ -833,28 +860,16 @@ export function RecordViewPage() {
                     />
                   )}
                   {block.block_type === 'yes_no' && (
-                    <RadioGroup.Root
-                      size="3"
-                      value={
-                        (draft as { yesNo?: boolean } | undefined)?.yesNo === true
-                          ? 'true'
-                          : (draft as { yesNo?: boolean } | undefined)?.yesNo === false
-                            ? 'false'
-                            : ''
-                      }
-                      onValueChange={(v) => setUpdateDraftValue(block.id, { yesNo: v === 'true' })}
-                    >
-                      <Flex gap="4">
-                        <Text as="label" size="2" className={styles.checkboxLabel}>
-                          <RadioGroup.Item value="true" />
-                          Да
-                        </Text>
-                        <Text as="label" size="2" className={styles.checkboxLabel}>
-                          <RadioGroup.Item value="false" />
-                          Нет
-                        </Text>
+                    <Text as="label" size="2" className={styles.checkboxLabel}>
+                      <Flex align="center" gap="2">
+                        <Checkbox
+                          size="3"
+                          checked={(draft as { yesNo?: boolean } | undefined)?.yesNo === true}
+                          onCheckedChange={(c) => setUpdateDraftValue(block.id, { yesNo: c === true })}
+                        />
+                        Выполнено
                       </Flex>
-                    </RadioGroup.Root>
+                    </Text>
                   )}
                 </Flex>
               </Box>
@@ -875,7 +890,7 @@ export function RecordViewPage() {
                     <Flex direction="column" gap="1" key={ans.id}>
                       <Flex direction="row" align="center" gap="2" wrap="wrap"> 
                         <Text weight="medium" size="3" color="gray">{title}</Text>
-                        <Badge size="2" color="red" variant="surface">Удалено</Badge>
+                        <Badge size="2" color="red" variant="surface">Блок удалён</Badge>
                       </Flex>
                       <Flex direction="row" align="center" gap="2" wrap="wrap">
                         <Text as="p" size="3">{ans.value_json ? formatAnswer(ans.value_json, block ?? ({} as BlockRow), optionsOverride) : '—'}</Text>
@@ -890,6 +905,41 @@ export function RecordViewPage() {
           )}
         </Flex>
       )}
+
+      <AlertDialog.Root open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialog.Content maxWidth="450px">
+          <AlertDialog.Title>Удалить запись?</AlertDialog.Title>
+          <AlertDialog.Description size="2">
+            Запись будет удалена без возможности восстановления
+          </AlertDialog.Description>
+          {deleteError && (
+            <Text as="p" color="red" size="2">
+              {deleteError}
+            </Text>
+          )}
+          <Flex gap="3" justify="end" mt="4">
+            <AlertDialog.Cancel>
+              <Button 
+              type="button" 
+              size="3" 
+              color="gray" 
+              variant="soft">
+                Отмена
+              </Button>
+            </AlertDialog.Cancel>
+            <Button
+              type="button"
+              size="3"
+              color="red"
+              variant="classic"
+              disabled={deleteLoading}
+              onClick={() => void confirmDeleteRecord()}
+            >
+              {deleteLoading ? 'Удаляю…' : 'Удалить'}
+            </Button>
+          </Flex>
+        </AlertDialog.Content>
+      </AlertDialog.Root>
     </Box>
   )
 }

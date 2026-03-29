@@ -1,0 +1,27 @@
+/* pre-wrap: переносы из textarea; overflow-wrap — длинные строки на узком экране */
+.root {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  vertical-align: baseline;
+  color: var(--accent-a11);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.link:hover {
+  color: var(--accent-12);
+}
+
+.linkIcon {
+  flex-shrink: 0;
+}
+
+.linkLabel {
+  white-space: nowrap;
+}

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
-import { Badge, Box, Card, Flex, Heading, IconButton, Separator, Text } from '@radix-ui/themes'
+import { AlertDialog, Badge, Box, Button, Card, Flex, Heading, IconButton, Separator, Text } from '@radix-ui/themes'
+import { DeedDescriptionText } from '@/components/DeedDescriptionText'
 import { AppBar } from '@/components/AppBar'
 import { PageLoading } from '@/components/PageLoading'
 import { Pencil1Icon, PlusIcon, TrashIcon } from '@radix-ui/react-icons'
@@ -25,6 +26,9 @@ export function DeedViewPage() {
   const [records, setRecords] = useState<(RecordRow & { record_answers?: { block_id: string; value_json: unknown }[] })[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  /** UI-диалог вместо `window.confirm` — во встроенном браузере Cursor нативные диалоги могут не показываться. */
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleteLoading, setDeleteLoading] = useState(false)
 
   // --- Загрузка дела и записей ---
   useEffect(() => {
@@ -46,16 +50,20 @@ export function DeedViewPage() {
     return () => { cancelled = true }
   }, [id])
 
-  // --- Удаление дела (с подтверждением) ---
-  const handleDelete = async () => {
+  // --- Удаление дела (подтверждение через AlertDialog) ---
+  async function confirmDeleteDeed() {
     if (!id) return
-    if (!confirm('Удалить дело? Все записи также будут удалены.')) return
+    setDeleteLoading(true)
     try {
       await api.deeds.delete(id)
+      setDeleteOpen(false)
       navigate('/')
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Не удалось удалить дело'
       setError(msg)
+      setDeleteOpen(false)
+    } finally {
+      setDeleteLoading(false)
     }
   }
 
@@ -168,7 +176,7 @@ export function DeedViewPage() {
               variant="classic"
               radius="full"
               aria-label="Удалить дело"
-              onClick={handleDelete}
+              onClick={() => setDeleteOpen(true)}
             >
               <TrashIcon width={18} height={18} />
             </IconButton>
@@ -212,11 +220,9 @@ export function DeedViewPage() {
           </Text>
           )} */}
 
-        {deed.description && (
-          <Text as="p" color="gray" size="2">
-            {deed.description}
-          </Text>
-        )}
+        {deed.description ? (
+          <DeedDescriptionText text={deed.description} />
+        ) : null}
       </Flex>
       </Flex>
 
@@ -339,6 +345,36 @@ export function DeedViewPage() {
         </Flex>
       )}
       </Flex>
+
+      <AlertDialog.Root open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialog.Content maxWidth="450px">
+          <AlertDialog.Title>Удалить дело?</AlertDialog.Title>
+          <AlertDialog.Description size="2">
+            Все записи по этому делу также будут удалены. Это действие нельзя отменить
+          </AlertDialog.Description>
+          <Flex gap="3" justify="end" mt="4">
+            <AlertDialog.Cancel>
+              <Button 
+              type="button" 
+              size="3" 
+              color="gray" 
+              variant="soft">
+                Отмена
+              </Button>
+            </AlertDialog.Cancel>
+            <Button
+              type="button"
+              size="3"
+              color="red"
+              variant="classic"
+              disabled={deleteLoading}
+              onClick={() => void confirmDeleteDeed()}
+            >
+              {deleteLoading ? 'Удаляю…' : 'Удалить'}
+            </Button>
+          </Flex>
+        </AlertDialog.Content>
+      </AlertDialog.Root>
     </Box>
   )
 }

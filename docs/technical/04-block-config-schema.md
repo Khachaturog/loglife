@@ -148,7 +148,7 @@ config_version_id uuid REFERENCES block_config_versions(id) ON DELETE SET NULL
 |------------|--------|---------|
 | scale | divisions, label_left, label_right, label_1…10 | block_config_scale_versions |
 | single_select, multi_select | options | block_config_select_option_versions |
-| number, text_short, text_paragraph, yes_no, duration | нет | — |
+| number, text_paragraph, yes_no, duration | нет | — |
 
 Для блоков без конфига `config_version_id` = NULL.
 

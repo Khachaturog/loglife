@@ -44,7 +44,7 @@ export function formatAnswer(
     return value.optionIds.map((id) => opts.find((x) => x.id === id)?.label ?? id).join(', ') || '—'
   }
   if ('scaleValue' in value) return String(value.scaleValue)
-  if ('yesNo' in value) return value.yesNo ? 'Да' : 'Нет'
+  if ('yesNo' in value) return value.yesNo ? 'Выполнено' : 'Не выполнено'
   if ('durationHms' in value) return (value as { durationHms: string }).durationHms || '—'
   return '—'
 }
@@ -93,6 +93,27 @@ export function formatDate(isoDate: string): string {
     .join(' ')
 }
 
+/**
+ * Дата и время записи для экрана просмотра: «27 марта 2026 в 14:30».
+ * Дата — день, месяц полностью, год (четыре цифры); время — часы:минуты из `record_time`.
+ */
+export function formatRecordDateTimeDisplay(isoDate: string, recordTime?: string | null): string {
+  const d = new Date(isoDate + 'T12:00:00')
+  const dateStr = new Intl.DateTimeFormat('ru-RU', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+    .formatToParts(d)
+    .filter((p) => p.type === 'day' || p.type === 'month' || p.type === 'year')
+    .map((p) => p.value)
+    .join(' ')
+  const t = recordTime?.trim()
+  if (!t) return dateStr
+  const hm = t.length >= 5 ? t.slice(0, 5) : t
+  return `${dateStr} в ${hm}`
+}
+
 /** Краткий превью ответа для списков (число, текст до 20–25 символов, галочки и т.д.) */
 export function previewAnswer(value: ValueJson | null | undefined, maxTextLen = 20): string {
   if (!value) return '—'
@@ -101,9 +122,44 @@ export function previewAnswer(value: ValueJson | null | undefined, maxTextLen = 
   if ('optionId' in value) return '✅'
   if ('optionIds' in value && Array.isArray(value.optionIds)) return value.optionIds.length ? `✓ ${value.optionIds.length}` : '—'
   if ('scaleValue' in value) return String(value.scaleValue)
-  if ('yesNo' in value) return value.yesNo ? 'Да' : 'Нет'
+  if ('yesNo' in value) return value.yesNo ? 'Выполнено' : 'Не выполнено'
   if ('durationHms' in value) return (value as { durationHms: string }).durationHms || '—'
   return '—'
+}
+
+/**
+ * Все неудалённые блоки дела — только тип «да/нет», и есть хотя бы один такой блок.
+ * Для таких дел превью в списке записей показываем «N из M», а не склейку подписей по блокам.
+ */
+export function isDeedOnlyYesNoBlocks(blocks: BlockRow[]): boolean {
+  const active = blocks.filter((b) => !b.deleted_at)
+  return active.length > 0 && active.every((b) => b.block_type === 'yes_no')
+}
+
+/**
+ * Если {@link isDeedOnlyYesNoBlocks} — строка «сколько выполнено из скольких блоков»; иначе `null`.
+ * Ответ без ключа или с `yesNo: false` не увеличивает счётчик выполненных.
+ */
+export function formatYesNoOnlyRecordListPreview(
+  recordAnswers: { block_id: string; value_json: unknown }[],
+  blocks: BlockRow[]
+): string | null {
+  if (!isDeedOnlyYesNoBlocks(blocks)) return null
+  const active = blocks
+    .filter((b) => !b.deleted_at)
+    .sort((a, b) => a.sort_order - b.sort_order)
+  const byBlockId = Object.fromEntries(recordAnswers.map((a) => [a.block_id, a.value_json])) as Record<
+    string,
+    unknown
+  >
+  let done = 0
+  for (const block of active) {
+    const v = byBlockId[block.id]
+    if (v && typeof v === 'object' && v !== null && 'yesNo' in v && (v as { yesNo: boolean }).yesNo === true) {
+      done++
+    }
+  }
+  return `${done} из ${active.length}`
 }
 
 /**

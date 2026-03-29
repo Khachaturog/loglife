@@ -1,6 +1,5 @@
 export type BlockType =
   | 'number'
-  | 'text_short'
   | 'text_paragraph'
   | 'single_select'
   | 'multi_select'

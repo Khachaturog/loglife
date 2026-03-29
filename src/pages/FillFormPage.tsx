@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Box, Button, CheckboxGroup, Flex, IconButton, RadioGroup, Select, SegmentedControl, Text, TextArea, TextField } from '@radix-ui/themes'
+import { Box, Button, Checkbox, CheckboxGroup, Flex, IconButton, Select, SegmentedControl, Text, TextField } from '@radix-ui/themes'
+import { AUTO_GROW_TEXTAREA_MIN_ONE_LINE_PX, AutoGrowTextArea } from '@/components/AutoGrowTextArea'
 import { AppBar } from '@/components/AppBar'
 import { FillFormNumberStepper } from '@/components/FillFormNumberStepper'
 import { PageLoading } from '@/components/PageLoading'
@@ -297,14 +298,14 @@ export function FillFormPage() {
                 <Text size="2" weight="medium">
                   {block.title}{block.is_required && ' *'}
                 </Text>
-                {answers[block.id] !== undefined && (
+                {answers[block.id] !== undefined && block.block_type !== 'yes_no' && (
                   <Button
                     type="button"
                     size="2"
                     variant="ghost"
                     color="gray"
                     onClick={() => {
-                      triggerHaptic('heavy', { intensity: 1 })
+                      triggerHaptic('medium', { intensity: 1 })
                       clearAnswer(block.id)
                     }}
                   >
@@ -365,7 +366,7 @@ export function FillFormPage() {
                           variant="soft"
                           radius="full"
                           onClick={() => {
-                            triggerHaptic('heavy', { intensity: 1 })
+                            triggerHaptic('medium', { intensity: 1 })
                             setAnswer(block.id, { number: val })
                           }}
                         >
@@ -376,20 +377,13 @@ export function FillFormPage() {
                   )}
                 </>
               )}
-              {block.block_type === 'text_short' && (
-                <TextField.Root
+              {block.block_type === 'text_paragraph' && (
+                <AutoGrowTextArea
                   size="3"
                   value={(answers[block.id] as { text?: string } | undefined)?.text ?? ''}
                   onChange={(e) => setAnswer(block.id, { text: e.target.value })}
-                  onKeyDown={blurInputOnEnter}
-                />
-              )}
-              {block.block_type === 'text_paragraph' && (
-                <TextArea
-                  value={(answers[block.id] as { text?: string } | undefined)?.text ?? ''}
-                  onChange={(e) => setAnswer(block.id, { text: e.target.value })}
                   placeholder=""
-                  resize="vertical"
+                  minHeightPx={AUTO_GROW_TEXTAREA_MIN_ONE_LINE_PX}
                 />
               )}
               {block.block_type === 'single_select' && (
@@ -399,7 +393,7 @@ export function FillFormPage() {
                     size="3"
                     value={(answers[block.id] as { optionId?: string } | undefined)?.optionId || undefined}
                     onValueChange={(v) => {
-                      triggerHaptic('heavy', { intensity: 1 })
+                      triggerHaptic('medium', { intensity: 1 })
                       setAnswer(block.id, { optionId: v })
                     }}
                   >
@@ -421,7 +415,7 @@ export function FillFormPage() {
                           variant="soft"
                           radius="full"
                           onClick={() => {
-                            triggerHaptic('heavy', { intensity: 1 })
+                            triggerHaptic('medium', { intensity: 1 })
                             setAnswer(block.id, { optionId: optId })
                           }}
                         >
@@ -441,7 +435,7 @@ export function FillFormPage() {
                     (answers[block.id] as { optionIds?: string[] } | undefined)?.optionIds ?? []
                   }
                   onValueChange={(nextValues) => {
-                    triggerHaptic('heavy', { intensity: 1 })
+                    triggerHaptic('medium', { intensity: 1 })
                     // Без flushSync при быстрых кликах по разным пунктам Radix считает следующий шаг
                     // от устаревшего `value` (батч React) — в onValueChange приходит урезанный массив.
                     flushSync(() => {
@@ -470,7 +464,7 @@ export function FillFormPage() {
                     (answers[block.id] as { scaleValue?: number } | undefined)?.scaleValue?.toString()
                   }
                   onValueChange={(v) => {
-                    triggerHaptic('heavy', { intensity: 1 })
+                    triggerHaptic('medium', { intensity: 1 })
                     setAnswer(block.id, { scaleValue: Number(v) })
                   }}
                   // Узкий экран — компактнее по ширине; высота — через ScaleSegmentedControl.module.css.
@@ -494,32 +488,19 @@ export function FillFormPage() {
                 />
               )}
               {block.block_type === 'yes_no' && (
-                <RadioGroup.Root
-                  key={`${block.id}-fill-yn-${answers[block.id] !== undefined ? 'set' : 'none'}`}
-                  size="3"
-                  value={
-                    (answers[block.id] as { yesNo?: boolean } | undefined)?.yesNo === true
-                      ? 'true'
-                      : (answers[block.id] as { yesNo?: boolean } | undefined)?.yesNo === false
-                        ? 'false'
-                        : ''
-                  }
-                  onValueChange={(v) => {
-                    triggerHaptic('heavy', { intensity: 1 })
-                    setAnswer(block.id, { yesNo: v === 'true' })
-                  }}
-                >
-                  <Flex gap="4">
-                    <Text as="label" size="3" className={styles.checkboxLabel}>
-                      <RadioGroup.Item value="true" />
-                      Да
-                    </Text>
-                    <Text as="label" size="3" className={styles.checkboxLabel}>
-                      <RadioGroup.Item value="false" />
-                      Нет
-                    </Text>
+                <Text as="label" size="3" className={styles.checkboxLabel}>
+                  <Flex align="center" gap="2">
+                    <Checkbox
+                      size="3"
+                      checked={(answers[block.id] as { yesNo?: boolean } | undefined)?.yesNo === true}
+                      onCheckedChange={(c) => {
+                        triggerHaptic('medium', { intensity: 1 })
+                        setAnswer(block.id, { yesNo: c === true })
+                      }}
+                    />
+                    Выполнено
                   </Flex>
-                </RadioGroup.Root>
+                </Text>
               )}
               {block.is_required && validationAttempted && isRequiredBlockInvalid(block, answers) && (
                 <Text size="1" color="crimson" role="alert">
