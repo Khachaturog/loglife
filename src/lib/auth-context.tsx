@@ -11,13 +11,29 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue>({ user: null, loading: true })
 
 /**
+ * Извлекает project ref из VITE_SUPABASE_URL (поддомен вида https://<ref>.supabase.co).
+ * Нужен для чтения ключа сессии из localStorage: sb-<ref>-auth-token.
+ * Не хардкодим ref — иначе self-hosted пользователи читали бы чужой ключ.
+ */
+function getSupabaseProjectRef(): string {
+  const url = import.meta.env.VITE_SUPABASE_URL as string | undefined
+  if (!url) return ''
+  try {
+    return new URL(url).hostname.split('.')[0]
+  } catch {
+    return ''
+  }
+}
+
+/**
  * Синхронно читает пользователя из localStorage (Supabase JS v2 хранит сессию там).
  * Позволяет избежать блокирующего спиннера при первом рендере — getSession() проверит
  * токен в фоне и обновит состояние при необходимости.
  */
 function getInitialUser(): User | null {
   try {
-    const projectRef = 'tzwvyfvskwgeggwjpass'
+    const projectRef = getSupabaseProjectRef()
+    if (!projectRef) return null
     const raw = localStorage.getItem(`sb-${projectRef}-auth-token`)
     if (!raw) return null
     const parsed = JSON.parse(raw) as { user?: User; expires_at?: number } | null

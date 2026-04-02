@@ -1,7 +1,26 @@
 node_modules
 dist
+
+# Секреты — никогда не коммитим
 .env
 .env.local
 *.local
+
+# Бэкапы и дампы БД
+*.backup
+*.backup.gz
+*.dump
+*.sql.gz
+
+# Артефакты сборки TypeScript
+tsconfig.tsbuildinfo
+
+# Локальные рабочие папки (хранятся только на компьютере)
+0-Разобрать/
+about/
+
+# AI-контекст и заметки
+Onboarding_ai_1.md
+
 .DS_Store
 .cursor
