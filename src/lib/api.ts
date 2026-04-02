@@ -9,6 +9,7 @@ import type {
   RecordAnswerRow,
   ValueJson,
 } from '@/types/database'
+import type { DeedAnalyticsConfigV1 } from '@/types/deed-analytics-config'
 
 function getBlockOptions(block: BlockRow): { id: string; label: string; sort_order: number }[] {
   const fromConfig = (block.config as BlockConfig | null)?.options
@@ -196,7 +197,15 @@ export const api = {
       return data as DeedWithBlocks
     },
 
-    async create(payload: { emoji?: string; name?: string; description?: string; category?: string | null; card_color?: string | null; blocks?: Partial<BlockRow>[] }): Promise<DeedRow> {
+    async create(payload: {
+      emoji?: string
+      name?: string
+      description?: string
+      category?: string | null
+      card_color?: string | null
+      analytics_config?: DeedAnalyticsConfigV1 | null
+      blocks?: Partial<BlockRow>[]
+    }): Promise<DeedRow> {
       const uid = await getUserIdOrThrow()
       const { data: deed, error: deedError } = await supabase
         .from('deeds')
@@ -207,6 +216,7 @@ export const api = {
           description: payload.description ?? null,
           category: payload.category ?? null,
           card_color: payload.card_color ?? null,
+          ...(payload.analytics_config !== undefined && { analytics_config: payload.analytics_config }),
         })
         .select()
         .single()
@@ -229,7 +239,15 @@ export const api = {
       return deed
     },
 
-    async update(id: string, payload: { emoji?: string; name?: string; description?: string; category?: string | null; card_color?: string | null; blocks?: Partial<BlockRow>[] }): Promise<void> {
+    async update(id: string, payload: {
+      emoji?: string
+      name?: string
+      description?: string
+      category?: string | null
+      card_color?: string | null
+      analytics_config?: DeedAnalyticsConfigV1 | null
+      blocks?: Partial<BlockRow>[]
+    }): Promise<void> {
       const uid = await getUserIdOrThrow()
       const now = new Date().toISOString()
       const { error: deedError } = await supabase
@@ -240,6 +258,7 @@ export const api = {
           ...(payload.description !== undefined && { description: payload.description }),
           ...(payload.category !== undefined && { category: payload.category }),
           ...(payload.card_color !== undefined && { card_color: payload.card_color }),
+          ...(payload.analytics_config !== undefined && { analytics_config: payload.analytics_config }),
         })
         .eq('id', id)
         .eq('user_id', uid)
@@ -519,9 +538,10 @@ export const api = {
         console.error(error.message ?? 'Ошибка загрузки записи')
         throw error
       }
-      const { data: deed } = await supabase.from('deeds').select('id, user_id').eq('id', record.deed_id).single()
-      const uid = await getUserId()
-      if (!uid || (deed as { user_id?: string } | null)?.user_id !== uid) return null
+      // Проверяем владение через явный .eq('user_id', uid) — ownership в запросе, не в JS
+      const uid = await getUserIdOrThrow()
+      const { data: deed } = await supabase.from('deeds').select('id').eq('id', record.deed_id).eq('user_id', uid).single()
+      if (!deed) return null
       return record as RecordWithAnswers
     },
 
@@ -531,9 +551,10 @@ export const api = {
     ): Promise<void> {
       const { data: record } = await supabase.from('records').select('deed_id').eq('id', id).single()
       if (!record) throw new Error('Запись не найдена')
-      const { data: deed } = await supabase.from('deeds').select('user_id').eq('id', record.deed_id).single()
-      const uid = await getUserId()
-      if (!uid || (deed as { user_id?: string } | null)?.user_id !== uid) throw new Error('Доступ запрещён')
+      // Проверяем владение через явный .eq('user_id', uid) — ownership в запросе, не в JS
+      const uid = await getUserIdOrThrow()
+      const { data: deed } = await supabase.from('deeds').select('id').eq('id', record.deed_id).eq('user_id', uid).single()
+      if (!deed) throw new Error('Доступ запрещён')
       const { error: recordError } = await supabase
         .from('records')
         .update({
@@ -550,6 +571,7 @@ export const api = {
           .from('deeds')
           .select('*, blocks(*)')
           .eq('id', record.deed_id)
+          .eq('user_id', uid)
           .single()
         const blocks = deedWithBlocks?.blocks ?? []
         for (const [block_id, value_json] of Object.entries(payload.answers)) {
@@ -599,9 +621,10 @@ export const api = {
     async delete(id: string): Promise<void> {
       const { data: record } = await supabase.from('records').select('deed_id').eq('id', id).single()
       if (!record) throw new Error('Запись не найдена')
-      const { data: deed } = await supabase.from('deeds').select('user_id').eq('id', record.deed_id).single()
-      const uid = await getUserId()
-      if (!uid || (deed as { user_id?: string } | null)?.user_id !== uid) throw new Error('Доступ запрещён')
+      // Проверяем владение через явный .eq('user_id', uid) — ownership в запросе, не в JS
+      const uid = await getUserIdOrThrow()
+      const { data: deed } = await supabase.from('deeds').select('id').eq('id', record.deed_id).eq('user_id', uid).single()
+      if (!deed) throw new Error('Доступ запрещён')
       const { error: answersError } = await supabase.from('record_answers').delete().eq('record_id', id)
       if (answersError) {
         console.error(answersError.message ?? 'Ошибка удаления ответов записи')

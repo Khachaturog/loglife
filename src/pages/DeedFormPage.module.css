@@ -8,13 +8,6 @@
   box-sizing: border-box;
 }
 
-/* Блок карточки */
-
-.blockCard {
-  border: 1px solid var(--gray-a4);
-  border-radius: var(--radius-3);
-}
-
 /* Single select text field */
 
 .single_select_textField {
@@ -23,6 +16,22 @@
 
 .scaleTextField {
   flex: 1;
+}
+
+/* Селект цвета карточки */
+.cardColorSelectWrap {
+  box-sizing: border-box;
+  max-width: 200px;
+  flex: 1 1 auto;
+}
+
+.cardColorSwatch {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  box-sizing: border-box;
+  border: 1px solid var(--gray-a6);
 }
 
 /* Color picker | Пикер цвета*/
@@ -39,34 +48,37 @@
   border: 1px solid var(--gray-a8);
 }
 
-.colorInput {
-  width: 44px;
-  height: 44px;
+/* Видимый слой + прозрачный input поверх для клика */
+.colorInputWrap {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: var(--radius-3);
+  border: 1px solid var(--gray-a6);
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.colorInputVisual {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+.colorInputNative {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   padding: 0;
   border: none;
-  outline: none;
-  border-radius: var(--radius-3);
   cursor: pointer;
-  /* Убираем стандартную обводку браузера */
+  opacity: 0;
   -webkit-appearance: none;
   appearance: none;
-  background: none;
-}
-
-/* Убираем внутреннюю обводку у WebKit (Chrome, Safari) */
-.colorInput::-webkit-color-swatch-wrapper {
-  padding: 0;
-}
-
-.colorInput::-webkit-color-swatch {
-  border: none;
-  border-radius: var(--radius-3);
-}
-
-/* Firefox */
-.colorInput::-moz-color-swatch {
-  border: none;
-  border-radius: var(--radius-3);
+  background: transparent;
 }
 
 /* Block title */
@@ -76,4 +88,62 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   flex: 1;
+}
+
+/**
+ * Выпадающий список Select: не шире окна (с отступами) и не шире триггера;
+ * длинные пункты переносятся (у .rt-SelectItem по умолчанию фиксированная высота).
+ */
+.selectContentConstrained:global([data-side]) {
+  box-sizing: border-box;
+  min-width: 0;
+  width: min(var(--radix-select-trigger-width), calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+}
+
+.selectContentConstrained:not(:global([data-side])) {
+  box-sizing: border-box;
+  max-width: calc(100vw - 32px);
+}
+
+.selectContentConstrained :global(.rt-SelectItem) {
+  height: auto;
+  min-height: var(--select-item-height);
+  /* center: при min-height > высоты одной строки текст совпадает с вертикальным центром галочки */
+  align-items: center;
+  padding-block: var(--space-1);
+}
+
+/* Галочка: колонка на всю высоту пункта, иконка по центру (без «прилипания» к верху) */
+.selectContentConstrained :global(.rt-SelectItemIndicator) {
+  top: 0;
+  bottom: 0;
+  height: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Текст пункта: второй span после индикатора выбора (ItemText) */
+.selectContentConstrained :global(.rt-SelectItem > span:last-child) {
+  display: block;
+  min-width: 0;
+  flex: 1;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* Строка с образцом цвета + подпись: перенос при узком меню */
+.selectContentConstrained :global(.rt-SelectItem) :global(.rt-Flex) {
+  flex-wrap: wrap;
+  min-width: 0;
+  align-items: center;
+}
+
+/* Подпись пресета цвета: та же типографика, что у пункта селекта (без лишнего line-height от голого текста) */
+.cardColorSelectOptionText {
+  font-size: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
 }

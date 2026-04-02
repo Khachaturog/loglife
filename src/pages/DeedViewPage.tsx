@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
 import { AlertDialog, Badge, Box, Button, Card, Flex, Heading, IconButton, Separator, Text } from '@radix-ui/themes'
+import { DeedActivityHeatmap } from '@/components/DeedActivityHeatmap'
 import { DeedDescriptionText } from '@/components/DeedDescriptionText'
 import { AppBar } from '@/components/AppBar'
 import { PageLoading } from '@/components/PageLoading'
@@ -12,6 +13,12 @@ import layoutStyles from '@/styles/layout.module.css'
 import styles from './DeedViewPage.module.css'
 import { formatDate, pluralRecords, todayLocalISO } from '@/lib/format-utils'
 import { currentStreak, maxStreak, workdayWeekendCounts } from '@/lib/deed-analytics'
+import {
+  heatmapDisplayColor,
+  normalizeDeedAnalyticsConfig,
+  resolveNumericBlockByConfigId,
+  getRecordAnswerNumericValue,
+} from '@/lib/deed-analytics-config'
 
 /**
  * Страница просмотра дела.
@@ -84,6 +91,11 @@ export function DeedViewPage() {
     return Array.from(map.entries()).sort(([a], [b]) => b.localeCompare(a))
   }, [records])
 
+  const analyticsConfig = useMemo(
+    () => normalizeDeedAnalyticsConfig(deed?.analytics_config),
+    [deed?.analytics_config],
+  )
+
   // Аналитика: стрики и распределение по рабочим/выходным (только если есть записи)
   const analytics = useMemo(() => {
     if (records.length === 0) return null
@@ -94,44 +106,40 @@ export function DeedViewPage() {
     }
   }, [records])
 
-  // Количества "сегодня / этот месяц / всего" считаем как количество записей.
-  const displayNumbers = useMemo(() => {
-    const deedBlocks = deed?.blocks ?? []
-    const numericBlocks = deedBlocks
-      .filter((b) => b.block_type === 'number' || b.block_type === 'scale' || b.block_type === 'duration')
-      .sort((a, b) => a.sort_order - b.sort_order)
+  const summaryBlock = useMemo(() => {
+    const blocks = deed?.blocks ?? []
+    return resolveNumericBlockByConfigId(blocks, analyticsConfig.summary.block_id)
+  }, [deed?.blocks, analyticsConfig.summary.block_id])
 
-    // Берем "первый" числовой блок (по sort_order) и суммируем только его значения.
-    const firstNumeric = numericBlocks[0]
-    if (!firstNumeric) return { today: 0, month: 0, total: 0 }
+  const heatmapBlock = useMemo(() => {
+    const blocks = deed?.blocks ?? []
+    return resolveNumericBlockByConfigId(blocks, analyticsConfig.heatmap.block_id)
+  }, [deed?.blocks, analyticsConfig.heatmap.block_id])
+
+  // Heatmap: по умолчанию — число записей в день; иначе сумма значений выбранного числового блока по дням.
+  const heatmapActivity = useMemo(() => {
+    if (!heatmapBlock) {
+      return records.map((r) => ({ record_date: r.record_date, value: 1 }))
+    }
+    return records.map((r) => ({
+      record_date: r.record_date,
+      value: getRecordAnswerNumericValue(r, heatmapBlock),
+    }))
+  }, [records, heatmapBlock])
+
+  // Количества «сегодня / этот месяц / всего» — сумма по выбранному числовому блоку (или 0, если блока нет).
+  const displayNumbers = useMemo(() => {
+    if (!summaryBlock) return { today: 0, month: 0, total: 0 }
 
     const todayISO = todayLocalISO()
-
-    const getValueFromAnswer = (valueJson: unknown, blockType: 'number' | 'scale' | 'duration'): number => {
-      // value_json приходит как JSON; нет ответа по блоку или пустой JSON — не падаем на v.number.
-      if (valueJson == null || typeof valueJson !== 'object') return 0
-      const v = valueJson as Partial<{ number: number; scaleValue: number; durationHms: string }>
-      if (blockType === 'number' && typeof v.number === 'number') return Number(v.number) || 0
-      if (blockType === 'scale' && typeof v.scaleValue === 'number') return Number(v.scaleValue) || 0
-      if (blockType === 'duration' && typeof v.durationHms === 'string') {
-        const hms = v.durationHms ?? '0:0:0'
-        const [h, m, s] = hms.split(':').map((x) => parseInt(x, 10) || 0)
-        return h * 3600 + m * 60 + s
-      }
-      return 0
-    }
-
-    const getRecordValue = (r: (typeof records)[number]): number => {
-      const answer = r.record_answers?.find((a) => a.block_id === firstNumeric.id)
-      // Мы знаем, что нас интересует только firstNumeric.block_type.
-      return getValueFromAnswer(answer?.value_json, firstNumeric.block_type as 'number' | 'scale' | 'duration')
-    }
+    const getRecordValue = (r: (typeof records)[number]): number =>
+      getRecordAnswerNumericValue(r, summaryBlock)
 
     const total = records.reduce((sum, r) => sum + getRecordValue(r), 0)
 
     const now = new Date()
     const year = now.getFullYear()
-    const month = now.getMonth() // 0-11
+    const month = now.getMonth()
 
     const monthStart = `${year}-${String(month + 1).padStart(2, '0')}-01`
     const monthEndDate = new Date(year, month + 1, 0).getDate()
@@ -143,7 +151,22 @@ export function DeedViewPage() {
       .reduce((sum, r) => sum + getRecordValue(r), 0)
 
     return { today, month: monthTotal, total }
-  }, [deed, records])
+  }, [summaryBlock, records])
+
+  const heatmapCardColor = heatmapDisplayColor(deed?.card_color, analyticsConfig.heatmap)
+  const s = analyticsConfig.summary
+  const showSummaryRow =
+    s.enabled &&
+    (s.show_today || s.show_month || s.show_total)
+  const showActivityRow =
+    records.length > 0 &&
+    analyticsConfig.activity.enabled &&
+    (analyticsConfig.activity.streak_enabled ||
+      analyticsConfig.activity.record_count_enabled ||
+      analyticsConfig.activity.workday_weekend_enabled)
+  const showHeatmap = analyticsConfig.heatmap.enabled
+  const showAnalyticsBlock =
+    showSummaryRow || showActivityRow || showHeatmap
 
   // --- Рендер состояний загрузки и ошибки ---
   if (loading) {
@@ -226,76 +249,108 @@ export function DeedViewPage() {
       </Flex>
       </Flex>
 
-      <Box py="3" className={styles.analyticsSection}>
-
-        <Flex direction="row" gap="2" wrap="wrap" mb="2">
-          <Card style={{ flex: '1' }}>
-            <Flex direction="column" gap="1">
-              <Text size="2" color="gray">Сегодня</Text>
-              <Text weight="bold" size="4">
-                {displayNumbers.today}
-              </Text>
-            </Flex>
-          </Card>
-
-          <Card style={{ flex: '1' }}>
-            <Flex direction="column" gap="1">
-              <Text size="2" color="gray">В этом месяце</Text>
-              <Text weight="bold" size="4">
-                {displayNumbers.month}
-              </Text>
-            </Flex>
-          </Card>
-
-          <Card style={{ flex: '1' }}>
-            <Flex direction="column" gap="1">
-              <Text size="2" color="gray">Всего</Text>
-              <Text weight="bold" size="4">
-                {displayNumbers.total}
-              </Text>
-            </Flex>
-          </Card>
-        </Flex>
-
-        {/* Сырые данные по стрику/рабочие-выходные (показываем только если есть записи) */}
-        {analytics && (
-          <Flex direction="row" gap="2" wrap="wrap">
-
-            <Card style={{ flex: '1' }}>
-              <Flex direction="column" gap="1" mb="2">
-                <Text size="2" color="gray">Текущий стрик</Text>
-                <Text size="4">{analytics.currentStreak}</Text>
-              </Flex>
-
-              <Flex direction="row" gap="1">
-                <Text size="2" color="gray">Максимум:</Text>
-                <Text size="2" >{analytics.maxStreak}</Text>
-              </Flex>
-            </Card>
-
-            <Card style={{ flex: '1' }}>
-              <Flex direction="column" gap="1" mb="2">
-                <Text size="2" color="gray">Всего</Text> 
-                <Text size="4">{pluralRecords(records.length)}</Text> 
-              </Flex>
-
-                <Flex direction="row" gap="2">
-                  <Flex direction="row" gap="1">
-                    <Text size="2" color="gray">Будни:</Text>
-                    <Text size="2" >{analytics.workdayWeekend.workday}</Text>
+      {showAnalyticsBlock ? (
+        <Box py="3" className={styles.analyticsSection}>
+          {showSummaryRow ? (
+            <Flex direction="row" gap="2" wrap="wrap" mb="2">
+              {s.show_today ? (
+                <Card style={{ flex: '1' }}>
+                  <Flex direction="column" gap="1">
+                    <Text size="2" color="gray">Сегодня</Text>
+                    <Text weight="bold" size="4">
+                      {displayNumbers.today}
+                    </Text>
                   </Flex>
-                  <Text size="2" color="gray">·</Text>
-                  <Flex direction="row" gap="1">
-                    <Text size="2" color="gray">Выходные:</Text>
-                    <Text size="2" >{analytics.workdayWeekend.weekend}</Text>
+                </Card>
+              ) : null}
+
+              {s.show_month ? (
+                <Card style={{ flex: '1' }}>
+                  <Flex direction="column" gap="1">
+                    <Text size="2" color="gray">За месяц</Text>
+                    <Text weight="bold" size="4">
+                      {displayNumbers.month}
+                    </Text>
                   </Flex>
-                </Flex>
-            </Card>
-            
-          </Flex>
-          
-        )}
-      </Box>
+                </Card>
+              ) : null}
+
+              {s.show_total ? (
+                <Card style={{ flex: '1' }}>
+                  <Flex direction="column" gap="1">
+                    <Text size="2" color="gray">Всего</Text>
+                    <Text weight="bold" size="4">
+                      {displayNumbers.total}
+                    </Text>
+                  </Flex>
+                </Card>
+              ) : null}
+            </Flex>
+          ) : null}
+
+          {analytics && showActivityRow ? (
+            <Flex direction="row" gap="2" wrap="wrap" mb="2">
+              {analyticsConfig.activity.streak_enabled ? (
+                <Card style={{ flex: '1' }}>
+                  <Flex
+                    direction="column"
+                    gap="1"
+                    mb={analyticsConfig.activity.max_streak_enabled ? '2' : '0'}
+                  >
+                    <Text size="2" color="gray">Текущий стрик</Text>
+                    <Text size="4">{analytics.currentStreak}</Text>
+                  </Flex>
+
+                  {analyticsConfig.activity.max_streak_enabled ? (
+                    <Flex direction="row" gap="1">
+                      <Text size="2" color="gray">Максимум:</Text>
+                      <Text size="2">{analytics.maxStreak}</Text>
+                    </Flex>
+                  ) : null}
+                </Card>
+              ) : null}
+
+              {(analyticsConfig.activity.record_count_enabled || analyticsConfig.activity.workday_weekend_enabled) ? (
+                <Card style={{ flex: '1' }}>
+                  {analyticsConfig.activity.record_count_enabled ? (
+                    <Flex direction="column" gap="1" mb={analyticsConfig.activity.workday_weekend_enabled ? '2' : '0'}>
+                      <Text size="2" color="gray">Всего</Text>
+                      <Text size="4">{pluralRecords(records.length)}</Text>
+                    </Flex>
+                  ) : null}
+
+                  {analyticsConfig.activity.workday_weekend_enabled ? (
+                    <Flex direction="row" gap="2">
+                      <Flex direction="row" gap="1">
+                        <Text size="2" color="gray">Будни:</Text>
+                        <Text size="2">{analytics.workdayWeekend.workday}</Text>
+                      </Flex>
+                      <Text size="2" color="gray">·</Text>
+                      <Flex direction="row" gap="1">
+                        <Text size="2" color="gray">Выходные:</Text>
+                        <Text size="2">{analytics.workdayWeekend.weekend}</Text>
+                      </Flex>
+                    </Flex>
+                  ) : null}
+                </Card>
+              ) : null}
+            </Flex>
+          ) : null}
+
+          {showHeatmap ? (
+            <Flex direction="row" gap="2">
+              <DeedActivityHeatmap
+                activity={heatmapActivity}
+                valueLabel={heatmapBlock?.title}
+                cardColor={heatmapCardColor}
+                showWeekdayLabels={analyticsConfig.heatmap.show_weekday_labels}
+                showMonthLabels={analyticsConfig.heatmap.show_month_labels}
+                showPeakAndLegend={analyticsConfig.heatmap.show_peak_and_legend}
+              />
+            </Flex>
+          ) : null}
+        </Box>
+      ) : null}
 
       {/* История записей по датам */}
       <Flex align="center" justify="between" gap="2" mt="4" mb="2">

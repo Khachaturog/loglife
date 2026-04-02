@@ -15,5 +15,6 @@
 | `/widgets/clicker` | [`src/pages/ClickerPage.tsx`](src/pages/ClickerPage.tsx) | Виджет «Кликер» (счётчик нажатий) |
 | `/history` | [`src/pages/HistoryPage.tsx`](src/pages/HistoryPage.tsx) | История записей (по делам) |
 | `/profile` | [`src/pages/ProfilePage.tsx`](src/pages/ProfilePage.tsx) | Профиль и настройки |
+| `/privacy` | [`src/pages/PrivacyPolicyPage.tsx`](src/pages/PrivacyPolicyPage.tsx) | Политика конфиденциальности (публичная) |
 
 Подробный план фронтенда см. в [`docs/plan-frontend.md`](docs/plan-frontend.md).

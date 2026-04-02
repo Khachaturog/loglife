@@ -14,8 +14,8 @@
 | api.deeds | `list()` | deeds | export-csv |
 | api.deeds | `listWithBlocks()` | deeds, blocks | DeedsListPage |
 | api.deeds | `get(id)` | deeds, blocks | DeedViewPage, FillFormPage, DeedFormPage, RecordViewPage, export-csv |
-| api.deeds | `create()` | deeds, blocks | DeedFormPage |
-| api.deeds | `update()` | deeds, blocks | DeedFormPage |
+| api.deeds | `create()` | deeds (в т.ч. `analytics_config`), blocks | DeedFormPage |
+| api.deeds | `update()` | deeds (в т.ч. `analytics_config`), blocks | DeedFormPage |
 | api.deeds | `delete()` | deeds | DeedViewPage |
 | api.deeds | `deleteBlock()` | deeds, blocks | DeedFormPage |
 | api.deeds | `records(deedId)` | deeds, records, record_answers | DeedViewPage, export-csv |

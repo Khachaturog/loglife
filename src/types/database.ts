@@ -75,6 +75,8 @@ export interface BlockConfigSelectOptionVersionRow {
   created_at: string
 }
 
+import type { DeedAnalyticsConfigV1 } from '@/types/deed-analytics-config'
+
 export interface DeedRow {
   id: string
   user_id: string
@@ -83,6 +85,8 @@ export interface DeedRow {
   description: string | null
   category: string | null
   card_color: string | null
+  /** Настройки отображения аналитики на карточке дела; null/отсутствует = дефолты в приложении. */
+  analytics_config?: DeedAnalyticsConfigV1 | null
   created_at: string
   updated_at: string
   blocks?: BlockRow[]

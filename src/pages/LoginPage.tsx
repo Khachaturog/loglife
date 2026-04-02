@@ -1,5 +1,5 @@
 import { type FormEvent, useEffect, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams, Link as RouterLink } from 'react-router-dom'
 import { EyeClosedIcon, EyeOpenIcon } from '@radix-ui/react-icons'
 import {
   Box,
@@ -288,8 +288,8 @@ export function LoginPage() {
             Условиями использования
           </Link>{' '}
           и&nbsp;
-          <Link href="#" size="2" underline="hover" onClick={(e) => e.preventDefault()}>
-            Политикой конфиденциальности
+          <Link asChild size="2" underline="hover">
+            <RouterLink to="/privacy">Политикой конфиденциальности</RouterLink>
           </Link>
         </Text>
       </Box>
