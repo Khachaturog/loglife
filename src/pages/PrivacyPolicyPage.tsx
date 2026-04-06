@@ -112,7 +112,7 @@ export function PrivacyPolicyPage() {
           <Separator size="4" />
 
           <Text size="2" color="gray">
-            Вопросы? Напишите нам — ссылка на GitHub в настройках приложения.
+            Вопросы по коду и развёртыванию — см. ссылку на GitHub внизу экрана «Профиль» (если задана в настройках деплоя).
           </Text>
 
         </Flex>

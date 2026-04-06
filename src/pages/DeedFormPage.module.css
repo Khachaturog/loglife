@@ -2,6 +2,8 @@
   flex: 1;
 }
 
+
+
 /* Поле «Описание»: max-height задаётся в AutoGrowTextArea (AUTO_GROW_TEXTAREA_MAX_PX). */
 .descriptionTextarea {
   width: 100%;

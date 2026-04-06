@@ -8,10 +8,16 @@ import { PageLoading } from '@/components/PageLoading'
 import { Pencil1Icon, PlusIcon, TrashIcon } from '@radix-ui/react-icons'
 import { api } from '@/lib/api'
 import { RecordCard } from '@/components/RecordCard'
-import type { DeedWithBlocks, RecordRow } from '@/types/database'
+import type { DeedWithBlocks } from '@/types/database'
 import layoutStyles from '@/styles/layout.module.css'
 import styles from './DeedViewPage.module.css'
-import { formatDate, pluralRecords, todayLocalISO } from '@/lib/format-utils'
+import { formatDate, nowTimeLocal, pluralRecords, todayLocalISO } from '@/lib/format-utils'
+import { triggerHaptic } from '@/lib/haptics'
+import {
+  getDeedDisplayNumbers,
+  getSingleYesNoBlock,
+  type RecordWithAnswersLoose,
+} from '@/lib/deed-utils'
 import { currentStreak, maxStreak, workdayWeekendCounts } from '@/lib/deed-analytics'
 import {
   heatmapDisplayColor,
@@ -30,12 +36,16 @@ export function DeedViewPage() {
 
   // --- Состояние ---
   const [deed, setDeed] = useState<DeedWithBlocks | null>(null)
-  const [records, setRecords] = useState<(RecordRow & { record_answers?: { block_id: string; value_json: unknown }[] })[]>([])
+  const [records, setRecords] = useState<RecordWithAnswersLoose[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   /** UI-диалог вместо `window.confirm` — во встроенном браузере Cursor нативные диалоги могут не показываться. */
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleteLoading, setDeleteLoading] = useState(false)
+  /** Создание записи одним тапом «+» для дела с одним блоком «Да/Нет». */
+  const [addingRecord, setAddingRecord] = useState(false)
+  /** Ошибка быстрого добавления — не смешиваем с `error` загрузки, чтобы не терять экран дела. */
+  const [quickAddError, setQuickAddError] = useState<string | null>(null)
 
   // --- Загрузка дела и записей ---
   useEffect(() => {
@@ -127,9 +137,11 @@ export function DeedViewPage() {
     }))
   }, [records, heatmapBlock])
 
-  // Количества «сегодня / этот месяц / всего» — сумма по выбранному числовому блоку (или 0, если блока нет).
+  // Количества «сегодня / этот месяц / всего»: при числовом источнике в сводке — сумма по блоку; иначе те же правила, что на карточке в списке (число записей).
   const displayNumbers = useMemo(() => {
-    if (!summaryBlock) return { today: 0, month: 0, total: 0 }
+    if (!summaryBlock) {
+      return getDeedDisplayNumbers(deed?.blocks ?? [], records)
+    }
 
     const todayISO = todayLocalISO()
     const getRecordValue = (r: (typeof records)[number]): number =>
@@ -151,9 +163,12 @@ export function DeedViewPage() {
       .reduce((sum, r) => sum + getRecordValue(r), 0)
 
     return { today, month: monthTotal, total }
-  }, [summaryBlock, records])
+  }, [summaryBlock, records, deed?.blocks])
 
-  const heatmapCardColor = heatmapDisplayColor(deed?.card_color, analyticsConfig.heatmap)
+  const heatmapCardColor = heatmapDisplayColor(
+    deed?.card_color,
+    analyticsConfig.heatmap.enabled,
+  )
   const s = analyticsConfig.summary
   const showSummaryRow =
     s.enabled &&
@@ -162,11 +177,35 @@ export function DeedViewPage() {
     records.length > 0 &&
     analyticsConfig.activity.enabled &&
     (analyticsConfig.activity.streak_enabled ||
-      analyticsConfig.activity.record_count_enabled ||
-      analyticsConfig.activity.workday_weekend_enabled)
+      analyticsConfig.activity.record_count_enabled)
   const showHeatmap = analyticsConfig.heatmap.enabled
   const showAnalyticsBlock =
     showSummaryRow || showActivityRow || showHeatmap
+
+  const singleYesNoBlock = useMemo(
+    () => getSingleYesNoBlock(deed?.blocks),
+    [deed?.blocks],
+  )
+
+  async function handleQuickAddYesNoRecord() {
+    if (!id || !singleYesNoBlock || addingRecord) return
+    setAddingRecord(true)
+    setQuickAddError(null)
+    try {
+      await api.deeds.createRecord(id, {
+        record_date: todayLocalISO(),
+        record_time: nowTimeLocal(),
+        answers: { [singleYesNoBlock.id]: { yesNo: true } },
+      })
+      const recordsData = await api.deeds.records(id)
+      setRecords(recordsData)
+      triggerHaptic('success', { intensity: 1 })
+    } catch (e) {
+      setQuickAddError(e instanceof Error ? e.message : 'Не удалось добавить запись')
+    } finally {
+      setAddingRecord(false)
+    }
+  }
 
   // --- Рендер состояний загрузки и ошибки ---
   if (loading) {
@@ -215,20 +254,40 @@ export function DeedViewPage() {
               </Link>
             </IconButton>
             <Separator orientation="vertical"/>
-            <IconButton 
-            asChild 
-            size="3"
-            variant="classic" 
-            radius="full" 
-            aria-label="Добавить запись">
-              <Link to={`/deeds/${id}/fill`}>
+            {singleYesNoBlock ? (
+              <IconButton
+                type="button"
+                size="3"
+                variant="classic"
+                radius="full"
+                aria-label={addingRecord ? 'Добавление…' : 'Добавить запись'}
+                disabled={addingRecord}
+                onClick={() => void handleQuickAddYesNoRecord()}
+              >
                 <PlusIcon width={18} height={18} />
-              </Link>
-            </IconButton>
+              </IconButton>
+            ) : (
+              <IconButton
+                asChild
+                size="3"
+                variant="classic"
+                radius="full"
+                aria-label="Добавить запись"
+              >
+                <Link to={`/deeds/${id}/fill`}>
+                  <PlusIcon width={18} height={18} />
+                </Link>
+              </IconButton>
+            )}
           </Flex>
         }
       />
     <Flex direction="column" gap="1">
+      {quickAddError ? (
+        <Text as="p" size="2" color="crimson" role="alert">
+          {quickAddError}
+        </Text>
+      ) : null}
 
       <Flex align="center" direction="row" gap="3">
      {/* <Avatar size="5" radius="large" color="gray" variant="soft" fallback={deed.emoji?.trim() || '📋'} /> */}
@@ -310,14 +369,12 @@ export function DeedViewPage() {
                 </Card>
               ) : null}
 
-              {(analyticsConfig.activity.record_count_enabled || analyticsConfig.activity.workday_weekend_enabled) ? (
+              {analyticsConfig.activity.record_count_enabled ? (
                 <Card style={{ flex: '1' }}>
-                  {analyticsConfig.activity.record_count_enabled ? (
-                    <Flex direction="column" gap="1" mb={analyticsConfig.activity.workday_weekend_enabled ? '2' : '0'}>
-                      <Text size="2" color="gray">Всего</Text>
-                      <Text size="4">{pluralRecords(records.length)}</Text>
-                    </Flex>
-                  ) : null}
+                  <Flex direction="column" gap="1" mb={analyticsConfig.activity.workday_weekend_enabled ? '2' : '0'}>
+                    <Text size="2" color="gray">Всего</Text>
+                    <Text size="4">{pluralRecords(records.length)}</Text>
+                  </Flex>
 
                   {analyticsConfig.activity.workday_weekend_enabled ? (
                     <Flex direction="row" gap="2">

@@ -284,8 +284,8 @@ export function LoginPage() {
         <Text as="p" size="2" color="gray" align="center">
           Продолжая пользоваться сервисом, ты&nbsp;соглашаешься
           <br />с&nbsp;
-          <Link href="#" size="2" underline="hover" onClick={(e) => e.preventDefault()}>
-            Условиями использования
+          <Link asChild size="2" underline="hover">
+            <RouterLink to="/terms">Условиями использования</RouterLink>
           </Link>{' '}
           и&nbsp;
           <Link asChild size="2" underline="hover">

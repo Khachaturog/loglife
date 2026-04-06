@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { Avatar, Card, Flex, Text } from '@radix-ui/themes'
 import type { BlockRow, RecordRow, ValueJson } from '@/types/database'
 import { formatAnswerPreviewSegment, formatYesNoOnlyRecordListPreview } from '@/lib/format-utils'
+import { persistHistoryListScrollY } from '@/lib/history-scroll-storage'
 import styles from './RecordCard.module.css'
 
 type RecordAnswer = { block_id: string; value_json: unknown }
@@ -65,6 +66,14 @@ export function RecordCard({
         to={`/records/${record.id}`}
         state={linkState}
         className={styles.recordLink}
+        onPointerDownCapture={
+          linkState?.from === 'history'
+            ? () => {
+                // До смены маршрута окно ещё на истории — иначе unmount сохранил бы уже чужой scrollY.
+                persistHistoryListScrollY()
+              }
+            : undefined
+        }
       >
         <Flex align="start" gap="2" width="100%">
           {!hideAvatar ? (

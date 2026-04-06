@@ -19,9 +19,10 @@ const HistoryPage = lazy(() => import('@/pages/HistoryPage').then((m) => ({ defa
 const WidgetsPage = lazy(() => import('@/pages/WidgetsPage').then((m) => ({ default: m.WidgetsPage })))
 const ClickerPage = lazy(() => import('@/pages/ClickerPage').then((m) => ({ default: m.ClickerPage })))
 const PrivacyPolicyPage = lazy(() => import('@/pages/PrivacyPolicyPage').then((m) => ({ default: m.PrivacyPolicyPage })))
+const TermsOfUsePage = lazy(() => import('@/pages/TermsOfUsePage').then((m) => ({ default: m.TermsOfUsePage })))
 
 // Маршруты, доступные без авторизации
-const PUBLIC_PATHS = ['/login', '/privacy']
+const PUBLIC_PATHS = ['/login', '/privacy', '/terms']
 
 function App() {
   const { user, loading } = useAuth()
@@ -57,6 +58,7 @@ function App() {
               <Route path="/history" element={<HistoryPage />} />
               <Route path="/profile" element={<ProfilePage />} />
               <Route path="/privacy" element={<PrivacyPolicyPage />} />
+              <Route path="/terms" element={<TermsOfUsePage />} />
             </Routes>
           </Suspense>
         </Box>

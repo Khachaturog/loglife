@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react'
 import { useEffect, useRef, useState } from 'react'
-import { Box, Card, Flex, Text } from '@radix-ui/themes'
+import { Box, Card, Flex, Text, Tooltip } from '@radix-ui/themes'
 import {
   buildDeedHeatmap,
   type DeedHeatmapMonthLabel,
@@ -243,7 +243,8 @@ export function DeedActivityHeatmap({
                       : ''
                   const className = [
                     styles.cell,
-                    levelClass,
+                    cell.isFuture ? styles.cellFuture : '',
+                    !cell.isFuture ? levelClass : '',
                     cell.isToday ? styles.today : '',
                   ]
                     .filter(Boolean)
@@ -255,13 +256,24 @@ export function DeedActivityHeatmap({
                     valueLabel,
                   )
 
+                  if (cell.isFuture) {
+                    return (
+                      <Box
+                        key={cell.date}
+                        className={className}
+                        aria-hidden
+                      />
+                    )
+                  }
+
                   return (
-                    <Box
+                    <Tooltip
                       key={cell.date}
-                      className={className}
-                      title={tip}
-                      aria-label={tip}
-                    />
+                      content={tip}
+                      delayDuration={400}
+                    >
+                      <Box className={className} aria-label={tip} />
+                    </Tooltip>
                   )
                 })}
               </Box>

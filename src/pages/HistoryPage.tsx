@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Badge, Box, Button, Flex, Heading, Text } from '@radix-ui/themes'
 import { HomeIcon } from '@radix-ui/react-icons'
@@ -8,6 +8,7 @@ import { api } from '@/lib/api'
 import { RecordCard } from '@/components/RecordCard'
 import type { BlockRow, RecordRow } from '@/types/database'
 import { formatDate, pluralRecords } from '@/lib/format-utils'
+import { HISTORY_SCROLL_STORAGE_KEY, persistHistoryListScrollY } from '@/lib/history-scroll-storage'
 import layoutStyles from '@/styles/layout.module.css'
 
 type RecordWithDeed = (RecordRow & { record_answers?: { block_id: string; value_json: unknown }[] }) & {
@@ -23,6 +24,45 @@ export function HistoryPage() {
   const [recordsWithDeed, setRecordsWithDeed] = useState<RecordWithDeed[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  /** Одно восстановление скролла за визит (после готовности списка в DOM). */
+  const scrollRestoreDoneRef = useRef(false)
+
+  /**
+   * Пока открыта история со списком — постоянно пишем scrollY в sessionStorage.
+   * Нельзя полагаться только на cleanup при unmount: при переходе на запись сначала монтируется
+   * новая страница и обнуляет скролл окна, и только потом размонтируется история — в cleanup было бы 0.
+   */
+  useEffect(() => {
+    if (loading || error) return
+    let ticking = false
+    const onScroll = () => {
+      if (ticking) return
+      ticking = true
+      requestAnimationFrame(() => {
+        ticking = false
+        persistHistoryListScrollY()
+      })
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    onScroll()
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [loading, error])
+
+  // После загрузки данных восстанавливаем скролл; до `loading === false` высота списка ещё не финальная.
+  useLayoutEffect(() => {
+    if (loading || error) return
+    if (scrollRestoreDoneRef.current) return
+    scrollRestoreDoneRef.current = true
+    const raw = sessionStorage.getItem(HISTORY_SCROLL_STORAGE_KEY)
+    if (raw == null) return
+    const y = Number.parseInt(raw, 10)
+    if (!Number.isFinite(y) || y < 0) return
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        window.scrollTo(0, y)
+      })
+    })
+  }, [loading, error])
 
   // --- Загрузка записей ---
   useEffect(() => {
@@ -134,8 +174,21 @@ export function HistoryPage() {
         </Flex>
       ) : (
         <Flex direction="column" gap="5" mt="2">
-          {byDate.map(([date, records]) => (
+          {byDate.map(([date, records], index) => {
+            const recordYear = Number.parseInt(date.slice(0, 4), 10)
+            const currentYear = new Date().getFullYear()
+            const prevDateStr = index > 0 ? byDate[index - 1]![0] : null
+            const prevYear = prevDateStr != null ? Number.parseInt(prevDateStr.slice(0, 4), 10) : null
+            // Для любого года, кроме текущего, перед первой датой этого года показываем строку с годом (например «2025», затем «31 декабря 2025»).
+            const showYearHeading = recordYear !== currentYear && prevYear !== recordYear
+
+            return (
             <Box key={date}>
+              {showYearHeading ? (
+                <Heading as="h2" mb="2">
+                  {recordYear}
+                </Heading>
+              ) : null}
               <Flex justify="between" align="center" gap="2" mb="2">
                 <Text weight="medium">
                   {formatDate(date)}
@@ -161,7 +214,8 @@ export function HistoryPage() {
                 ))}
               </Flex>
             </Box>
-          ))}
+            )
+          })}
         </Flex>
       )}
     </Box>

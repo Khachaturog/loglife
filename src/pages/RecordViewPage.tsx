@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { Link, useParams, useNavigate, useLocation } from 'react-router-dom'
-import { AlertDialog, Box, Button, Checkbox, CheckboxGroup, Flex, IconButton, Select, SegmentedControl, Separator, Text, TextField, Badge } from '@radix-ui/themes'
+import { AlertDialog, Box, Button, Checkbox, CheckboxGroup, DropdownMenu, Flex, IconButton, Select, SegmentedControl, Separator, Text, TextField, Badge } from '@radix-ui/themes'
 import { AUTO_GROW_TEXTAREA_MIN_ONE_LINE_PX, AutoGrowTextArea } from '@/components/AutoGrowTextArea'
 import { AppBar } from '@/components/AppBar'
 import { FillFormNumberStepper } from '@/components/FillFormNumberStepper'
 import { PageLoading } from '@/components/PageLoading'
-import { ArrowTopLeftIcon, BackpackIcon, CheckIcon, Pencil1Icon, PlusIcon, TrashIcon } from '@radix-ui/react-icons'
+import { ArrowTopLeftIcon, BackpackIcon, CheckIcon, CopyIcon, DotsHorizontalIcon } from '@radix-ui/react-icons'
 import { api } from '@/lib/api'
 import type { BlockConfig, BlockRow, DeedWithBlocks, RecordAnswerRow, RecordWithAnswers, ValueJson } from '@/types/database'
 import { DatePicker } from '@/components/DatePicker'
@@ -403,62 +403,71 @@ export function RecordViewPage() {
               <CheckIcon width={18} height={18} />
             </IconButton>
           ) : (
-            <>
-              {/* Новая запись по тому же делу (например, после просмотра похожей записи) */}
-              <IconButton asChild 
-              variant="soft" 
-              color="gray"
-              radius="full" 
-              size="3" 
-              aria-label="Добавить запись">
-                <Link to={`/deeds/${record.deed_id}/fill`}>
-                  <PlusIcon width={18} height={18} />
-                </Link>
+            <Flex align="center" gap="2" wrap="wrap" justify="end">
+              {/* Дублировать: новая запись с теми же ответами по блокам; дата/время — на форме «сейчас» */}
+              <IconButton
+                type="button"
+                size="3"
+                color="gray"
+                variant="classic"
+                radius="full"
+                aria-label="Дублировать"
+                onClick={() =>
+                  navigate(`/deeds/${record.deed_id}/fill`, {
+                    state: { fillDuplicateAnswers: answersFromRecord(record) },
+                  })
+                }
+              >
+                <CopyIcon width={18} height={18} />
               </IconButton>
-              <Separator orientation="vertical" />
-              {/* К делу — только если открыли запись с вкладки «История» (state.from === 'history') */}
+              {/* К делу — только с экрана «История» */}
               {fromHistory && (
-                <>
+                <IconButton
+                  type="button"
+                  size="3"
+                  color="gray"
+                  variant="classic"
+                  radius="full"
+                  onClick={() => navigate(`/deeds/${record.deed_id}`)}
+                  aria-label="Перейти к делу"
+                >
+                  <BackpackIcon width={18} height={18} />
+                </IconButton>
+              )}
+              <DropdownMenu.Root>
+                <DropdownMenu.Trigger>
                   <IconButton
-                    variant="soft"
+                    type="button"
+                    size="3"
+                    variant="classic" 
                     color="gray"
                     radius="full"
-                    size="3"
-                    onClick={() => navigate(`/deeds/${record.deed_id}`)}
-                    aria-label="Перейти к делу"
+                    aria-label="Действия с записью"
                   >
-                    <BackpackIcon width={18} height={18} />
+                    <DotsHorizontalIcon width={18} height={18} />
                   </IconButton>
-                  <Separator orientation="vertical" />
-                </>
-              )}
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Content align="end" sideOffset={8}>
+                  <DropdownMenu.Item asChild>
+                    <Link to={`/deeds/${record.deed_id}/fill`}>Новая запись</Link>
+                  </DropdownMenu.Item>
+                  <DropdownMenu.Separator />
+                  <DropdownMenu.Item
+                    onSelect={() => {
+                      setEditAnswersBaseline(structuredClone(answers))
+                      setEditing(true)
+                    }}
+                  >
+                    Редактировать
+                  </DropdownMenu.Item>
+                  <DropdownMenu.Separator />
+                  <DropdownMenu.Item color="red" onSelect={() => openDeleteDialog()}>
+                    Удалить
+                  </DropdownMenu.Item>
+                </DropdownMenu.Content>
+              </DropdownMenu.Root>
 
-              <IconButton
-                variant="classic"
-                color="gray"
-                radius="full"
-                size="3"
-                onClick={() => {
-                  setEditAnswersBaseline(structuredClone(answers))
-                  setEditing(true)
-                }}
-                aria-label="Редактировать"
-              >
-                <Pencil1Icon width={18} height={18} />
-              </IconButton>
-
-              <IconButton
-                variant="classic"
-                color="red"
-                radius="full"
-                size="3"
-                onClick={openDeleteDialog}
-                aria-label="Удалить"
-              >
-                <TrashIcon width={18} height={18} />
-              </IconButton>
-
-              {/* Актуализировать — только в режиме просмотра при устаревших блоках */}
+              {/* Актуализировать — только при устаревших блоках */}
               {hasBlocksToUpdate && (
                 <>
                   <Separator orientation="vertical" size="1" />
@@ -475,7 +484,7 @@ export function RecordViewPage() {
                   </IconButton>
                 </>
               )}
-            </>
+            </Flex>
           )
         }
       />

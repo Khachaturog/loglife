@@ -1,25 +1,28 @@
-import type {
-  BlockRow,
-  RecordRow,
-  RecordAnswerRow,
-  ValueJson,
-} from '@/types/database'
+import type { BlockRow, RecordRow, ValueJson } from '@/types/database'
 import { todayLocalISO } from '@/lib/format-utils'
+
+/** Запись с ответами, как приходит в списке на главной и на странице дела (без полного RecordAnswerRow). */
+export type RecordWithAnswersLoose = RecordRow & {
+  record_answers?: { block_id: string; value_json: unknown }[]
+}
+
+/** Ровно один активный блок и он «Да/Нет» — для быстрого добавления записи с экрана дела. */
+export function getSingleYesNoBlock(blocks: BlockRow[] | undefined): BlockRow | null {
+  const list = blocks ?? []
+  if (list.length !== 1 || list[0].block_type !== 'yes_no') return null
+  return list[0]
+}
 
 // --- Логика отображения "N сегодня · N всего" на карточке дела ---
 //
-// N определяется по блокам дела типа number и scale:
+// • Если есть блоки number / scale / duration:
+//   – несколько таких блоков, или среди них есть duration → считаем КОЛИЧЕСТВО ЗАПИСЕЙ (сегодня / всего).
+//   – ровно один блок (число или шкала, без duration) → СУММА значений по этому блоку.
 //
-// • Если в деле больше одного блока "число"/"шкала" ИЛИ один "число" + одна "шкала"
-//   → показываем КОЛИЧЕСТВО ЗАПИСЕЙ этого дела (сколько раз заполняли форму).
+// • Если числовых блоков нет (только «Да/Нет», текст, выбор и т.д.), но блоки в деле есть
+//   → КОЛИЧЕСТВО ЗАПИСЕЙ — иначе превью было бы 0 при наличии записей.
 //
-// • Если в деле ровно один блок "число" или "шкала"
-//   → показываем СУММУ значений этого блока по всем ответам (number → value, scale → scaleValue).
-//
-// "N сегодня" — то же правило, но только по записям с record_date = сегодня (локальная дата).
-// "N всего" — по всем записям дела.
-//
-// Если в деле нет ни одного блока number/scale, показываем 0 сегодня и 0 всего.
+// • Блоков нет → 0 и 0.
 
 function getNumericBlocks(blocks: BlockRow[]): BlockRow[] {
   return (blocks ?? []).filter(
@@ -29,6 +32,31 @@ function getNumericBlocks(blocks: BlockRow[]): BlockRow[] {
 
 function getTodayDateString(): string {
   return todayLocalISO()
+}
+
+/** Границы текущего календарного месяца в локальных ISO-датах (YYYY-MM-DD). */
+function getCurrentMonthLocalRange(): { monthStart: string; monthEnd: string } {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = now.getMonth()
+  const monthStart = `${year}-${String(month + 1).padStart(2, '0')}-01`
+  const monthEndDate = new Date(year, month + 1, 0).getDate()
+  const monthEnd = `${year}-${String(month + 1).padStart(2, '0')}-${String(monthEndDate).padStart(2, '0')}`
+  return { monthStart, monthEnd }
+}
+
+/** Сколько записей сегодня, в текущем месяце и всего (для сводки без числового блока). */
+export function getRecordCountMetrics(
+  records: RecordWithAnswersLoose[],
+): { today: number; month: number; total: number } {
+  const todayStr = getTodayDateString()
+  const { monthStart, monthEnd } = getCurrentMonthLocalRange()
+  const total = records.length
+  const today = records.filter((r) => r.record_date === todayStr).length
+  const month = records.filter(
+    (r) => r.record_date >= monthStart && r.record_date <= monthEnd,
+  ).length
+  return { today, month, total }
 }
 
 function getValueFromAnswer(valueJson: ValueJson, blockType: 'number' | 'scale' | 'duration'): number {
@@ -44,22 +72,25 @@ function getValueFromAnswer(valueJson: ValueJson, blockType: 'number' | 'scale' 
 
 export function getDeedDisplayNumbers(
   blocks: BlockRow[],
-  records: (RecordRow & { record_answers?: RecordAnswerRow[] })[]
-): { today: number; total: number } {
+  records: RecordWithAnswersLoose[],
+): { today: number; month: number; total: number } {
   const numericBlocks = getNumericBlocks(blocks)
   const todayStr = getTodayDateString()
+  const { monthStart, monthEnd } = getCurrentMonthLocalRange()
 
   if (numericBlocks.length === 0) {
-    return { today: 0, total: 0 }
+    const blockList = blocks ?? []
+    if (blockList.length === 0) {
+      return { today: 0, month: 0, total: 0 }
+    }
+    return getRecordCountMetrics(records)
   }
 
   // For duration, or multiple numeric blocks: show record count
   const hasDuration = numericBlocks.some((b) => b.block_type === 'duration')
   const useCount = numericBlocks.length > 1 || hasDuration
   if (useCount) {
-    const today = records.filter((r) => r.record_date === todayStr).length
-    const total = records.length
-    return { today, total }
+    return getRecordCountMetrics(records)
   }
 
   const singleBlock = numericBlocks[0]
@@ -67,12 +98,14 @@ export function getDeedDisplayNumbers(
   const blockType = singleBlock.block_type as 'number' | 'scale' | 'duration'
 
   let sumToday = 0
+  let sumMonth = 0
   let sumTotal = 0
   for (const rec of records) {
     const answer = rec.record_answers?.find((a) => a.block_id === blockId)
-    const value = answer ? getValueFromAnswer(answer.value_json, blockType) : 0
+    const value = answer ? getValueFromAnswer(answer.value_json as ValueJson, blockType) : 0
     sumTotal += value
     if (rec.record_date === todayStr) sumToday += value
+    if (rec.record_date >= monthStart && rec.record_date <= monthEnd) sumMonth += value
   }
-  return { today: sumToday, total: sumTotal }
+  return { today: sumToday, month: sumMonth, total: sumTotal }
 }

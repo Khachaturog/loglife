@@ -1,1 +1,14 @@
+/* Вращение иконки загрузки при быстром добавлении записи «Да/Нет» */
+.iconSpin {
+  display: block;
+  animation: deedCardReloadSpin 0.75s linear infinite;
+}
 
+@keyframes deedCardReloadSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

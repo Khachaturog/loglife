@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { useParams, useNavigate } from 'react-router-dom'
-import { Box, Button, Checkbox, CheckboxGroup, Flex, IconButton, Select, SegmentedControl, Text, TextField } from '@radix-ui/themes'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
+import { Box, Button, CheckboxCards, CheckboxGroup, Flex, IconButton, Select, SegmentedControl, Text, TextField } from '@radix-ui/themes'
 import { AUTO_GROW_TEXTAREA_MIN_ONE_LINE_PX, AutoGrowTextArea } from '@/components/AutoGrowTextArea'
 import { AppBar } from '@/components/AppBar'
 import { FillFormNumberStepper } from '@/components/FillFormNumberStepper'
@@ -53,6 +53,9 @@ function isRequiredBlockInvalid(block: BlockRow, answers: Record<string, ValueJs
 export function FillFormPage() {
   const { id: deedId } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
+  /** Чтобы не подмешать дубликат повторно при повторном срабатывании эффекта. */
+  const duplicateAppliedRef = useRef(false)
 
   // --- Состояние ---
   const [deed, setDeed] = useState<DeedWithBlocks | null>(null)
@@ -93,6 +96,22 @@ export function FillFormPage() {
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [deedId, navigate])
+
+  // Подстановка ответов при «Дублировать» (дата/время уже «сейчас» из useState выше).
+  useEffect(() => {
+    if (!deed || duplicateAppliedRef.current) return
+    const st = location.state as { fillDuplicateAnswers?: Record<string, ValueJson> } | null | undefined
+    const src = st?.fillDuplicateAnswers
+    if (!src || typeof src !== 'object') return
+    duplicateAppliedRef.current = true
+    const blockIds = new Set((deed.blocks ?? []).map((b) => b.id))
+    const next: Record<string, ValueJson> = {}
+    for (const [bid, val] of Object.entries(src)) {
+      if (blockIds.has(bid)) next[bid] = val
+    }
+    setAnswers(next)
+    navigate(`${location.pathname}${location.search}`, { replace: true, state: null })
+  }, [deed, location.pathname, location.search, location.state, navigate])
 
   const blocks = useMemo(() => deed?.blocks ?? [], [deed])
 
@@ -397,7 +416,7 @@ export function FillFormPage() {
                       setAnswer(block.id, { optionId: v })
                     }}
                   >
-                    <Select.Trigger placeholder="Выберите" />
+                    <Select.Trigger placeholder="Выберите значение..." />
                     <Select.Content>
                       {getBlockOptions(block).map((opt) => (
                         <Select.Item key={opt.id} value={opt.id}>{opt.label}</Select.Item>
@@ -410,7 +429,7 @@ export function FillFormPage() {
                         <Button
                           key={optId}
                           type="button"
-                          size="3"
+                          size="2"
                           color="gray"
                           variant="soft"
                           radius="full"
@@ -468,7 +487,7 @@ export function FillFormPage() {
                     setAnswer(block.id, { scaleValue: Number(v) })
                   }}
                   // Узкий экран — компактнее по ширине; высота — через ScaleSegmentedControl.module.css.
-                  size={{ initial: '1', sm: '3' }}
+                  size={{ initial: '1', sm: '2' }}
                 >
                   {Array.from(
                     { length: Math.min(10, Math.max(1, (block.config as BlockConfig | null)?.divisions ?? 5)) },
@@ -488,19 +507,22 @@ export function FillFormPage() {
                 />
               )}
               {block.block_type === 'yes_no' && (
-                <Text as="label" size="3" className={styles.checkboxLabel}>
-                  <Flex align="center" gap="2">
-                    <Checkbox
-                      size="3"
-                      checked={(answers[block.id] as { yesNo?: boolean } | undefined)?.yesNo === true}
-                      onCheckedChange={(c) => {
-                        triggerHaptic('medium', { intensity: 1 })
-                        setAnswer(block.id, { yesNo: c === true })
-                      }}
-                    />
-                    Выполнено
-                  </Flex>
-                </Text>
+                <CheckboxCards.Root
+                  size="2"
+                  columns="1"
+                  gap="2"
+                  value={
+                    (answers[block.id] as { yesNo?: boolean } | undefined)?.yesNo === true
+                      ? ['done']
+                      : []
+                  }
+                  onValueChange={(newValues) => {
+                    triggerHaptic('medium', { intensity: 1 })
+                    setAnswer(block.id, { yesNo: newValues.includes('done') })
+                  }}
+                >
+                  <CheckboxCards.Item value="done">Выполнено</CheckboxCards.Item>
+                </CheckboxCards.Root>
               )}
               {block.is_required && validationAttempted && isRequiredBlockInvalid(block, answers) && (
                 <Text size="1" color="crimson" role="alert">

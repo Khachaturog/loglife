@@ -27,7 +27,7 @@ import {
 import { AppBar } from "@/components/AppBar";
 import { PageLoading } from "@/components/PageLoading";
 import { EmojiPickerButton } from "@/components/EmojiPickerButton";
-import { ArrowBottomRightIcon, ArrowDownIcon, ArrowUpIcon, CheckIcon, PlusIcon, TrashIcon } from "@radix-ui/react-icons";
+import { ArrowBottomRightIcon, ArrowDownIcon, ArrowUpIcon, CheckIcon, Cross2Icon, PlusIcon, TrashIcon } from "@radix-ui/react-icons";
 import { api } from "@/lib/api";
 import {
   RADIX_COLOR_9_PRESETS,
@@ -61,10 +61,10 @@ const BLOCK_TYPE_LABEL: Record<BlockType, string> = {
   duration: "Время",
 };
 
-/** Создаёт пустой блок с дефолтными значениями */
+/** Создаёт пустой блок с дефолтными значениями (текст вопроса — только placeholder, без автозаполнения) */
 function createDefaultBlock(): UiBlock {
   return {
-    title: "Значение",
+    title: "",
     block_type: "number",
     is_required: false,
     config: null,
@@ -92,7 +92,7 @@ function createDefaultSelectConfig(): BlockConfig {
   };
 }
 
-/** Перед API: trim подписей и порядок sort_order; пустых в UI не допускаем — см. selectBlockOptionsValid */
+/** Перед API: trim подписей и порядок sort_order (валидация непустых подписей — при сабмите формы) */
 function normalizeSelectOptionsForPayload(
   config: BlockConfig | null,
 ): BlockConfig | null {
@@ -107,13 +107,52 @@ function normalizeSelectOptionsForPayload(
   };
 }
 
-/** Для «Один/Несколько из списка»: есть варианты и у каждого непустой текст (не только placeholder). */
-function selectBlockOptionsValid(block: UiBlock): boolean {
-  if (block.block_type !== "single_select" && block.block_type !== "multi_select")
-    return true;
-  const opts = block.config?.options ?? [];
-  if (opts.length === 0) return false;
-  return opts.every((o) => o.label.trim().length > 0);
+type SummaryShowPatch = Partial<
+  Pick<
+    DeedAnalyticsConfigV1["summary"],
+    "show_today" | "show_month" | "show_total"
+  >
+>;
+
+/**
+ * Сводка («Активность»): если все три карточки выключены — `enabled: false`,
+ * чтобы мастер-тоггл не оставался «включён» при пустой секции.
+ */
+function applySummaryShowPatch(
+  summary: DeedAnalyticsConfigV1["summary"],
+  patch: SummaryShowPatch,
+): DeedAnalyticsConfigV1["summary"] {
+  const next = { ...summary, ...patch }
+  const anyWidget = next.show_today || next.show_month || next.show_total
+  return {
+    ...next,
+    enabled: anyWidget,
+  }
+}
+
+type ActivityCorePatch = Partial<
+  Pick<
+    DeedAnalyticsConfigV1["activity"],
+    "streak_enabled" | "record_count_enabled" | "workday_weekend_enabled"
+  >
+>
+
+/**
+ * «Стрики и записи»: мастер `enabled` синхронизируем с фактом «есть что показать» —
+ * стрик или блок «Всего» (как у max_streak при выключенном стрике: флаг будни/выходные
+ * в состоянии сохраняется, просто скрыт, пока «Всего» выкл).
+ */
+function applyActivityCorePatch(
+  activity: DeedAnalyticsConfigV1["activity"],
+  patch: ActivityCorePatch,
+): DeedAnalyticsConfigV1["activity"] {
+  const next = { ...activity, ...patch }
+  const anyVisible =
+    next.streak_enabled || next.record_count_enabled
+  return {
+    ...next,
+    enabled: anyVisible,
+  }
 }
 
 /** Категории по умолчанию + пользовательские из существующих дел */
@@ -321,6 +360,30 @@ export function DeedFormPage() {
     () => ({ ...DEFAULT_DEED_ANALYTICS_CONFIG }),
   );
   const formRef = useRef<HTMLFormElement>(null);
+  /** Ошибки после попытки сохранить — подсветка полей и тексты (кнопка сохранения не блокируется) */
+  const [nameFieldError, setNameFieldError] = useState(false);
+  const [blocksEmptyError, setBlocksEmptyError] = useState(false);
+  /** Индексы блоков с пустым «Вопрос» */
+  const [blockQuestionErrorIndices, setBlockQuestionErrorIndices] = useState<
+    number[]
+  >([]);
+  /** Ключи «индексБлока-индексВарианта» для пустых подписей в single/multi select */
+  const [selectOptionFieldErrors, setSelectOptionFieldErrors] = useState<
+    string[]
+  >([]);
+  /** Блоки-списки без ни одного варианта */
+  const [selectBlocksNoOptions, setSelectBlocksNoOptions] = useState<number[]>(
+    [],
+  );
+
+  /** Сброс подсветок при изменении состава/порядка блоков (индексы ошибок перестают совпадать) */
+  function clearAllSubmitValidation() {
+    setNameFieldError(false);
+    setBlocksEmptyError(false);
+    setBlockQuestionErrorIndices([]);
+    setSelectOptionFieldErrors([]);
+    setSelectBlocksNoOptions([]);
+  }
 
   /** Числовые блоки для выбора в сводке и heatmap (порядок формы). */
   const numericBlocksUi = useMemo(() => {
@@ -439,15 +502,6 @@ export function DeedFormPage() {
       setCategoryCustom(false);
   }, [allCategories, category, categoryCustom]);
 
-  /** Сохранение: название, блоки, у списков — у всех вариантов введён текст */
-  const canSave = useMemo(
-    () =>
-      name.trim().length > 0 &&
-      blocks.length > 0 &&
-      blocks.every(selectBlockOptionsValid),
-    [name, blocks],
-  );
-
   /** Обновить блок по индексу — updater получает текущий блок и возвращает новый */
   function updateBlock(index: number, updater: (block: UiBlock) => UiBlock) {
     setBlocks((prev) => prev.map((b, i) => (i === index ? updater(b) : b)));
@@ -455,6 +509,7 @@ export function DeedFormPage() {
 
   /** Поменять блок местами с соседом (вверх/вниз) */
   function moveBlock(index: number, direction: "up" | "down") {
+    clearAllSubmitValidation();
     setBlocks((prev) => {
       const next = [...prev];
       const targetIndex = direction === "up" ? index - 1 : index + 1;
@@ -466,10 +521,12 @@ export function DeedFormPage() {
   }
 
   function removeBlock(index: number) {
+    clearAllSubmitValidation();
     setBlocks((prev) => prev.filter((_, i) => i !== index));
   }
 
   function addBlock() {
+    clearAllSubmitValidation();
     setBlocks((prev) => [...prev, createDefaultBlock()]);
   }
 
@@ -477,7 +534,46 @@ export function DeedFormPage() {
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault(); // без этого страница перезагрузится
     blurActiveInputInForm(e.currentTarget);
-    if (!canSave || saving) return;
+    if (saving) return;
+
+    const nameErr = !name.trim();
+    const blocksEmpty = blocks.length === 0;
+    const emptyQuestionIndices = blocks
+      .map((b, i) => (!b.title.trim() ? i : -1))
+      .filter((i) => i >= 0);
+    const selectBlocksNoOpts: number[] = [];
+    const selectOptErrKeys: string[] = [];
+    blocks.forEach((b, bi) => {
+      if (
+        b.block_type !== "single_select" &&
+        b.block_type !== "multi_select"
+      ) {
+        return;
+      }
+      const opts = b.config?.options ?? [];
+      if (opts.length === 0) selectBlocksNoOpts.push(bi);
+      opts.forEach((o, oi) => {
+        if (!o.label.trim()) selectOptErrKeys.push(`${bi}-${oi}`);
+      });
+    });
+
+    const hasErrors =
+      nameErr ||
+      blocksEmpty ||
+      emptyQuestionIndices.length > 0 ||
+      selectBlocksNoOpts.length > 0 ||
+      selectOptErrKeys.length > 0;
+
+    if (hasErrors) {
+      setNameFieldError(nameErr);
+      setBlocksEmptyError(blocksEmpty);
+      setBlockQuestionErrorIndices(emptyQuestionIndices);
+      setSelectBlocksNoOptions(selectBlocksNoOpts);
+      setSelectOptionFieldErrors(selectOptErrKeys);
+      return;
+    }
+
+    clearAllSubmitValidation();
     setSaving(true);
     try {
       // Преобразуем UI-блоки в формат API (добавляем sort_order)
@@ -490,22 +586,14 @@ export function DeedFormPage() {
         return {
           id: b.id,
           sort_order: index,
-          title: b.title || "Блок",
+          title: b.title.trim(),
           block_type: b.block_type,
           is_required: b.is_required,
           config,
         };
       });
 
-      // Цвет heatmap всегда из card_color / темы; отдельный accent_hex в UI не задаём.
-      const analyticsPayload: DeedAnalyticsConfigV1 = {
-        ...analyticsConfig,
-        heatmap: {
-          ...analyticsConfig.heatmap,
-          use_card_color: true,
-          accent_hex: null,
-        },
-      };
+      const analyticsPayload: DeedAnalyticsConfigV1 = analyticsConfig;
 
       if (isNew) {
         const deed = await api.deeds.create({
@@ -562,7 +650,7 @@ export function DeedFormPage() {
             size="3"
             variant="classic"
             radius='full'
-            disabled={!canSave || saving}
+            disabled={saving}
             onClick={() => formRef.current?.requestSubmit()}
             aria-label={saving ? "Сохранение…" : "Сохранить дело"}
           >
@@ -597,11 +685,21 @@ export function DeedFormPage() {
               <TextField.Root
                 id="name"
                 size="3"
+                color={nameFieldError ? "red" : undefined}
                 value={name}
                 onKeyDown={blurInputOnEnter}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  setNameFieldError(false);
+                }}
                 placeholder="Название"
-                />
+                aria-invalid={nameFieldError}
+              />
+              {nameFieldError ? (
+                <Text size="1" color="red" role="alert">
+                  Заполни поле
+                </Text>
+              ) : null}
             </Flex>
           </Flex>
 
@@ -671,9 +769,16 @@ export function DeedFormPage() {
           {/* Список блоков: каждый блок — карточка с настройками */}
           {/* Блоки */}
 
-          <Heading size="5" mt="4" mb="-1">
-            Блоки
-          </Heading>
+          <Flex direction="column" gap="1" mt="4">
+            <Heading size="5" mb="-1">
+              Блоки
+            </Heading>
+            {blocksEmptyError ? (
+              <Text size="2" color="red" role="alert">
+                Добавьте хотя бы один блок
+              </Text>
+            ) : null}
+          </Flex>
 
           <Flex direction="column" gap="4">
             {/* key = block.id ?? index: у новых блоков нет id, используем индекс */}
@@ -707,6 +812,7 @@ export function DeedFormPage() {
                   
                   <Flex gap="1">
                     <IconButton
+                      type="button"
                       size="3"
                       color="gray"
                       variant="surface"
@@ -718,6 +824,7 @@ export function DeedFormPage() {
                     </IconButton>
 
                     <IconButton
+                      type="button"
                       size="3"
                       color="gray"
                       variant="surface"
@@ -729,6 +836,7 @@ export function DeedFormPage() {
                     </IconButton>
                     
                     <IconButton
+                      type="button"
                       size="3"
                       variant="surface"
                       color="red"
@@ -748,7 +856,14 @@ export function DeedFormPage() {
                     <Select.Root
                       size="3"
                       value={block.block_type}
-                      onValueChange={(nextType) =>
+                      onValueChange={(nextType) => {
+                        // Сбрасываем ошибки вариантов для этого блока — тип сменился
+                        setSelectOptionFieldErrors((prev) =>
+                          prev.filter((k) => !k.startsWith(`${index}-`)),
+                        );
+                        setSelectBlocksNoOptions((prev) =>
+                          prev.filter((i) => i !== index),
+                        );
                         updateBlock(index, (b) => {
                           let nextConfig: BlockConfig | null = b.config;
                           if (nextType === "scale")
@@ -766,8 +881,8 @@ export function DeedFormPage() {
                             block_type: nextType as BlockType,
                             config: nextConfig,
                           };
-                        })
-                      }
+                        });
+                      }}
                     >
                       <Select.Trigger />
                       <Select.Content className={styles.selectContentConstrained}>
@@ -788,16 +903,30 @@ export function DeedFormPage() {
                     </Text>
                     <TextField.Root
                       size="3"
+                      color={
+                        blockQuestionErrorIndices.includes(index)
+                          ? "red"
+                          : undefined
+                      }
                       value={block.title}
                       onKeyDown={blurInputOnEnter}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        setBlockQuestionErrorIndices((prev) =>
+                          prev.filter((i) => i !== index),
+                        );
                         updateBlock(index, (b) => ({
                           ...b,
                           title: e.target.value,
-                        }))
-                      }
-                      placeholder="Вопрос"
+                        }));
+                      }}
+                      placeholder="Опиши вопрос..."
+                      aria-invalid={blockQuestionErrorIndices.includes(index)}
                     />
+                    {blockQuestionErrorIndices.includes(index) ? (
+                      <Text size="1" color="red" role="alert">
+                        Заполни поле
+                      </Text>
+                    ) : null}
                   </Flex>
                 </Flex>
 
@@ -846,34 +975,60 @@ export function DeedFormPage() {
                     <Text as="label" size="2" weight="medium" mb="-1">
                       Варианты
                     </Text>
-                    {(block.config?.options ?? []).map((opt, optIndex) => (
-                      <Flex key={opt.id} gap="1" align="center">
-                        <TextField.Root
+                    {selectBlocksNoOptions.includes(index) ? (
+                      <Text size="1" color="red" role="alert">
+                        Добавьте хотя бы один вариант
+                      </Text>
+                    ) : null}
+                    {(block.config?.options ?? []).map((opt, optIndex) => {
+                      const optErrKey = `${index}-${optIndex}`;
+                      const optionHasError =
+                        selectOptionFieldErrors.includes(optErrKey);
+                      return (
+                      <Flex key={opt.id} gap="1" align="start">
+                        <Flex
+                          direction="column"
+                          gap="1"
                           className={styles.single_select_textField}
-                          size="3"
-                          value={opt.label}
-                          onKeyDown={blurInputOnEnter}
-                          onChange={(e) =>
-                            updateBlock(index, (b) => {
-                              const nextOptions = [
-                                ...(b.config?.options ?? []),
-                              ];
-                              nextOptions[optIndex] = {
-                                ...nextOptions[optIndex],
-                                label: e.target.value,
-                              };
-                              return {
-                                ...b,
-                                config: {
-                                  ...(b.config ?? {}),
-                                  options: nextOptions,
-                                },
-                              };
-                            })
-                          }
-                          placeholder={`Вариант ${optIndex + 1}`}
-                        />
+                          style={{ flex: 1, minWidth: 0 }}
+                        >
+                          <TextField.Root
+                            size="3"
+                            color={optionHasError ? "red" : undefined}
+                            value={opt.label}
+                            onKeyDown={blurInputOnEnter}
+                            onChange={(e) => {
+                              setSelectOptionFieldErrors((prev) =>
+                                prev.filter((k) => k !== optErrKey),
+                              );
+                              updateBlock(index, (b) => {
+                                const nextOptions = [
+                                  ...(b.config?.options ?? []),
+                                ];
+                                nextOptions[optIndex] = {
+                                  ...nextOptions[optIndex],
+                                  label: e.target.value,
+                                };
+                                return {
+                                  ...b,
+                                  config: {
+                                    ...(b.config ?? {}),
+                                    options: nextOptions,
+                                  },
+                                };
+                              });
+                            }}
+                            placeholder={`Вариант ${optIndex + 1}`}
+                            aria-invalid={optionHasError}
+                          />
+                          {optionHasError ? (
+                            <Text size="1" color="red" role="alert">
+                              Заполни поле
+                            </Text>
+                          ) : null}
+                        </Flex>
                         <IconButton
+                          type="button"
                           size="3"
                           color="gray"
                           variant="surface"
@@ -908,6 +1063,7 @@ export function DeedFormPage() {
                           <ArrowUpIcon />
                         </IconButton>
                         <IconButton
+                        type="button"
                         size="3"
                         color="gray"
                         variant="surface"
@@ -945,6 +1101,7 @@ export function DeedFormPage() {
                           <ArrowDownIcon />
                         </IconButton>
                         <IconButton
+                        type="button"
                         size="3"
                         variant="surface"
                         color="red"
@@ -961,17 +1118,21 @@ export function DeedFormPage() {
                             }))
                           }
                         >
-                          <TrashIcon />
+                          <Cross2Icon />
                         </IconButton>
                       </Flex>
-                    ))}
+                      );
+                    })}
                     <Button
                       type="button"
                       color="gray"
                       variant="surface"
                       size="3"
                       aria-label="Добавить вариант"
-                      onClick={() =>
+                      onClick={() => {
+                        setSelectBlocksNoOptions((prev) =>
+                          prev.filter((i) => i !== index),
+                        );
                         updateBlock(index, (b) => {
                           const current = b.config?.options ?? [];
                           return {
@@ -988,8 +1149,8 @@ export function DeedFormPage() {
                               ],
                             },
                           };
-                        })
-                      }
+                        });
+                      }}
                     >
                       <PlusIcon /> 
                       Добавить вариант
@@ -1002,8 +1163,7 @@ export function DeedFormPage() {
 
           <Button 
           type="button" 
-          color="gray" 
-          variant="surface" 
+          variant="soft" 
           size="3" 
           onClick={addBlock} 
           aria-label="Добавить блок">
@@ -1026,13 +1186,34 @@ export function DeedFormPage() {
                     </Text>
                   </Flex>
                   <Switch
-                    size="2"
+                    size="3"
                     checked={analyticsConfig.summary.enabled}
                     onCheckedChange={(checked) =>
-                      setAnalyticsConfig((c) => ({
-                        ...c,
-                        summary: { ...c.summary, enabled: checked },
-                      }))
+                      setAnalyticsConfig((c) => {
+                        if (!checked) {
+                          return {
+                            ...c,
+                            summary: { ...c.summary, enabled: false },
+                          }
+                        }
+                        const s = c.summary
+                        const anyWidget =
+                          s.show_today || s.show_month || s.show_total
+                        return {
+                          ...c,
+                          summary: {
+                            ...s,
+                            enabled: true,
+                            ...(!anyWidget
+                              ? {
+                                  show_today: true,
+                                  show_month: true,
+                                  show_total: true,
+                                }
+                              : {}),
+                          },
+                        }
+                      })
                     }
                   />
                 </Flex>
@@ -1092,11 +1273,15 @@ export function DeedFormPage() {
                       <Flex align="center" justify="between" gap="3">
                         <Text size="2">Блок «Сегодня»</Text>
                         <Switch
+                        size="3"
+                        color="gray"
                           checked={analyticsConfig.summary.show_today}
                           onCheckedChange={(checked) =>
                             setAnalyticsConfig((c) => ({
                               ...c,
-                              summary: { ...c.summary, show_today: checked },
+                              summary: applySummaryShowPatch(c.summary, {
+                                show_today: checked,
+                              }),
                             }))
                           }
                         />
@@ -1104,11 +1289,15 @@ export function DeedFormPage() {
                       <Flex align="center" justify="between" gap="3">
                         <Text size="2">Блок «За месяц»</Text>
                         <Switch
+                        size="3"
+                        color="gray"
                           checked={analyticsConfig.summary.show_month}
                           onCheckedChange={(checked) =>
                             setAnalyticsConfig((c) => ({
                               ...c,
-                              summary: { ...c.summary, show_month: checked },
+                              summary: applySummaryShowPatch(c.summary, {
+                                show_month: checked,
+                              }),
                             }))
                           }
                         />
@@ -1116,11 +1305,15 @@ export function DeedFormPage() {
                       <Flex align="center" justify="between" gap="3">
                         <Text size="2">Блок «Всего»</Text>
                         <Switch
+                        size="3"
+                        color="gray"
                           checked={analyticsConfig.summary.show_total}
                           onCheckedChange={(checked) =>
                             setAnalyticsConfig((c) => ({
                               ...c,
-                              summary: { ...c.summary, show_total: checked },
+                              summary: applySummaryShowPatch(c.summary, {
+                                show_total: checked,
+                              }),
                             }))
                           }
                         />
@@ -1142,12 +1335,37 @@ export function DeedFormPage() {
                     </Text>
                   </Flex>
                   <Switch
+                    size="3"
                     checked={analyticsConfig.activity.enabled}
                     onCheckedChange={(checked) =>
-                      setAnalyticsConfig((c) => ({
-                        ...c,
-                        activity: { ...c.activity, enabled: checked },
-                      }))
+                      setAnalyticsConfig((c) => {
+                        if (!checked) {
+                          return {
+                            ...c,
+                            activity: { ...c.activity, enabled: false },
+                          }
+                        }
+                        const a = c.activity
+                        const anyWidget =
+                          a.streak_enabled ||
+                          a.record_count_enabled ||
+                          a.workday_weekend_enabled
+                        return {
+                          ...c,
+                          activity: {
+                            ...a,
+                            enabled: true,
+                            ...(!anyWidget
+                              ? {
+                                  streak_enabled: true,
+                                  max_streak_enabled: true,
+                                  record_count_enabled: true,
+                                  workday_weekend_enabled: true,
+                                }
+                              : {}),
+                          },
+                        }
+                      })
                     }
                   />
                 </Flex>
@@ -1156,11 +1374,15 @@ export function DeedFormPage() {
                       <Flex align="center" justify="between" gap="3">
                         <Text size="2">Блок «Текущий стрик»</Text>
                         <Switch
+                          size="3"
+                          color="gray"
                           checked={analyticsConfig.activity.streak_enabled}
                           onCheckedChange={(checked) =>
                             setAnalyticsConfig((c) => ({
                               ...c,
-                              activity: { ...c.activity, streak_enabled: checked },
+                              activity: applyActivityCorePatch(c.activity, {
+                                streak_enabled: checked,
+                              }),
                             }))
                           }
                         />
@@ -1169,6 +1391,8 @@ export function DeedFormPage() {
                         <Flex align="center" justify="between" gap="3" pl="4">
                           <Text size="2">Счётчик «Максимальный стрик»</Text>
                           <Switch
+                            size="3"
+                            color="gray"
                             checked={analyticsConfig.activity.max_streak_enabled}
                             onCheckedChange={(checked) =>
                               setAnalyticsConfig((c) => ({
@@ -1179,29 +1403,43 @@ export function DeedFormPage() {
                           />
                         </Flex>
                       ) : null}
-                      <Flex align="center" justify="between" gap="3">
-                        <Text size="2">Блок «Всего записей»</Text>
-                        <Switch
-                          checked={analyticsConfig.activity.record_count_enabled}
-                          onCheckedChange={(checked) =>
-                            setAnalyticsConfig((c) => ({
-                              ...c,
-                              activity: { ...c.activity, record_count_enabled: checked },
-                            }))
-                          }
-                        />
-                      </Flex>
-                      <Flex align="center" justify="between" gap="3" pl="4">
-                        <Text size="2">Счётчик «Будни · Выходные»</Text>
-                        <Switch
-                          checked={analyticsConfig.activity.workday_weekend_enabled}
-                          onCheckedChange={(checked) =>
-                            setAnalyticsConfig((c) => ({
-                              ...c,
-                              activity: { ...c.activity, workday_weekend_enabled: checked },
-                            }))
-                          }
-                        />
+                      <Flex direction="column" gap="3">
+                        <Flex align="center" justify="between" gap="3">
+                          <Text size="2">Блок «Всего записей»</Text>
+                          <Switch
+                            size="3"
+                            color="gray"
+                            checked={analyticsConfig.activity.record_count_enabled}
+                            onCheckedChange={(checked) =>
+                              setAnalyticsConfig((c) => ({
+                                ...c,
+                                activity: applyActivityCorePatch(c.activity, {
+                                  record_count_enabled: checked,
+                                }),
+                              }))
+                            }
+                          />
+                        </Flex>
+                        {analyticsConfig.activity.record_count_enabled ? (
+                          <Flex align="center" justify="between" gap="3" pl="4">
+                            <Text size="2">Счётчик «Будни · Выходные»</Text>
+                            <Switch
+                              size="3"
+                              color="gray"
+                              checked={
+                                analyticsConfig.activity.workday_weekend_enabled
+                              }
+                              onCheckedChange={(checked) =>
+                                setAnalyticsConfig((c) => ({
+                                  ...c,
+                                  activity: applyActivityCorePatch(c.activity, {
+                                    workday_weekend_enabled: checked,
+                                  }),
+                                }))
+                              }
+                            />
+                          </Flex>
+                        ) : null}
                       </Flex>
                     </Flex>
                 ) : null}
@@ -1219,6 +1457,7 @@ export function DeedFormPage() {
                     </Text>
                   </Flex>
                   <Switch
+                    size="3"
                     checked={analyticsConfig.heatmap.enabled}
                     onCheckedChange={(checked) =>
                       setAnalyticsConfig((c) => ({
@@ -1371,6 +1610,8 @@ export function DeedFormPage() {
                     <Flex align="center" justify="between" gap="3">
                       <Text size="2">Подписи «Дни недели»</Text>
                       <Switch
+                        size="3"
+                        color="gray"
                         checked={analyticsConfig.heatmap.show_weekday_labels}
                         onCheckedChange={(checked) =>
                           setAnalyticsConfig((c) => ({
@@ -1383,6 +1624,8 @@ export function DeedFormPage() {
                     <Flex align="center" justify="between" gap="3">
                       <Text size="2">Подписи «Месяц»</Text>
                       <Switch
+                        size="3"
+                        color="gray"
                         checked={analyticsConfig.heatmap.show_month_labels}
                         onCheckedChange={(checked) =>
                           setAnalyticsConfig((c) => ({
@@ -1395,6 +1638,8 @@ export function DeedFormPage() {
                     <Flex align="center" justify="between" gap="3">
                       <Text size="2">Пик и легенда уровней «Меньше — Больше»</Text>
                       <Switch
+                        size="3"
+                        color="gray"
                         checked={analyticsConfig.heatmap.show_peak_and_legend}
                         onCheckedChange={(checked) =>
                           setAnalyticsConfig((c) => ({

@@ -19,11 +19,10 @@ export type DeedAnalyticsConfigV1 = {
     record_count_enabled: boolean
     workday_weekend_enabled: boolean
   }
+  /** Теплокарта: цвет ячеек только из `deeds.card_color`, не из этого JSON. */
   heatmap: {
     enabled: boolean
     block_id: string | null
-    use_card_color: boolean
-    accent_hex: string | null
     show_weekday_labels: boolean
     show_month_labels: boolean
     /** Нижний ряд: «пик» и легенда «Меньше» … «Больше» */
@@ -50,8 +49,6 @@ export const DEFAULT_DEED_ANALYTICS_CONFIG: DeedAnalyticsConfigV1 = {
   heatmap: {
     enabled: true,
     block_id: null,
-    use_card_color: true,
-    accent_hex: null,
     show_weekday_labels: true,
     show_month_labels: true,
     show_peak_and_legend: true,

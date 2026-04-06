@@ -91,8 +91,6 @@ auth.users (Supabase Auth)
   "heatmap": {
     "enabled": true,
     "block_id": null,
-    "use_card_color": true,
-    "accent_hex": null,
     "show_weekday_labels": true,
     "show_month_labels": true,
     "show_peak_and_legend": true
@@ -104,8 +102,9 @@ auth.users (Supabase Auth)
 - `summary.show_*` — видимость карточек «Сегодня» / «За месяц» / «Всего»; при отсутствии в JSON подставляются `true`.
 - `activity.enabled` — мастер-переключатель блока «активность по записям» на карточке дела; без него игнорируются флаги ниже.
 - `activity.max_streak_enabled` — строка «Максимум» в карточке стрика; только при `streak_enabled`.
+- `activity.workday_weekend_enabled` — как `max_streak_enabled` при выключенном стрике: значение может оставаться `true` в JSON при `record_count_enabled: false` (в UI скрыто); на карточке счётчик показывается только при включённом «Всего».
 - `heatmap.show_weekday_labels` / `show_month_labels` / `show_peak_and_legend` — оформление теплокарты (подписи недели и месяцев, нижний ряд «пик» и легенда уровней).
-- `heatmap.use_card_color` — в приложении при сохранении всегда `true`; цвет ячеек из `card_color` или акцента темы при пустом `card_color`. Поле `accent_hex` в JSON может встречаться у старых данных; в форме не задаётся.
+- Цвет ячеек теплокарты — только колонка `deeds.card_color` (валидный `#RRGGBB`); в `analytics_config` цвет не хранится. Устаревшие ключи `heatmap.use_card_color` / `heatmap.accent_hex` в старых JSON игнорируются при нормализации.
 
 ---
 

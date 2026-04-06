@@ -79,6 +79,13 @@
   background: var(--gray-4);
 }
 
+/* Будущие дни: место в сетке сохраняем, квадрат не показываем (см. buildDeedHeatmap — isFuture). */
+.cellFuture {
+  background: transparent;
+  border-color: transparent;
+  pointer-events: none;
+}
+
 /* Акцент: при заданном на контейнере `--heatmap-accent` (цвет карточки дела) иначе цвет темы */
 .level1 {
   background: color-mix(in srgb, var(--heatmap-accent, var(--accent-9)) 25%, white);

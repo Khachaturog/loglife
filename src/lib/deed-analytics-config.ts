@@ -15,33 +15,41 @@ export function normalizeDeedAnalyticsConfig(raw: unknown): DeedAnalyticsConfigV
   const s = isObject(raw.summary) ? raw.summary : {}
   const a = isObject(raw.activity) ? raw.activity : {}
   const h = isObject(raw.heatmap) ? raw.heatmap : {}
+
+  const summary: DeedAnalyticsConfigV1['summary'] = {
+    enabled: typeof s.enabled === 'boolean' ? s.enabled : DEFAULT_DEED_ANALYTICS_CONFIG.summary.enabled,
+    block_id: typeof s.block_id === 'string' ? s.block_id : s.block_id === null ? null : DEFAULT_DEED_ANALYTICS_CONFIG.summary.block_id,
+    show_today: typeof s.show_today === 'boolean' ? s.show_today : DEFAULT_DEED_ANALYTICS_CONFIG.summary.show_today,
+    show_month: typeof s.show_month === 'boolean' ? s.show_month : DEFAULT_DEED_ANALYTICS_CONFIG.summary.show_month,
+    show_total: typeof s.show_total === 'boolean' ? s.show_total : DEFAULT_DEED_ANALYTICS_CONFIG.summary.show_total,
+  }
+  const anySummaryShow = summary.show_today || summary.show_month || summary.show_total
+  if (!anySummaryShow) summary.enabled = false
+
+  const activity: DeedAnalyticsConfigV1['activity'] = {
+    enabled: typeof a.enabled === 'boolean' ? a.enabled : DEFAULT_DEED_ANALYTICS_CONFIG.activity.enabled,
+    streak_enabled: typeof a.streak_enabled === 'boolean' ? a.streak_enabled : DEFAULT_DEED_ANALYTICS_CONFIG.activity.streak_enabled,
+    max_streak_enabled:
+      typeof a.max_streak_enabled === 'boolean' ? a.max_streak_enabled : DEFAULT_DEED_ANALYTICS_CONFIG.activity.max_streak_enabled,
+    record_count_enabled:
+      typeof a.record_count_enabled === 'boolean' ? a.record_count_enabled : DEFAULT_DEED_ANALYTICS_CONFIG.activity.record_count_enabled,
+    workday_weekend_enabled:
+      typeof a.workday_weekend_enabled === 'boolean'
+        ? a.workday_weekend_enabled
+        : DEFAULT_DEED_ANALYTICS_CONFIG.activity.workday_weekend_enabled,
+  }
+  /* Мастер секции: только стрик или «Всего»; workday_weekend хранится «в тени», как max_streak */
+  const anyActivityWidget =
+    activity.streak_enabled || activity.record_count_enabled
+  if (!anyActivityWidget) activity.enabled = false
+
   return {
     version: 1,
-    summary: {
-      enabled: typeof s.enabled === 'boolean' ? s.enabled : DEFAULT_DEED_ANALYTICS_CONFIG.summary.enabled,
-      block_id: typeof s.block_id === 'string' ? s.block_id : s.block_id === null ? null : DEFAULT_DEED_ANALYTICS_CONFIG.summary.block_id,
-      show_today: typeof s.show_today === 'boolean' ? s.show_today : DEFAULT_DEED_ANALYTICS_CONFIG.summary.show_today,
-      show_month: typeof s.show_month === 'boolean' ? s.show_month : DEFAULT_DEED_ANALYTICS_CONFIG.summary.show_month,
-      show_total: typeof s.show_total === 'boolean' ? s.show_total : DEFAULT_DEED_ANALYTICS_CONFIG.summary.show_total,
-    },
-    activity: {
-      enabled: typeof a.enabled === 'boolean' ? a.enabled : DEFAULT_DEED_ANALYTICS_CONFIG.activity.enabled,
-      streak_enabled: typeof a.streak_enabled === 'boolean' ? a.streak_enabled : DEFAULT_DEED_ANALYTICS_CONFIG.activity.streak_enabled,
-      max_streak_enabled:
-        typeof a.max_streak_enabled === 'boolean' ? a.max_streak_enabled : DEFAULT_DEED_ANALYTICS_CONFIG.activity.max_streak_enabled,
-      record_count_enabled:
-        typeof a.record_count_enabled === 'boolean' ? a.record_count_enabled : DEFAULT_DEED_ANALYTICS_CONFIG.activity.record_count_enabled,
-      workday_weekend_enabled:
-        typeof a.workday_weekend_enabled === 'boolean'
-          ? a.workday_weekend_enabled
-          : DEFAULT_DEED_ANALYTICS_CONFIG.activity.workday_weekend_enabled,
-    },
+    summary,
+    activity,
     heatmap: {
       enabled: typeof h.enabled === 'boolean' ? h.enabled : DEFAULT_DEED_ANALYTICS_CONFIG.heatmap.enabled,
       block_id: typeof h.block_id === 'string' ? h.block_id : h.block_id === null ? null : DEFAULT_DEED_ANALYTICS_CONFIG.heatmap.block_id,
-      use_card_color:
-        typeof h.use_card_color === 'boolean' ? h.use_card_color : DEFAULT_DEED_ANALYTICS_CONFIG.heatmap.use_card_color,
-      accent_hex: typeof h.accent_hex === 'string' ? h.accent_hex : h.accent_hex === null ? null : DEFAULT_DEED_ANALYTICS_CONFIG.heatmap.accent_hex,
       show_weekday_labels:
         typeof h.show_weekday_labels === 'boolean' ? h.show_weekday_labels : DEFAULT_DEED_ANALYTICS_CONFIG.heatmap.show_weekday_labels,
       show_month_labels:
@@ -96,16 +104,12 @@ export function getRecordAnswerNumericValue(
   return getNumericValueFromAnswer(answer?.value_json, block.block_type as 'number' | 'scale' | 'duration')
 }
 
-/** Цвет ячеек heatmap: карточка дела или свой hex. */
+/** Цвет ячеек heatmap: только валидный `deeds.card_color`; иначе акцент темы в компоненте. */
 export function heatmapDisplayColor(
   deedCardColor: string | null | undefined,
-  heatmap: DeedAnalyticsConfigV1['heatmap'],
+  heatmapEnabled: boolean,
 ): string | null | undefined {
-  if (!heatmap.enabled) return undefined
-  if (heatmap.use_card_color) {
-    const c = deedCardColor?.trim()
-    return c && /^#[0-9A-Fa-f]{6}$/.test(c) ? c : undefined
-  }
-  const h = heatmap.accent_hex?.trim()
-  return h && /^#[0-9A-Fa-f]{6}$/.test(h) ? h : undefined
+  if (!heatmapEnabled) return undefined
+  const c = deedCardColor?.trim()
+  return c && /^#[0-9A-Fa-f]{6}$/.test(c) ? c : undefined
 }

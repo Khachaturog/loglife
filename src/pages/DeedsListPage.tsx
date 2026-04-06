@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Box, Button, Flex, Heading, Text } from '@radix-ui/themes'
 import { AppBar } from '@/components/AppBar'
@@ -76,6 +76,12 @@ export function DeedsListPage() {
     }
     return deeds.filter((d) => (d.category?.trim() ?? '') === selectedCategory)
   }, [deeds, selectedCategory])
+
+  /** После быстрого «+» на карточке (один блок «Да/Нет») подтягиваем записи и обновляем счётчики. */
+  const refreshRecordsForDeed = useCallback(async (deedId: string) => {
+    const recs = await api.deeds.records(deedId)
+    setRecordsByDeedId((prev) => ({ ...prev, [deedId]: recs }))
+  }, [])
 
   // --- Рендер состояний загрузки и ошибки ---
   if (deedsLoading) {
@@ -174,6 +180,7 @@ export function DeedsListPage() {
               key={deed.id}
               deed={deed}
               records={recordsByDeedId[deed.id] ?? []}
+              onRecordsRefresh={refreshRecordsForDeed}
             />
           ))}
         </Flex>
