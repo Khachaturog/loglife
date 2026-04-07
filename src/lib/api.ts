@@ -224,7 +224,20 @@ export const api = {
         console.error(deedError.message ?? 'Ошибка создания дела')
         throw deedError
       }
-      const blocks = payload.blocks?.length ? payload.blocks : [{ block_type: 'number' as const, title: 'Значение', sort_order: 0, is_required: false, config: null }]
+      const blocks = payload.blocks?.length
+        ? payload.blocks
+        : [
+            {
+              block_type: 'number' as const,
+              title: 'Значение',
+              sort_order: 0,
+              is_required: false,
+              default_value: null,
+              default_value_enabled: false,
+              recent_suggestions_enabled: true,
+              config: null,
+            },
+          ]
       for (let i = 0; i < blocks.length; i++) {
         const b = blocks[i]
         await supabase.from('blocks').insert({
@@ -233,6 +246,9 @@ export const api = {
           title: b.title ?? 'Блок',
           block_type: b.block_type ?? 'number',
           is_required: b.is_required ?? false,
+          default_value: b.default_value ?? null,
+          default_value_enabled: b.default_value_enabled ?? false,
+          recent_suggestions_enabled: b.recent_suggestions_enabled ?? true,
           config: b.config ?? null,
         })
       }
@@ -282,6 +298,9 @@ export const api = {
               title: b.title,
               block_type: b.block_type,
               is_required: b.is_required,
+              default_value: b.default_value ?? null,
+              default_value_enabled: b.default_value_enabled ?? false,
+              recent_suggestions_enabled: b.recent_suggestions_enabled ?? true,
               config: b.config,
             }).eq('id', b.id)
           } else {
@@ -291,6 +310,9 @@ export const api = {
               title: b.title ?? 'Блок',
               block_type: b.block_type ?? 'number',
               is_required: b.is_required ?? false,
+              default_value: b.default_value ?? null,
+              default_value_enabled: b.default_value_enabled ?? false,
+              recent_suggestions_enabled: b.recent_suggestions_enabled ?? true,
               config: b.config ?? null,
             }).select('id').single()
             if (inserted?.id) existingIds.add(inserted.id)

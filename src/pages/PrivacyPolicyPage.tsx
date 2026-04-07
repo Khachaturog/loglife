@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeftIcon } from '@radix-ui/react-icons'
-import { Box, Flex, Heading, IconButton, Separator, Text } from '@radix-ui/themes'
+import { Box, Flex, Heading, Text } from '@radix-ui/themes'
+import { AppBar } from '@/components/AppBar'
 import layoutStyles from '@/styles/layout.module.css'
 
 /** Публичная страница — доступна без авторизации (маршрут /privacy). */
@@ -8,30 +8,25 @@ export function PrivacyPolicyPage() {
   const navigate = useNavigate()
 
   return (
-    <Box>
-      {/* Хедер с кнопкой назад */}
-      <Box style={{ position: 'sticky', top: 0, zIndex: 10, backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', background: 'var(--color-background)' }}>
-        <Flex align="center" gap="2" px="4" py="3" className={layoutStyles.pageContainer} style={{ maxWidth: '668px' }}>
-          <IconButton
-            size="3"
-            color="gray"
-            variant="surface"
-            aria-label="Назад"
-            onClick={() => navigate(-1)}
-          >
-            <ArrowLeftIcon />
-          </IconButton>
-          <Heading as="h1" size="5">Политика конфиденциальности</Heading>
-        </Flex>
-      </Box>
+    <Box
+      className={layoutStyles.pageContainer}
+      style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}
+    >
+      <AppBar onBack={() => navigate(-1)} title="Политика конфиденциальности" />
 
-      {/* Контент */}
-      <Box p="4" className={layoutStyles.pageContainer}>
-        <Flex direction="column" gap="5" pb="8">
+      {/* Скролл здесь — как на профиле, чтобы sticky AppBar на мобилках не ломался */}
+      <Box
+        style={{
+          flex: 1,
+          minHeight: 0,
+          overflowY: 'auto',
+          WebkitOverflowScrolling: 'touch',
+        }}
+      >
+        <Box pb="8">
+          <Flex direction="column" gap="5">
 
           <Text size="2" color="gray">Последнее обновление: апрель 2026</Text>
-
-          <Separator size="4" />
 
           <Section title="1. Кто мы">
             <Text>
@@ -108,14 +103,9 @@ export function PrivacyPolicyPage() {
               Продолжение использования сервиса означает согласие с актуальной редакцией.
             </Text>
           </Section>
-
-          <Separator size="4" />
-
-          <Text size="2" color="gray">
-            Вопросы по коду и развёртыванию — см. ссылку на GitHub внизу экрана «Профиль» (если задана в настройках деплоя).
-          </Text>
-
-        </Flex>
+          
+          </Flex>
+        </Box>
       </Box>
     </Box>
   )

@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { Link, useParams, useNavigate, useLocation } from 'react-router-dom'
-import { AlertDialog, Box, Button, Checkbox, CheckboxGroup, DropdownMenu, Flex, IconButton, Select, SegmentedControl, Separator, Text, TextField, Badge } from '@radix-ui/themes'
+import { AlertDialog, Box, Button, Checkbox, CheckboxGroup, DropdownMenu, Flex, IconButton, SegmentedControl, Separator, Text, TextField, Badge } from '@radix-ui/themes'
 import { AUTO_GROW_TEXTAREA_MIN_ONE_LINE_PX, AutoGrowTextArea } from '@/components/AutoGrowTextArea'
 import { AppBar } from '@/components/AppBar'
+import { SingleSelectAnswerField } from '@/components/SingleSelectAnswerField'
 import { FillFormNumberStepper } from '@/components/FillFormNumberStepper'
 import { PageLoading } from '@/components/PageLoading'
 import { ArrowTopLeftIcon, BackpackIcon, CheckIcon, CopyIcon, DotsHorizontalIcon } from '@radix-ui/react-icons'
+import { getSingleSelectUi } from '@/lib/block-config'
 import { api } from '@/lib/api'
 import type { BlockConfig, BlockRow, DeedWithBlocks, RecordAnswerRow, RecordWithAnswers, ValueJson } from '@/types/database'
 import { DatePicker } from '@/components/DatePicker'
@@ -15,7 +17,6 @@ import { formatAnswer, formatRecordDateTimeDisplay } from '@/lib/format-utils'
 import { blurInputOnEnter } from '@/lib/ios-input-blur'
 import scaleSegmentedStyles from '@/components/ScaleSegmentedControl.module.css'
 import layoutStyles from '@/styles/layout.module.css'
-import styles from './RecordViewPage.module.css'
 
 function getBlockOptions(block: BlockRow): { id: string; label: string }[] {
   const fromConfig = (block.config as BlockConfig | null)?.options
@@ -576,20 +577,27 @@ export function RecordViewPage() {
                 />
               )}
               {block.block_type === 'single_select' && (
-                <Select.Root
-                  // После сброса Radix Select может не обновить триггер — key как у актуализации.
-                  key={`${block.id}-edit-ss-${isEditBlockDirty(block.id) ? 'd' : 's'}-${(answers[block.id] as { optionId?: string } | undefined)?.optionId ?? 'none'}`}
-                  size="3"
-                  value={(answers[block.id] as { optionId?: string } | undefined)?.optionId || undefined}
-                  onValueChange={(v) => setAnswer(block.id, { optionId: v })}
-                >
-                  <Select.Trigger placeholder="Выберите" />
-                  <Select.Content>
-                    {getBlockOptions(block).map((opt) => (
-                      <Select.Item key={opt.id} value={opt.id}>{opt.label}</Select.Item>
-                    ))}
-                  </Select.Content>
-                </Select.Root>
+                <SingleSelectAnswerField
+                  uiMode={getSingleSelectUi(block.config as BlockConfig)}
+                  options={getBlockOptions(block)}
+                  optionId={
+                    (answers[block.id] as { optionId?: string } | undefined)?.optionId ||
+                    undefined
+                  }
+                  onOptionIdChange={(v) => {
+                    if (v === undefined) {
+                      setAnswers((prev) => {
+                        const next = { ...prev }
+                        delete next[block.id]
+                        return next
+                      })
+                      return
+                    }
+                    setAnswer(block.id, { optionId: v })
+                  }}
+                  selectRemountKey={`${block.id}-edit-ss-${isEditBlockDirty(block.id) ? 'd' : 's'}-${(answers[block.id] as { optionId?: string } | undefined)?.optionId ?? 'none'}`}
+                  selectPlaceholder="Выберите"
+                />
               )}
               {block.block_type === 'multi_select' && (
                 <CheckboxGroup.Root
@@ -604,17 +612,14 @@ export function RecordViewPage() {
                     })
                   }}
                 >
-                  <Flex direction="column" gap="2">
                     {getBlockOptions(block).map((opt) => (
                       <CheckboxGroup.Item
                         key={opt.id}
                         value={opt.id}
-                        className={styles.checkboxLabel}
                       >
                         {opt.label}
                       </CheckboxGroup.Item>
                     ))}
-                  </Flex>
                 </CheckboxGroup.Root>
               )}
               {block.block_type === 'scale' && (
@@ -645,7 +650,7 @@ export function RecordViewPage() {
                 />
               )}
               {block.block_type === 'yes_no' && (
-                <Text as="label" size="3" className={styles.checkboxLabel}>
+                <Text as="label" size="3">
                   <Flex align="center" gap="2">
                     <Checkbox
                       size="3"
@@ -801,21 +806,20 @@ export function RecordViewPage() {
                     />
                   )}
                   {block.block_type === 'single_select' && (
-                    <Select.Root
-                      // Radix Select не всегда сбрасывает отображение при value → undefined после «Сбросить»;
-                      // смена key принудительно перемонтирует и показывает placeholder.
-                      key={`${block.id}-single-${(updateDraft[block.id] as { optionId?: string } | undefined)?.optionId ?? 'cleared'}`}
-                      size="3"
-                      value={(draft as { optionId?: string } | undefined)?.optionId || undefined}
-                      onValueChange={(v) => setUpdateDraftValue(block.id, { optionId: v })}
-                    >
-                      <Select.Trigger placeholder="Выберите" />
-                      <Select.Content>
-                        {currentOptions.map((opt) => (
-                          <Select.Item key={opt.id} value={opt.id}>{opt.label}</Select.Item>
-                        ))}
-                      </Select.Content>
-                    </Select.Root>
+                    <SingleSelectAnswerField
+                      uiMode={getSingleSelectUi(block.config as BlockConfig)}
+                      options={currentOptions}
+                      optionId={(draft as { optionId?: string } | undefined)?.optionId || undefined}
+                      onOptionIdChange={(v) => {
+                        if (v === undefined) {
+                          clearUpdateDraft(block.id)
+                          return
+                        }
+                        setUpdateDraftValue(block.id, { optionId: v })
+                      }}
+                      selectRemountKey={`${block.id}-single-${(updateDraft[block.id] as { optionId?: string } | undefined)?.optionId ?? 'cleared'}`}
+                      selectPlaceholder="Выберите"
+                    />
                   )}
                   {block.block_type === 'multi_select' && (
                     <CheckboxGroup.Root
@@ -829,23 +833,20 @@ export function RecordViewPage() {
                         })
                       }}
                     >
-                      <Flex direction="column" gap="1">
                         {currentOptions.map((opt) => (
                           <CheckboxGroup.Item
                             key={opt.id}
                             value={opt.id}
-                            className={styles.checkboxLabel}
                           >
                             {opt.label}
                           </CheckboxGroup.Item>
                         ))}
-                      </Flex>
                     </CheckboxGroup.Root>
                   )}
                   {block.block_type === 'scale' && (
                     <SegmentedControl.Root
                       className={scaleSegmentedStyles.root}
-                      // Как у Select выше: после «Сбросить» value приходит из миграции, но Radix может
+                      // После «Сбросить» value приходит из миграции, но Radix может
                       // оставить визуально старый сегмент — key синхронизирует с черновиком/сбросом.
                       key={`${block.id}-scale-${updateDraft[block.id] != null ? 'draft' : 'migrated'}`}
                       value={
@@ -869,7 +870,7 @@ export function RecordViewPage() {
                     />
                   )}
                   {block.block_type === 'yes_no' && (
-                    <Text as="label" size="2" className={styles.checkboxLabel}>
+                    <Text as="label" size="2">
                       <Flex align="center" gap="2">
                         <Checkbox
                           size="3"

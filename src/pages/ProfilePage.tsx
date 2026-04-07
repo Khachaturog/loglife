@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link as RouterLink, useNavigate } from 'react-router-dom'
-import { Box, Button, Flex, Heading, IconButton, Link, RadioGroup, Separator, Text, TextField } from '@radix-ui/themes'
+import { Box, Button, Flex, Heading, IconButton, Link, RadioGroup, Text, TextField } from '@radix-ui/themes'
 import { AppBar } from '@/components/AppBar'
 import { ExitIcon } from '@radix-ui/react-icons'
 import { DatePicker } from '@/components/DatePicker'
@@ -8,7 +8,7 @@ import { useAuth } from '@/lib/auth-context'
 import { supabase } from '@/lib/supabase'
 import { exportAllToCsv, downloadCsv } from '@/lib/export-csv'
 import { todayLocalISO } from '@/lib/format-utils'
-import { getGithubRepoUrl, getSupportAuthorUrl } from '@/lib/app-external-links'
+import { getGithubRepoUrl } from '@/lib/app-external-links'
 import layoutStyles from '@/styles/layout.module.css'
 import styles from './ProfilePage.module.css'
 
@@ -30,7 +30,6 @@ function monthAgo(): string {
 export function ProfilePage() {
   const navigate = useNavigate()
   const { user } = useAuth()
-  const supportUrl = getSupportAuthorUrl()
   const githubUrl = getGithubRepoUrl()
 
   // --- Состояние ---
@@ -241,30 +240,22 @@ export function ProfilePage() {
         </Flex>
       </Flex>
 
-      {/* Футер: юридические и внешние ссылки (как в типичных мобильных настройках) */}
-      <Separator size="4" />
-      <Flex direction="column" gap="3" align="stretch" pt="1" pb="6">
-        <Text size="1" color="gray" weight="medium">
-          О приложении
-        </Text>
-        <Flex direction="column" gap="2" align="stretch">
-          {supportUrl && (
-            <Link href={supportUrl} size="2" underline="hover" target="_blank" rel="noopener noreferrer">
-              Поддержать автора
-            </Link>
-          )}
-          <Link asChild size="2" underline="hover">
-            <RouterLink to="/terms">Условия использования</RouterLink>
+      {/* Ссылки внизу профиля — по центру */}
+      <Flex direction="column" gap="2" align="center" pt="2" pb="6">
+        <Link href="#" size="3" underline="hover">
+          Поддержать автора
+        </Link>
+        <Link asChild size="3" underline="hover">
+          <RouterLink to="/terms">Условия использования</RouterLink>
+        </Link>
+        <Link asChild size="3" underline="hover">
+          <RouterLink to="/privacy">Политика конфиденциальности</RouterLink>
+        </Link>
+        {githubUrl && (
+          <Link href={githubUrl} size="3" underline="hover" target="_blank" rel="noopener noreferrer">
+            Проект на GitHub
           </Link>
-          <Link asChild size="2" underline="hover">
-            <RouterLink to="/privacy">Политика конфиденциальности</RouterLink>
-          </Link>
-          {githubUrl && (
-            <Link href={githubUrl} size="2" underline="hover" target="_blank" rel="noopener noreferrer">
-              Проект на GitHub
-            </Link>
-          )}
-        </Flex>
+        )}
       </Flex>
         </Flex>
       </Box>

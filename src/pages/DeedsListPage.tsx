@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Box, Button, Flex, Heading, Text } from '@radix-ui/themes'
+import { Box, Button, DropdownMenu, Flex, Heading, IconButton, Text } from '@radix-ui/themes'
 import { AppBar } from '@/components/AppBar'
 import { PageLoading } from '@/components/PageLoading'
 import { api } from '@/lib/api'
@@ -8,7 +8,7 @@ import { DeedCard } from '@/components/DeedCard'
 import type { DeedWithBlocks } from '@/types/database'
 import layoutStyles from '@/styles/layout.module.css'
 import type { RecordRow, RecordAnswerRow } from '@/types/database'
-import { PlusIcon } from '@radix-ui/react-icons'
+import { DotsHorizontalIcon, PlusIcon } from '@radix-ui/react-icons'
 
 /**
  * Страница списка дел.
@@ -104,19 +104,38 @@ export function DeedsListPage() {
     >
       <AppBar
         title="Дела"
-        /* В пустом состоянии CTA только в центре экрана — дублировать «Создать» в хедере не нужно */
+        /* Основные действия главной — в overflow-меню (позже добавим пункты). «Создать» не дублируем текстовой кнопкой. */
         actions={
-          deeds.length > 0 ? (
-            <Button size="3" variant="ghost" radius="large" color="gray" asChild aria-label="Создать дело">
-              <Link to="/deeds/new">Создать</Link>
-            </Button>
-          ) : undefined
+          <Flex mr="4">
+
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger>
+              <IconButton
+                type="button"
+                size="4"
+                color="gray"
+                variant="ghost"
+                aria-label="Меню действий"
+                >
+                <DotsHorizontalIcon width={18} height={18} />
+              </IconButton>
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Content align="end" sideOffset={8}>
+              <DropdownMenu.Item asChild>
+                <Link to="/deeds/new">Создать дело</Link>
+              </DropdownMenu.Item>
+              <DropdownMenu.Item asChild>
+                <Link to="#">Запустить обучение</Link>
+              </DropdownMenu.Item>
+            </DropdownMenu.Content>
+          </DropdownMenu.Root>
+                </Flex>
         }
       />
 
       {/* Фильтр по категориям (скрыт, если нет дел или категорий) */}
       {deeds.length > 0 && categories.length > 0 && (
-        <Flex gap="2" mb="4" wrap="wrap">
+        <Flex gap="2" mt="4" mb="4" wrap="wrap">
           <Button
             type="button"
             color='gray'

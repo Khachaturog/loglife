@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Badge, Card, Flex, IconButton, Text } from '@radix-ui/themes'
+import { Badge, Box, Card, Flex, IconButton, Text } from '@radix-ui/themes'
 import { CheckIcon, PlusIcon, UpdateIcon } from '@radix-ui/react-icons'
 import type { DeedWithBlocks } from '@/types/database'
 import type { RecordRow, RecordAnswerRow } from '@/types/database'
@@ -22,8 +22,8 @@ const YES_NO_LONG_PRESS_MS = 500
 
 /**
  * Карточка дела в списке.
- * Левая часть — ссылка на просмотр дела.
- * «+» — форма добавления записи или мгновенная запись для дела с одним блоком «Да/Нет».
+ * Клик по карточке — просмотр дела (полноразмерная ссылка под контентом).
+ * Кнопка «+» — добавление записи (pointer-events только на кнопке).
  */
 export function DeedCard({ deed, records, onRecordsRefresh }: DeedCardProps) {
   const navigate = useNavigate()
@@ -111,27 +111,20 @@ export function DeedCard({ deed, records, onRecordsRefresh }: DeedCardProps) {
     void handleQuickAddYesNo(e)
   }
 
+  const deedOpenLabel = `Открыть дело «${deed.name}»${deed.category ? `. ${deed.category}` : ''}. ${today} сегодня, ${total} всего`
+
   return (
-    <Card>
-      <Flex direction="column" gap="1">
-        <Flex direction="row" justify="between" align="center" gap="3">
-          <Link
-            to={`/deeds/${deed.id}`}
-            style={{
-              flex: 1,
-              minWidth: 0,
-              textDecoration: 'none',
-              color: 'inherit',
-            }}
-          >
-            <Flex align="start" gap="2">
-              {/* <Avatar
-                size="1"
-                radius="large"
-                color="gray"
-                variant="soft"
-                fallback={deed.emoji || '📋'}
-              /> */}
+    <Card className={`${deedCardStyles.cardNoPadding} ${deedCardStyles.cardInteractive}`}>
+      <Box position="relative">
+        {/* Вся карточка — переход к делу; клики проходят сквозь .cardContent и попадают сюда */}
+        <Link
+          to={`/deeds/${deed.id}`}
+          className={deedCardStyles.cardHitArea}
+          aria-label={deedOpenLabel}
+        />
+        <Flex direction="column" gap="1" className={deedCardStyles.cardContent}>
+          <Flex direction="row" justify="between" align="center" gap="3" p="3" pb={quickAddError ? '0' : '3'}>
+            <Flex align="start" gap="2" flexGrow="1" minWidth="0" aria-hidden="true">
               {deed.emoji && <Text size="2">{deed.emoji}</Text>}
               <Flex direction="column" gap="1">
                 <Flex align="center" gapX="2" gapY="1" wrap="wrap">
@@ -147,77 +140,85 @@ export function DeedCard({ deed, records, onRecordsRefresh }: DeedCardProps) {
                 </Text>
               </Flex>
             </Flex>
-          </Link>
 
-          {singleYesNoBlock ? (
-            quickAddSuccess ? (
-              <IconButton
-                type="button"
-                size="3"
-                color="green"
-                variant="solid"
-                radius="large"
-                title="Запись добавлена"
-                aria-label="Запись добавлена"
-                onClick={(e) => {
-                  // Без disabled — полная яркость solid; клик не дублирует запись
-                  e.preventDefault()
-                  e.stopPropagation()
-                }}
-              >
-                <CheckIcon />
-              </IconButton>
-            ) : addingRecord ? (
-              <IconButton
-                type="button"
-                size="3"
-                color="gray"
-                variant="surface"
-                radius="large"
-                title="Добавление записи…"
-                aria-label="Добавление записи"
-                disabled
-              >
-                <UpdateIcon className={deedCardStyles.iconSpin} />
-              </IconButton>
+            {singleYesNoBlock ? (
+              quickAddSuccess ? (
+                <IconButton
+                  type="button"
+                  size="3"
+                  color="green"
+                  variant="solid"
+                  radius="full"
+                  className={deedCardStyles.cardActionButton}
+                  title="Запись добавлена"
+                  aria-label="Запись добавлена"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                  }}
+                >
+                  <CheckIcon />
+                </IconButton>
+              ) : addingRecord ? (
+                <IconButton
+                  type="button"
+                  size="3"
+                  color="gray"
+                  variant="surface"
+                  radius="large"
+                  className={deedCardStyles.cardActionButton}
+                  title="Добавление записи…"
+                  aria-label="Добавление записи"
+                  disabled
+                >
+                  <UpdateIcon className={deedCardStyles.iconSpin} />
+                </IconButton>
+              ) : (
+                <IconButton
+                  type="button"
+                  size="3"
+                  variant="surface"
+                  radius="large"
+                  className={deedCardStyles.cardActionButton}
+                  title="Нажать — быстрая запись «Да». Удерживать — форма с датой и временем"
+                  aria-label="Добавить запись"
+                  onPointerDown={handleYesNoPlusPointerDown}
+                  onPointerUp={handleYesNoPlusPointerEnd}
+                  onPointerCancel={handleYesNoPlusPointerEnd}
+                  onPointerLeave={handleYesNoPlusPointerEnd}
+                  onClick={handleYesNoPlusClick}
+                >
+                  <PlusIcon />
+                </IconButton>
+              )
             ) : (
               <IconButton
-                type="button"
                 size="3"
                 variant="surface"
                 radius="large"
-                title="Нажать — быстрая запись «Да». Удерживать — форма с датой и временем"
+                asChild
+                title="Добавить запись"
                 aria-label="Добавить запись"
-                onPointerDown={handleYesNoPlusPointerDown}
-                onPointerUp={handleYesNoPlusPointerEnd}
-                onPointerCancel={handleYesNoPlusPointerEnd}
-                onPointerLeave={handleYesNoPlusPointerEnd}
-                onClick={handleYesNoPlusClick}
               >
-                <PlusIcon />
+                <Link
+                  to={`/deeds/${deed.id}/fill`}
+                  className={deedCardStyles.cardActionButton}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <PlusIcon />
+                </Link>
               </IconButton>
-            )
-          ) : (
-            <IconButton
-              size="3"
-              variant="surface"
-              radius="large"
-              asChild
-              title="Добавить запись"
-              aria-label="Добавить запись"
-            >
-              <Link to={`/deeds/${deed.id}/fill`} onClick={(e) => e.stopPropagation()}>
-                <PlusIcon />
-              </Link>
-            </IconButton>
-          )}
+            )}
+          </Flex>
+          {quickAddError ? (
+            <Box px="3" pb="3">
+              <Text size="1" color="crimson" role="alert">
+                {quickAddError}
+              </Text>
+            </Box>
+          ) : null}
         </Flex>
-        {quickAddError ? (
-          <Text size="1" color="crimson" role="alert">
-            {quickAddError}
-          </Text>
-        ) : null}
-      </Flex>
+      </Box>
     </Card>
   )
 }

@@ -3,10 +3,11 @@ import { ClockIcon, HomeIcon, PersonIcon, ViewGridIcon } from '@radix-ui/react-i
 import { triggerHaptic } from '@/lib/haptics'
 import styles from './TabBar.module.css'
 
-/** Панель скрыта на: логин, виджет кликер, создание дела, редактирование дела, форма записи, просмотр/редактирование записи */
+/** Панель скрыта на: логин, юридические страницы, виджет кликер, создание дела, редактирование дела, форма записи, просмотр/редактирование записи */
 export function useTabBarVisible(): boolean {
   const path = useLocation().pathname
   if (path === '/login') return false
+  if (path === '/privacy' || path === '/terms') return false
   if (path === '/deeds/new') return false
   if (path.match(/\/deeds\/[^/]+\/(edit|fill)/)) return false
   if (path === '/widgets/clicker') return false

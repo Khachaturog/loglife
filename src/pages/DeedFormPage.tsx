@@ -4,16 +4,19 @@
  */
 import type { CSSProperties } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { useNavigate, useParams } from "react-router-dom";
+import * as Collapsible from "@radix-ui/react-collapsible";
 import {
   Box,
   Button,
   Card,
-  CheckboxCards,
+  CheckboxGroup,
   Flex,
   Heading,
   IconButton,
   Select,
+  SegmentedControl,
   Switch,
   Tabs,
   Text,
@@ -26,15 +29,22 @@ import {
 } from "@/components/AutoGrowTextArea";
 import { AppBar } from "@/components/AppBar";
 import { PageLoading } from "@/components/PageLoading";
+import { DurationInput } from "@/components/DurationInput";
 import { EmojiPickerButton } from "@/components/EmojiPickerButton";
-import { ArrowBottomRightIcon, ArrowDownIcon, ArrowUpIcon, CheckIcon, Cross2Icon, PlusIcon, TrashIcon } from "@radix-ui/react-icons";
+import scaleSegmentedStyles from "@/components/ScaleSegmentedControl.module.css";
+import { ArrowBottomRightIcon, ArrowDownIcon, ArrowUpIcon, CheckIcon, ChevronDownIcon, Cross2Icon, PlusIcon, TrashIcon } from "@radix-ui/react-icons";
 import { api } from "@/lib/api";
 import {
   RADIX_COLOR_9_PRESETS,
   findRadixColor9PresetByHex,
 } from "@/lib/radix-color9-presets";
+import {
+  createInitialDefaultForBlockType,
+  normalizeDefaultValueForBlock,
+} from "@/lib/block-default-value";
 import { blurActiveInputInForm, blurInputOnEnter } from "@/lib/ios-input-blur";
-import type { BlockConfig, BlockType, DeedWithBlocks } from "@/types/database";
+import { getSingleSelectUi } from "@/lib/block-config";
+import type { BlockConfig, BlockType, DeedWithBlocks, ValueJson } from "@/types/database";
 import type { DeedAnalyticsConfigV1 } from "@/types/deed-analytics-config";
 import { DEFAULT_DEED_ANALYTICS_CONFIG } from "@/types/deed-analytics-config";
 import { normalizeDeedAnalyticsConfig } from "@/lib/deed-analytics-config";
@@ -47,6 +57,10 @@ type UiBlock = {
   title: string;
   block_type: BlockType;
   is_required: boolean;
+  recent_suggestions_enabled: boolean;
+  /** Подставлять `default_value` при новой записи; сам JSON не стираем при выкл. */
+  default_value_enabled: boolean;
+  default_value: ValueJson | null;
   config: BlockConfig | null;
 };
 
@@ -67,6 +81,9 @@ function createDefaultBlock(): UiBlock {
     title: "",
     block_type: "number",
     is_required: false,
+    recent_suggestions_enabled: true,
+    default_value_enabled: false,
+    default_value: null,
     config: null,
   };
 }
@@ -89,7 +106,244 @@ function createDefaultSelectConfig(): BlockConfig {
       { id: createOptionId(), label: "", sort_order: 0 },
       { id: createOptionId(), label: "", sort_order: 1 },
     ],
+    singleSelectUi: "select",
   };
+}
+
+/** Варианты списка для редактора дефолта (как на FillForm). */
+function deedFormGetBlockOptions(config: BlockConfig | null): { id: string; label: string }[] {
+  const fromConfig = config?.options;
+  if (fromConfig?.length) return fromConfig.map((o) => ({ id: o.id, label: o.label }));
+  return [];
+}
+
+/**
+ * Редактор значения по умолчанию для блока (футер карточки на DeedFormPage).
+ */
+function DeedBlockDefaultValueEditor({
+  block,
+  blockIndex,
+  updateBlock,
+  hasValidationError,
+}: {
+  block: UiBlock;
+  blockIndex: number;
+  updateBlock: (index: number, updater: (b: UiBlock) => UiBlock) => void;
+  hasValidationError: boolean;
+}) {
+  const opts = deedFormGetBlockOptions(block.config);
+  const divisions = Math.min(10, Math.max(1, block.config?.divisions ?? 5));
+
+  if (block.block_type === "number") {
+    const n = (block.default_value as { number?: number } | null)?.number ?? 1;
+    return (
+      <Flex direction="column" gap="1" mt="2">
+        <Text size="2" weight="medium" as="label">
+          Значение по умолчанию
+        </Text>
+        <TextField.Root
+          size="3"
+          color={hasValidationError ? "red" : undefined}
+          type="text"
+          inputMode="numeric"
+          value={String(n)}
+          onKeyDown={blurInputOnEnter}
+          onChange={(e) => {
+            const parsed = Number(e.target.value);
+            if (!Number.isFinite(parsed) || parsed < 1) return;
+            updateBlock(blockIndex, (b) => ({
+              ...b,
+              default_value: { number: Math.floor(parsed) },
+            }));
+          }}
+        />
+        {hasValidationError ? (
+          <Text size="1" color="red" role="alert">
+            Укажи целое число не меньше 1
+          </Text>
+        ) : null}
+      </Flex>
+    );
+  }
+
+  if (block.block_type === "text_paragraph") {
+    const t = (block.default_value as { text?: string } | null)?.text ?? "";
+    return (
+      <Flex direction="column" gap="1" mt="2">
+        <Text size="2" weight="medium" as="label">
+          Текст по умолчанию
+        </Text>
+        <TextField.Root
+          size="3"
+          color={hasValidationError ? "red" : undefined}
+          value={t}
+          onKeyDown={blurInputOnEnter}
+          onChange={(e) =>
+            updateBlock(blockIndex, (b) => ({
+              ...b,
+              default_value: { text: e.target.value },
+            }))
+          }
+        />
+        {hasValidationError ? (
+          <Text size="1" color="red" role="alert">
+            Текст не может быть пустым
+          </Text>
+        ) : null}
+      </Flex>
+    );
+  }
+
+  if (block.block_type === "single_select") {
+    const oid = (block.default_value as { optionId?: string } | null)?.optionId ?? "";
+    return (
+      <Flex direction="column" gap="1" mt="2">
+        <Text size="2" weight="medium" as="label">
+          Вариант по умолчанию
+        </Text>
+        <Select.Root
+          size="3"
+          value={oid || undefined}
+          onValueChange={(v) =>
+            updateBlock(blockIndex, (b) => ({
+              ...b,
+              default_value: { optionId: v },
+            }))
+          }
+        >
+          <Select.Trigger
+            placeholder="Выбери вариант"
+            color={hasValidationError ? "red" : undefined}
+          />
+          <Select.Content className={styles.selectContentConstrained}>
+            {opts.map((o) => (
+              <Select.Item key={o.id} value={o.id}>
+                {o.label || "—"}
+              </Select.Item>
+            ))}
+          </Select.Content>
+        </Select.Root>
+        {hasValidationError ? (
+          <Text size="1" color="red" role="alert">
+            Выбери вариант из списка
+          </Text>
+        ) : null}
+      </Flex>
+    );
+  }
+
+  if (block.block_type === "multi_select") {
+    const ids = (block.default_value as { optionIds?: string[] } | null)?.optionIds ?? [];
+    return (
+      <Flex direction="column" gap="1" mt="2">
+        <Text size="2" weight="medium">
+          Варианты по умолчанию
+        </Text>
+        <CheckboxGroup.Root
+          size="3"
+          value={ids}
+          onValueChange={(nextValues) => {
+            flushSync(() => {
+              updateBlock(blockIndex, (b) => ({
+                ...b,
+                default_value: { optionIds: nextValues },
+              }));
+            });
+          }}
+        >
+          <Flex direction="column" gap="2">
+            {opts.map((o) => (
+              <CheckboxGroup.Item key={o.id} value={o.id}>
+                {o.label || "—"}
+              </CheckboxGroup.Item>
+            ))}
+          </Flex>
+        </CheckboxGroup.Root>
+        {hasValidationError ? (
+          <Text size="1" color="red" role="alert">
+            Отметь хотя бы один вариант
+          </Text>
+        ) : null}
+      </Flex>
+    );
+  }
+
+  if (block.block_type === "scale") {
+    const sv = (block.default_value as { scaleValue?: number } | null)?.scaleValue ?? 1;
+    return (
+      <Flex direction="column" gap="1" mt="2">
+        <Text size="2" weight="medium">
+          Деление по умолчанию
+        </Text>
+        <SegmentedControl.Root
+          className={scaleSegmentedStyles.root}
+          value={String(sv)}
+          onValueChange={(v) =>
+            updateBlock(blockIndex, (b) => ({
+              ...b,
+              default_value: { scaleValue: Number(v) },
+            }))
+          }
+          size={{ initial: "1", sm: "2" }}
+        >
+          {Array.from({ length: divisions }, (_, i) => i + 1).map((n) => (
+            <SegmentedControl.Item key={n} value={String(n)}>
+              {n}
+            </SegmentedControl.Item>
+          ))}
+        </SegmentedControl.Root>
+      </Flex>
+    );
+  }
+
+  if (block.block_type === "yes_no") {
+    const yn = (block.default_value as { yesNo?: boolean } | null)?.yesNo === true;
+    return (
+      <Flex direction="column" gap="1" mt="2">
+        <Text size="2" weight="medium">
+          По умолчанию отмечено «Выполнено»
+        </Text>
+        <Switch
+          size="3"
+          checked={yn}
+          onCheckedChange={(checked) =>
+            updateBlock(blockIndex, (b) => ({
+              ...b,
+              default_value: { yesNo: checked },
+            }))
+          }
+        />
+      </Flex>
+    );
+  }
+
+  if (block.block_type === "duration") {
+    const hms =
+      (block.default_value as { durationHms?: string } | null)?.durationHms ?? "00:00:00";
+    return (
+      <Flex direction="column" gap="1" mt="2">
+        <Text size="2" weight="medium" as="label">
+          Длительность по умолчанию
+        </Text>
+        <DurationInput
+          value={hms}
+          onChange={(next) =>
+            updateBlock(blockIndex, (b) => ({
+              ...b,
+              default_value: { durationHms: next },
+            }))
+          }
+        />
+        {hasValidationError ? (
+          <Text size="1" color="red" role="alert">
+            Укажи время в формате ЧЧ:ММ:СС
+          </Text>
+        ) : null}
+      </Flex>
+    );
+  }
+
+  return null;
 }
 
 /** Перед API: trim подписей и порядок sort_order (валидация непустых подписей — при сабмите формы) */
@@ -375,6 +629,10 @@ export function DeedFormPage() {
   const [selectBlocksNoOptions, setSelectBlocksNoOptions] = useState<number[]>(
     [],
   );
+  /** Индексы блоков с невалидным default_value при сохранении */
+  const [blockDefaultErrorIndices, setBlockDefaultErrorIndices] = useState<
+    number[]
+  >([]);
 
   /** Сброс подсветок при изменении состава/порядка блоков (индексы ошибок перестают совпадать) */
   function clearAllSubmitValidation() {
@@ -383,6 +641,7 @@ export function DeedFormPage() {
     setBlockQuestionErrorIndices([]);
     setSelectOptionFieldErrors([]);
     setSelectBlocksNoOptions([]);
+    setBlockDefaultErrorIndices([]);
   }
 
   /** Числовые блоки для выбора в сводке и heatmap (порядок формы). */
@@ -476,6 +735,13 @@ export function DeedFormPage() {
             title: b.title,
             block_type: b.block_type,
             is_required: b.is_required,
+            recent_suggestions_enabled: b.recent_suggestions_enabled ?? true,
+            default_value_enabled: b.default_value_enabled ?? false,
+            default_value:
+              normalizeDefaultValueForBlock(
+                { block_type: b.block_type, config },
+                b.default_value,
+              ) ?? null,
             config,
           };
         }) ?? [createDefaultBlock()];
@@ -557,12 +823,27 @@ export function DeedFormPage() {
       });
     });
 
+    const defaultValErrIndices: number[] = [];
+    blocks.forEach((b, bi) => {
+      if (!b.default_value_enabled) return;
+      if (b.default_value === null) {
+        defaultValErrIndices.push(bi);
+        return;
+      }
+      const ok = normalizeDefaultValueForBlock(
+        { block_type: b.block_type, config: b.config },
+        b.default_value,
+      );
+      if (!ok) defaultValErrIndices.push(bi);
+    });
+
     const hasErrors =
       nameErr ||
       blocksEmpty ||
       emptyQuestionIndices.length > 0 ||
       selectBlocksNoOpts.length > 0 ||
-      selectOptErrKeys.length > 0;
+      selectOptErrKeys.length > 0 ||
+      defaultValErrIndices.length > 0;
 
     if (hasErrors) {
       setNameFieldError(nameErr);
@@ -570,6 +851,7 @@ export function DeedFormPage() {
       setBlockQuestionErrorIndices(emptyQuestionIndices);
       setSelectBlocksNoOptions(selectBlocksNoOpts);
       setSelectOptionFieldErrors(selectOptErrKeys);
+      setBlockDefaultErrorIndices(defaultValErrIndices);
       return;
     }
 
@@ -579,16 +861,33 @@ export function DeedFormPage() {
       // Преобразуем UI-блоки в формат API (добавляем sort_order)
       const payloadBlocks = blocks.map((b, index) => {
         const rawConfig = b.config ?? null;
-        const config =
+        let config =
           b.block_type === "single_select" || b.block_type === "multi_select"
             ? normalizeSelectOptionsForPayload(rawConfig)
             : rawConfig;
+        // В jsonb всегда явный singleSelectUi для «один из списка» (как после миграции).
+        if (b.block_type === "single_select" && config) {
+          config = {
+            ...config,
+            singleSelectUi: getSingleSelectUi(config),
+          };
+        }
+        const normalizedDefault =
+          b.default_value === null
+            ? null
+            : normalizeDefaultValueForBlock(
+                { block_type: b.block_type, config },
+                b.default_value,
+              );
         return {
           id: b.id,
           sort_order: index,
           title: b.title.trim(),
           block_type: b.block_type,
           is_required: b.is_required,
+          recent_suggestions_enabled: b.recent_suggestions_enabled,
+          default_value_enabled: b.default_value_enabled,
+          default_value: normalizedDefault,
           config,
         };
       });
@@ -794,22 +1093,6 @@ export function DeedFormPage() {
                       Блок {index + 1}
                     </Text>
                   </Box>
-                  <CheckboxCards.Root
-                    value={block.is_required ? ["required"] : []}
-                    onValueChange={(values) =>
-                      updateBlock(index, (b) => ({
-                        ...b,
-                        is_required: values.includes("required"),
-                      }))
-                    }
-                    size="1"
-                    columns="1"
-                  >
-                    <CheckboxCards.Item value="required">
-                      Обязательно
-                    </CheckboxCards.Item>
-                  </CheckboxCards.Root>
-                  
                   <Flex gap="1">
                     <IconButton
                       type="button"
@@ -872,14 +1155,24 @@ export function DeedFormPage() {
                             nextType === "single_select" ||
                             nextType === "multi_select"
                           ) {
-                            nextConfig = b.config?.options?.length
-                              ? { options: [...b.config!.options!] }
-                              : createDefaultSelectConfig();
+                            if (b.config?.options?.length) {
+                              nextConfig =
+                                nextType === "single_select"
+                                  ? {
+                                      options: [...b.config!.options!],
+                                      singleSelectUi: getSingleSelectUi(b.config),
+                                    }
+                                  : { options: [...b.config!.options!] };
+                            } else {
+                              nextConfig = createDefaultSelectConfig();
+                            }
                           } else nextConfig = null;
                           return {
                             ...b,
                             block_type: nextType as BlockType,
                             config: nextConfig,
+                            default_value: null,
+                            default_value_enabled: false,
                           };
                         });
                       }}
@@ -1157,6 +1450,129 @@ export function DeedFormPage() {
                     </Button>
                   </Flex>
                 )}
+
+                {/* Аккордеон: доп. настройки не загромождают карточку блока, пока не раскроешь */}
+                <Collapsible.Root defaultOpen={false} style={{ marginTop: '8px' }}>
+                  <Collapsible.Trigger
+                    type="button"
+                    className={styles.blockAdditionalAccordionTrigger}
+                  >
+                    <Text size="2" weight="medium" as="span">
+                      Дополнительно
+                    </Text>
+                    <ChevronDownIcon
+                      className={styles.blockAdditionalAccordionChevron}
+                      width={16}
+                      height={16}
+                      aria-hidden
+                    />
+                  </Collapsible.Trigger>
+                  <Collapsible.Content>
+                    <Flex direction="column" gap="3" mt="2" pb="1">
+                      <Flex align="center" justify="between" gap="3" wrap="wrap">
+                        <Text size="2">Обязательное поле</Text>
+                        <Switch
+                          size="3"
+                          checked={block.is_required}
+                          onCheckedChange={(checked) =>
+                            updateBlock(index, (b) => ({ ...b, is_required: checked }))
+                          }
+                        />
+                      </Flex>
+                      {(block.block_type === "number" ||
+                        block.block_type === "single_select") && (
+                        <Flex align="center" justify="between" gap="3" wrap="wrap">
+                          <Text size="2">Подсказки из недавних записей</Text>
+                          <Switch
+                            size="3"
+                            checked={block.recent_suggestions_enabled}
+                            onCheckedChange={(checked) =>
+                              updateBlock(index, (b) => ({
+                                ...b,
+                                recent_suggestions_enabled: checked,
+                              }))
+                            }
+                          />
+                        </Flex>
+                      )}
+                      {block.block_type === "single_select" && (
+                        <Flex direction="column" gap="2">
+                          <Text size="2" weight="medium" as="span">
+                            Как показывать при заполнении
+                          </Text>
+                          <SegmentedControl.Root
+                            size="2"
+                            value={
+                              block.config?.singleSelectUi === "checkbox"
+                                ? "checkbox"
+                                : "select"
+                            }
+                            onValueChange={(v) =>
+                              updateBlock(index, (b) => ({
+                                ...b,
+                                config: {
+                                  ...(b.config ?? {}),
+                                  singleSelectUi:
+                                    v === "checkbox" ? "checkbox" : "select",
+                                },
+                              }))
+                            }
+                          >
+                            <SegmentedControl.Item value="select">
+                              Список
+                            </SegmentedControl.Item>
+                            <SegmentedControl.Item value="checkbox">
+                              Чекбоксы
+                            </SegmentedControl.Item>
+                          </SegmentedControl.Root>
+                        </Flex>
+                      )}
+                      <Flex direction="column" gap="2">
+                        <Flex align="center" justify="between" gap="3" wrap="wrap">
+                          <Text size="2">Подставлять при новой записи</Text>
+                          <Switch
+                            size="3"
+                            checked={block.default_value_enabled}
+                            onCheckedChange={(on) => {
+                              setBlockDefaultErrorIndices((prev) =>
+                                prev.filter((i) => i !== index),
+                              );
+                              if (!on) {
+                                updateBlock(index, (b) => ({
+                                  ...b,
+                                  default_value_enabled: false,
+                                }));
+                                return;
+                              }
+                              updateBlock(index, (b) => {
+                                let next = { ...b, default_value_enabled: true };
+                                if (b.default_value === null) {
+                                  const init = createInitialDefaultForBlockType(
+                                    b.block_type,
+                                    b.config,
+                                  );
+                                  if (init) next = { ...next, default_value: init };
+                                }
+                                return next;
+                              });
+                            }}
+                          />
+                        </Flex>
+                        {/* Редактор дефолта только при включённой подстановке; JSON в состоянии сохраняем при выкл. */}
+                        {block.default_value_enabled && block.default_value !== null ? (
+                          <DeedBlockDefaultValueEditor
+                            block={block}
+                            blockIndex={index}
+                            updateBlock={updateBlock}
+                            hasValidationError={blockDefaultErrorIndices.includes(
+                              index,
+                            )}
+                          />
+                        ) : null}
+                      </Flex>
+                    </Flex>
+                  </Collapsible.Content>
+                </Collapsible.Root>
               </Card>
             ))}
           </Flex>

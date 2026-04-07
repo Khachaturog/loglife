@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import { flushSync } from 'react-dom'
 import { IconButton } from '@radix-ui/themes'
 import { MinusIcon, PlusIcon } from '@radix-ui/react-icons'
 import type { ValueJson } from '@/types/database'
@@ -16,6 +17,10 @@ type Props = {
    * storeZero — при 0 в state остаётся `{ number: 0 }` (режим редактирования записи).
    */
   zeroBehavior?: NumberStepperZeroBehavior
+  /** FillForm: скрыть чипы недавних значений после ручного шага ± (когда ответ не очищен до пустого). */
+  onUserAdjusted?: () => void
+  /** FillForm: при `clearKey` и шаге «−» до пустого ответа — снова показать чипы недавних. */
+  onClearedToEmpty?: () => void
 }
 
 /**
@@ -27,33 +32,44 @@ export function FillFormNumberStepper({
   value,
   setAnswers,
   zeroBehavior = 'clearKey',
+  onUserAdjusted,
+  onClearedToEmpty,
 }: Props) {
   const decrement = useCallback(() => {
-    setAnswers((prev) => {
-      const fromState = (prev[blockId] as { number?: number } | undefined)?.number
-      const current = fromState !== undefined ? fromState : value
-      const next = Math.max(0, current - 1)
-      const out = { ...prev } as Record<string, ValueJson>
-      if (next === 0) {
-        if (zeroBehavior === 'storeZero') {
-          out[blockId] = { number: 0 }
+    // Снаружи апдейтера читаем флаг: React может вызывать updater повторно (Strict Mode) —
+    // присваивание внутри setAnswers ненадёжно; flushSync гарантирует один проход до колбэков.
+    let clearedToEmpty = false
+    flushSync(() => {
+      setAnswers((prev) => {
+        const fromState = (prev[blockId] as { number?: number } | undefined)?.number
+        const current = fromState !== undefined ? fromState : value
+        const next = Math.max(0, current - 1)
+        const out = { ...prev } as Record<string, ValueJson>
+        if (next === 0) {
+          if (zeroBehavior === 'storeZero') {
+            out[blockId] = { number: 0 }
+            return out
+          }
+          clearedToEmpty = true
+          delete (out as Record<string, ValueJson> & { [k: string]: ValueJson | undefined })[blockId]
           return out
         }
-        delete (out as Record<string, ValueJson> & { [k: string]: ValueJson | undefined })[blockId]
+        out[blockId] = { number: next }
         return out
-      }
-      out[blockId] = { number: next }
-      return out
+      })
     })
-  }, [blockId, setAnswers, value, zeroBehavior])
+    if (clearedToEmpty) onClearedToEmpty?.()
+    else onUserAdjusted?.()
+  }, [blockId, onClearedToEmpty, onUserAdjusted, setAnswers, value, zeroBehavior])
 
   const increment = useCallback(() => {
+    onUserAdjusted?.()
     setAnswers((prev) => {
       const fromState = (prev[blockId] as { number?: number } | undefined)?.number
       const current = fromState !== undefined ? fromState : value
       return { ...prev, [blockId]: { number: current + 1 } }
     })
-  }, [blockId, setAnswers, value])
+  }, [blockId, onUserAdjusted, setAnswers, value])
 
   const minusHold = useHoldRepeat(decrement)
   const plusHold = useHoldRepeat(increment)

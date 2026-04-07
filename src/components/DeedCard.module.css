@@ -1,3 +1,33 @@
+/* Убираем внутренний padding Card — отступы задаём на слое контента */
+.cardNoPadding {
+  --card-padding: 0;
+}
+
+/* Контейнер: на весь фон — ссылка на дело, сверху — контент с pointer-events: none и кнопки с auto */
+.cardInteractive {
+  position: relative;
+}
+
+/* Полноразмерный hit-target на просмотр дела (кнопка «+» выше по z-index и ловит клики сама) */
+.cardHitArea {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+}
+
+/* Текст/бейджи не перехватывают клики — они проходят к .cardHitArea */
+.cardContent {
+  position: relative;
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* Только кнопки добавления записи снова интерактивны */
+.cardActionButton {
+  pointer-events: auto;
+}
+
 /* Вращение иконки загрузки при быстром добавлении записи «Да/Нет» */
 .iconSpin {
   display: block;

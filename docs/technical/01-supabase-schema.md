@@ -28,12 +28,14 @@ auth.users (Supabase Auth)
 │  title          │   │  updated_at                     │
 │  block_type     │   └──────────────┬──────────────────┘
 │  is_required    │                  │ record_id
-│  config (jsonb) │                  ▼
-│  deleted_at     │   ┌─────────────────────────────────┐
-└────┬────────────┘   │ record_answers                  │
-     │ block_id        │  id · record_id · block_id      │
-     │                 │  value_json · config_version_id │
-     ▼                 │  created_at · updated_at        │
+│  default_value  │                  ▼
+│  default_enab.  │   ┌─────────────────────────────────┐
+│  recent_suggest.│   │ record_answers                  │
+│  config (jsonb) │   │  id · record_id · block_id      │
+│  deleted_at     │   │  value_json · config_version_id │
+└────┬────────────┘   │  created_at · updated_at        │
+     │ block_id        └─────────────────────────────────┘
+     ▼                 
 ┌──────────────────────┴──────────────────────────┐
 │ block_config_versions                           │
 │  id · block_id · block_type · created_at        │
@@ -118,6 +120,9 @@ auth.users (Supabase Auth)
 | `title` | text | NOT NULL, DEFAULT '' | Текст вопроса |
 | `block_type` | text | NOT NULL, CHECK (см. ниже) | Тип блока |
 | `is_required` | boolean | NOT NULL, DEFAULT false | |
+| `default_value` | jsonb | | Черновик значения; формат как `record_answers.value_json`; NULL = нет |
+| `default_value_enabled` | boolean | NOT NULL, DEFAULT false | Подставлять `default_value` при открытии формы новой записи |
+| `recent_suggestions_enabled` | boolean | NOT NULL, DEFAULT true | Чипы недавних значений на форме записи (типы `number`, `single_select`) |
 | `config` | jsonb | | Конфиг блока (см. ниже) |
 | `deleted_at` | timestamptz | | null = активен; soft delete |
 | `created_at` | timestamptz | NOT NULL, DEFAULT now() | |
@@ -144,8 +149,11 @@ auth.users (Supabase Auth)
 // scale
 { "divisions": 5 }  // текущий конфиг; история — в block_config_scale_versions
 
-// single_select / multi_select
-{ "options": [{ "id": "uuid", "label": "Вариант" }] }
+// multi_select
+{ "options": [{ "id": "uuid", "label": "Вариант", "sort_order": 0 }] }
+
+// single_select — те же options плюс режим ввода (после миграции всегда задано для строк с этим типом)
+{ "options": [...], "singleSelectUi": "select" }  // или "checkbox" — чекбоксы как у multi_select; просмотр записи — по-прежнему текст
 
 // duration, yes_no, text_paragraph — config не используется
 ```
@@ -296,3 +304,4 @@ auth.users (Supabase Auth)
 | `20250227` | RLS: `auth.uid()` → `(select auth.uid())` во всех политиках |
 | `20260329` | Тип `text_short` удалён, данные мигрированы в `text_paragraph` |
 | `20260402` | Добавлена `deeds.analytics_config` (jsonb) |
+| `20260409` | В `blocks.config` для `single_select` бэкфилл `singleSelectUi: "select"` |

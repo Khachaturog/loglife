@@ -4,9 +4,15 @@
  */
 .pageContainer {
   width: 100%;
+  height: 100%;
+
   max-width: 668px;
+
   margin-left: auto;
   margin-right: auto;
+  margin-bottom: auto;
+
   padding-left: 16px;
   padding-right: 16px;
+  padding-bottom: 32px;
 }

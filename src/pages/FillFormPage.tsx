@@ -1,12 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
-import { Box, Button, CheckboxCards, CheckboxGroup, Flex, IconButton, Select, SegmentedControl, Text, TextField } from '@radix-ui/themes'
+import { Box, Button, CheckboxCards, CheckboxGroup, Flex, IconButton, SegmentedControl, Text, TextField } from '@radix-ui/themes'
 import { AUTO_GROW_TEXTAREA_MIN_ONE_LINE_PX, AutoGrowTextArea } from '@/components/AutoGrowTextArea'
 import { AppBar } from '@/components/AppBar'
+import { SingleSelectAnswerField } from '@/components/SingleSelectAnswerField'
 import { FillFormNumberStepper } from '@/components/FillFormNumberStepper'
 import { PageLoading } from '@/components/PageLoading'
 import { CheckIcon } from '@radix-ui/react-icons'
+import { getSingleSelectUi } from '@/lib/block-config'
+import { initialAnswersFromBlockDefaults } from '@/lib/block-default-value'
 import { api } from '@/lib/api'
 import {
   recentNumberSuggestions,
@@ -21,7 +24,6 @@ import { triggerHaptic } from '@/lib/haptics'
 import type { BlockConfig, BlockRow, DeedWithBlocks, ValueJson } from '@/types/database'
 import scaleSegmentedStyles from '@/components/ScaleSegmentedControl.module.css'
 import layoutStyles from '@/styles/layout.module.css'
-import styles from './FillFormPage.module.css'
 
 function getBlockOptions(block: BlockRow): { id: string; label: string }[] {
   const fromConfig = (block.config as BlockConfig | null)?.options
@@ -54,8 +56,8 @@ export function FillFormPage() {
   const { id: deedId } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const location = useLocation()
-  /** Чтобы не подмешать дубликат повторно при повторном срабатывании эффекта. */
-  const duplicateAppliedRef = useRef(false)
+  /** Один раз подмешиваем дефолты блоков и при необходимости ответы из «Дублировать». */
+  const initialAnswersSeededRef = useRef(false)
 
   // --- Состояние ---
   const [deed, setDeed] = useState<DeedWithBlocks | null>(null)
@@ -68,6 +70,17 @@ export function FillFormPage() {
   const [recentRecords, setRecentRecords] = useState<RecordWithAnswersForSuggestions[]>([])
   /** После первой попытки отправки показываем ошибки по обязательным блокам (и общее правило «хотя бы один ответ»). */
   const [validationAttempted, setValidationAttempted] = useState(false)
+  /** После ввода / ± / выбора в селекте / тапа по чипу скрываем чипы; снова показываем, когда ответ блока снова «пустой». */
+  const [recentChipsDismissedByBlock, setRecentChipsDismissedByBlock] = useState<
+    Record<string, boolean>
+  >({})
+
+  // Смена дела — снова подмешиваем дефолты при следующей загрузке.
+  useEffect(() => {
+    initialAnswersSeededRef.current = false
+    setAnswers({})
+    setRecentChipsDismissedByBlock({})
+  }, [deedId])
 
   // --- Загрузка дела и последних записей (подсказки на форме) ---
   useEffect(() => {
@@ -97,23 +110,53 @@ export function FillFormPage() {
     return () => { cancelled = true }
   }, [deedId, navigate])
 
-  // Подстановка ответов при «Дублировать» (дата/время уже «сейчас» из useState выше).
+  // Дефолты из шаблона блоков + опционально значения с «Дублировать» (оверлей поверх дефолтов).
   useEffect(() => {
-    if (!deed || duplicateAppliedRef.current) return
+    if (!deedId || !deed || deed.id !== deedId || initialAnswersSeededRef.current) return
+    initialAnswersSeededRef.current = true
+    const blockList = deed.blocks ?? []
+    const blockIds = new Set(blockList.map((b) => b.id))
     const st = location.state as { fillDuplicateAnswers?: Record<string, ValueJson> } | null | undefined
     const src = st?.fillDuplicateAnswers
-    if (!src || typeof src !== 'object') return
-    duplicateAppliedRef.current = true
-    const blockIds = new Set((deed.blocks ?? []).map((b) => b.id))
-    const next: Record<string, ValueJson> = {}
-    for (const [bid, val] of Object.entries(src)) {
-      if (blockIds.has(bid)) next[bid] = val
+    const overlay: Record<string, ValueJson> = {}
+    if (src && typeof src === 'object') {
+      for (const [bid, val] of Object.entries(src)) {
+        if (blockIds.has(bid)) overlay[bid] = val
+      }
+      navigate(`${location.pathname}${location.search}`, { replace: true, state: null })
     }
-    setAnswers(next)
-    navigate(`${location.pathname}${location.search}`, { replace: true, state: null })
-  }, [deed, location.pathname, location.search, location.state, navigate])
+    const defaults = initialAnswersFromBlockDefaults(
+      blockList,
+      new Set(Object.keys(overlay)),
+    )
+    setAnswers({ ...defaults, ...overlay })
+  }, [deed, deedId, location.pathname, location.search, location.state, navigate])
 
   const blocks = useMemo(() => deed?.blocks ?? [], [deed])
+
+  // На форме новой записи «пустое число» = нет ключа; не держим { number: 0 } и нечисла (как после − до нуля / очистки поля).
+  useLayoutEffect(() => {
+    if (!blocks.length) return
+    setAnswers((prev) => {
+      let changed = false
+      const next = { ...prev } as Record<string, ValueJson>
+      const numberIds = new Set(
+        blocks.filter((b) => b.block_type === 'number').map((b) => b.id),
+      )
+      for (const id of numberIds) {
+        const v = next[id] as { number?: number } | undefined
+        if (v === undefined) continue
+        const n = v.number
+        if (typeof n !== 'number' || !Number.isFinite(n) || n <= 0) {
+          delete (next as Record<string, ValueJson> & { [k: string]: ValueJson | undefined })[
+            id
+          ]
+          changed = true
+        }
+      }
+      return changed ? next : prev
+    })
+  }, [answers, blocks])
 
   // Подсказки по блокам: какие значения взять — по недавности записей; числа на экране — от большего к меньшему.
   const quickPickNumbersByBlockId = useMemo(() => {
@@ -192,6 +235,22 @@ export function FillFormPage() {
     setAnswers((prev) => ({ ...prev, [blockId]: value }))
   }
 
+  function dismissRecentChips(blockId: string) {
+    setRecentChipsDismissedByBlock((prev) =>
+      prev[blockId] ? prev : { ...prev, [blockId]: true },
+    )
+  }
+
+  /** Пустое поле (число / один из списка) — снова показываем чипы недавних, если они есть в данных. */
+  function restoreRecentChips(blockId: string) {
+    setRecentChipsDismissedByBlock((prev) => {
+      if (!prev[blockId]) return prev
+      const next = { ...prev }
+      delete next[blockId]
+      return next
+    })
+  }
+
   function clearAnswer(blockId: string) {
     // `answers` типизирован как `Record<string, ValueJson>`, но на практике ключ может отсутствовать.
     // Поэтому используем delete с narrow через `any`, чтобы удалить ключ из состояния.
@@ -200,6 +259,7 @@ export function FillFormPage() {
       delete (next as any)[blockId]
       return next
     })
+    restoreRecentChips(blockId)
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -304,9 +364,15 @@ export function FillFormPage() {
             const numberChipValues = quickPickNumbersByBlockId[block.id]
             const selectChipIds = quickPickSelectIdsByBlockId[block.id]
             const numberAns = (answers[block.id] as { number?: number } | undefined)?.number
-            const numberFilled =
-              numberAns !== undefined && Number.isFinite(numberAns) && numberAns > 0
-            const selectOptionId = (answers[block.id] as { optionId?: string } | undefined)?.optionId
+            const chipsDismissed = !!recentChipsDismissedByBlock[block.id]
+            const showNumberRecentChips =
+              (block.recent_suggestions_enabled ?? true) &&
+              !!numberChipValues?.length &&
+              !chipsDismissed
+            const showSelectRecentChips =
+              (block.recent_suggestions_enabled ?? true) &&
+              !!selectChipIds?.length &&
+              !chipsDismissed
             const selectOptionLabelById =
               block.block_type === 'single_select'
                 ? Object.fromEntries(getBlockOptions(block).map((o) => [o.id, o.label]))
@@ -337,7 +403,7 @@ export function FillFormPage() {
                   {/*
                     Не вешаем key от «пусто/заполнено» на поле/stepper: иначе при первом шаге ± или первой цифре
                     весь блок remount’ится — сбрасывается удержание кнопок и фокус.
-                    Чипы «недавние значения» показываем только пока число пустое; после выбора чипа или ввода скрываются.
+                    Чипы: скрываются после ввода / ± / тапа по чипу; снова при пустом ответе (стирание, «Сбросить», − до нуля).
                   */}
                   <Flex gap="2" align="center">
                     <TextField.Root
@@ -365,6 +431,7 @@ export function FillFormPage() {
                           return
                         }
 
+                        dismissRecentChips(block.id)
                         setAnswer(block.id, { number: Math.max(0, parsed) })
                       }}
                     />
@@ -372,11 +439,13 @@ export function FillFormPage() {
                       blockId={block.id}
                       value={(answers[block.id] as { number?: number } | undefined)?.number ?? 0}
                       setAnswers={setAnswers}
+                      onUserAdjusted={() => dismissRecentChips(block.id)}
+                      onClearedToEmpty={() => restoreRecentChips(block.id)}
                     />
                   </Flex>
-                  {!numberFilled && numberChipValues && numberChipValues.length > 0 && (
+                  {showNumberRecentChips && (
                     <Flex gap="1" wrap="wrap">
-                      {numberChipValues.map((val) => (
+                      {numberChipValues!.map((val) => (
                         <Button
                           key={val}
                           type="button"
@@ -386,6 +455,7 @@ export function FillFormPage() {
                           radius="full"
                           onClick={() => {
                             triggerHaptic('medium', { intensity: 1 })
+                            dismissRecentChips(block.id)
                             setAnswer(block.id, { number: val })
                           }}
                         >
@@ -407,25 +477,27 @@ export function FillFormPage() {
               )}
               {block.block_type === 'single_select' && (
                 <>
-                  <Select.Root
-                    key={`${block.id}-fill-ss-${(answers[block.id] as { optionId?: string } | undefined)?.optionId ?? 'cleared'}`}
-                    size="3"
-                    value={(answers[block.id] as { optionId?: string } | undefined)?.optionId || undefined}
-                    onValueChange={(v) => {
+                  <SingleSelectAnswerField
+                    uiMode={getSingleSelectUi(block.config as BlockConfig)}
+                    options={getBlockOptions(block)}
+                    optionId={
+                      (answers[block.id] as { optionId?: string } | undefined)?.optionId ||
+                      undefined
+                    }
+                    onOptionIdChange={(v) => {
                       triggerHaptic('medium', { intensity: 1 })
+                      dismissRecentChips(block.id)
+                      if (v === undefined) {
+                        clearAnswer(block.id)
+                        return
+                      }
                       setAnswer(block.id, { optionId: v })
                     }}
-                  >
-                    <Select.Trigger placeholder="Выберите значение..." />
-                    <Select.Content>
-                      {getBlockOptions(block).map((opt) => (
-                        <Select.Item key={opt.id} value={opt.id}>{opt.label}</Select.Item>
-                      ))}
-                    </Select.Content>
-                  </Select.Root>
-                  {!selectOptionId && selectChipIds && selectChipIds.length > 0 && (
+                    selectRemountKey={`${block.id}-fill-ss-${(answers[block.id] as { optionId?: string } | undefined)?.optionId ?? 'cleared'}`}
+                  />
+                  {showSelectRecentChips && (
                     <Flex gap="1" wrap="wrap" mt="1">
-                      {selectChipIds.map((optId) => (
+                      {selectChipIds!.map((optId) => (
                         <Button
                           key={optId}
                           type="button"
@@ -435,6 +507,7 @@ export function FillFormPage() {
                           radius="full"
                           onClick={() => {
                             triggerHaptic('medium', { intensity: 1 })
+                            dismissRecentChips(block.id)
                             setAnswer(block.id, { optionId: optId })
                           }}
                         >
@@ -462,17 +535,14 @@ export function FillFormPage() {
                     })
                   }}
                 >
-                  <Flex direction="column" gap="2">
                     {getBlockOptions(block).map((opt) => (
                       <CheckboxGroup.Item
                         key={opt.id}
                         value={opt.id}
-                        className={styles.checkboxLabel}
                       >
                         {opt.label}
                       </CheckboxGroup.Item>
                     ))}
-                  </Flex>
                 </CheckboxGroup.Root>
               )}
               {block.block_type === 'scale' && (

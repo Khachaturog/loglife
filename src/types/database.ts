@@ -7,6 +7,16 @@ export type BlockType =
   | 'yes_no'
   | 'duration'
 
+/** Значение ответа в записи и в `blocks.default_value`. */
+export type ValueJson =
+  | { number: number }
+  | { text: string }
+  | { optionId: string }
+  | { optionIds: string[] }
+  | { scaleValue: number }
+  | { yesNo: boolean }
+  | { durationHms: string }
+
 export interface BlockRow {
   id: string
   deed_id: string
@@ -14,11 +24,20 @@ export interface BlockRow {
   title: string
   block_type: BlockType
   is_required: boolean
+  /** Черновик значения; подстановка на новой записи зависит от `default_value_enabled`. */
+  default_value: ValueJson | null
+  /** Подставлять `default_value` при открытии формы новой записи. */
+  default_value_enabled: boolean
+  /** Чипы недавних значений на FillForm (number / single_select). */
+  recent_suggestions_enabled: boolean
   config: BlockConfig | null
   deleted_at: string | null
   created_at: string
   updated_at: string
 }
+
+/** Как показывать «Один из списка» при вводе (FillForm, редактирование на RecordView). Просмотр — всегда текст. */
+export type SingleSelectUiMode = 'select' | 'checkbox'
 
 export interface BlockConfig {
   /**
@@ -36,6 +55,8 @@ export interface BlockConfig {
     label: string
     sort_order: number
   }[]
+  /** Только для block_type === 'single_select'. В БД после миграции всегда задано для таких блоков. */
+  singleSelectUi?: SingleSelectUiMode
 }
 
 /** Версия конфига блока (родительская таблица). */
@@ -100,15 +121,6 @@ export interface RecordRow {
   created_at: string
   updated_at: string
 }
-
-export type ValueJson =
-  | { number: number }
-  | { text: string }
-  | { optionId: string }
-  | { optionIds: string[] }
-  | { scaleValue: number }
-  | { yesNo: boolean }
-  | { durationHms: string }
 
 export interface RecordAnswerRow {
   id: string

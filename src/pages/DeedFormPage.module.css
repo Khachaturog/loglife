@@ -149,3 +149,37 @@
   line-height: inherit;
   letter-spacing: inherit;
 }
+
+/* Аккордеон «Дополнительно» в карточке блока (DeedFormPage) */
+.blockAdditionalAccordionTrigger {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-2);
+  border-radius: var(--radius-3);
+  cursor: pointer;
+  color: var(--gray-12);
+}
+
+.blockAdditionalAccordionTrigger:hover {
+  background: var(--gray-a3);
+}
+
+.blockAdditionalAccordionTrigger:focus-visible {
+  outline: 2px solid var(--focus-8);
+  outline-offset: 2px;
+}
+
+.blockAdditionalAccordionChevron {
+  flex-shrink: 0;
+  color: var(--gray-11);
+  transition: transform 0.2s ease;
+}
+
+.blockAdditionalAccordionTrigger[data-state="open"] .blockAdditionalAccordionChevron {
+  transform: rotate(180deg);
+}
