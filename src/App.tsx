@@ -31,6 +31,8 @@ function App() {
   const { user, loading } = useAuth()
   const location = useLocation()
   const isPublicPage = PUBLIC_PATHS.some((p) => location.pathname === p)
+  // До любых return: иначе при loading → false меняется число хуков (useTabBarVisible → useLocation).
+  const showTabBar = useTabBarVisible()
 
   if (loading) {
     return <PageLoading />
@@ -39,8 +41,6 @@ function App() {
   if (!user && !isPublicPage) {
     return <Navigate to={`/login?redirect=${encodeURIComponent(location.pathname + location.search)}`} replace />
   }
-
-  const showTabBar = useTabBarVisible()
 
   return (
     <Flex direction="column" className={styles.app}>
