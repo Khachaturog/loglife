@@ -20,6 +20,7 @@
 |----------|-------------------|
 | `help_deeds_list` | `/` — список дел |
 | `help_deed_form` | `/deeds/new`, `/deeds/:id/edit` |
+| `help_quick_add_defaults` | Редактор дела: кнопка «?» у блока «Быстрое добавление» (вкладка «Дело») |
 | `help_deed_view` | `/deeds/:id` |
 | `help_fill_form` | `/deeds/:id/fill` (тексты в реестре; в UI не вызывается) |
 | `help_record` | `/records/:id` |

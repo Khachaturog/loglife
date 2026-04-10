@@ -127,3 +127,54 @@ export function initialAnswersFromBlockDefaults(
   }
   return out
 }
+
+/** Активные блоки дела (не удалённые), по порядку. */
+export function activeBlocksSorted(blocks: BlockRow[] | undefined): BlockRow[] {
+  return (blocks ?? [])
+    .filter((b) => !b.deleted_at)
+    .sort((a, b) => a.sort_order - b.sort_order)
+}
+
+/**
+ * Полный набор ответов из дефолтов блоков для быстрого создания записи.
+ * Если у хотя бы одного активного блока нет валидного дефолта — `null`.
+ */
+export function getCompleteDefaultAnswers(blocks: BlockRow[] | undefined): Record<string, ValueJson> | null {
+  const list = activeBlocksSorted(blocks)
+  if (list.length === 0) return null
+  const out: Record<string, ValueJson> = {}
+  for (const b of list) {
+    if (!b.id) return null
+    if (!b.default_value_enabled) return null
+    const normalized = normalizeDefaultValueForBlock(b, b.default_value)
+    if (!normalized) return null
+    out[b.id] = normalized
+  }
+  return out
+}
+
+export function isQuickAddDefaultsAvailable(blocks: BlockRow[] | undefined): boolean {
+  return getCompleteDefaultAnswers(blocks) !== null
+}
+
+/**
+ * Все блоки (в порядке формы) имеют включённый и валидный дефолт — можно включать «быстрое добавление» в редакторе.
+ * Не требует `id` блока (подходит для черновика до первого сохранения).
+ */
+export function areDefaultValuesCompleteForBlocks(
+  blocks:
+    | Array<
+        Pick<BlockRow, 'block_type' | 'config' | 'default_value_enabled' | 'default_value'> & {
+          deleted_at?: string | null
+        }
+      >
+    | undefined,
+): boolean {
+  const list = (blocks ?? []).filter((b) => !b.deleted_at)
+  if (list.length === 0) return false
+  for (const b of list) {
+    if (!b.default_value_enabled) return false
+    if (!normalizeDefaultValueForBlock(b, b.default_value)) return false
+  }
+  return true
+}

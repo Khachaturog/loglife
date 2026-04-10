@@ -123,14 +123,15 @@ export function DeedsListPage() {
         title="Дела"
         /* Основные действия главной — в overflow-меню (позже добавим пункты). «Создать» не дублируем текстовой кнопкой. */
         actions={
-          <Flex mr="4">
+          <Flex>
             <DropdownMenu.Root>
               <DropdownMenu.Trigger>
                 <IconButton
                   type="button"
-                  size="4"
+                  size="3"
                   color="gray"
-                  variant="ghost"
+                  variant="classic"
+                  radius="full"
                   aria-label="Меню действий"
                 >
                   <DotsHorizontalIcon />

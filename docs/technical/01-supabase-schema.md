@@ -16,6 +16,7 @@ auth.users (Supabase Auth)
 │ deeds                                           │
 │  id · user_id · emoji · name · description     │
 │  category · card_color · analytics_config      │
+│  quick_add_defaults_enabled                    │
 │  created_at · updated_at                       │
 └────────────────────┬────────────────────────────┘
                      │ deed_id
@@ -68,6 +69,7 @@ auth.users (Supabase Auth)
 | `category` | text | | Опциональная категория |
 | `card_color` | text | | Цвет карточки (опционально) |
 | `analytics_config` | jsonb | | Настройки отображения аналитики на карточке дела (см. ниже); `null` = дефолты в приложении |
+| `quick_add_defaults_enabled` | boolean | NOT NULL, DEFAULT false | Вкл. у пользователя: короткое «+» создаёт запись из дефолтов блоков, если дефолты полные и валидны |
 | `created_at` | timestamptz | NOT NULL, DEFAULT now() | |
 | `updated_at` | timestamptz | NOT NULL, DEFAULT now() | |
 

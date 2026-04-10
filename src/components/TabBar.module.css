@@ -5,11 +5,11 @@
   position: fixed;
   left: var(--space-4);
   right: var(--space-4);
-  bottom: 1px;
+  bottom: 8px;
   display: flex;
   align-items: center;
   gap: var(--space-1);
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 16px);
 }
 
 /* .backButton:hover {

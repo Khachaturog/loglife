@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react'
 import { Box, Button, Flex, Heading, Text } from '@radix-ui/themes'
-import { Link } from 'react-router-dom'
 import layoutStyles from '@/styles/layout.module.css'
 import styles from './PageErrorState.module.css'
 
@@ -40,7 +39,7 @@ export function PageErrorState({
   title,
   description,
   code,
-  homeTo = '/',
+  homeTo: _homeTo = '/',
   onRefresh,
   withPageContainer = true,
 }: PageErrorStateProps) {
@@ -75,14 +74,6 @@ export function PageErrorState({
         variant="classic"
         onClick={handleRefresh}>
           Обновить страницу
-        </Button>
-        <Button asChild 
-        size="3" 
-        color="gray" 
-        variant="soft">
-          <Link to={homeTo} replace>
-            На главную
-          </Link>
         </Button>
       </Flex>
     </Flex>

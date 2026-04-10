@@ -14,15 +14,15 @@
 | api.deeds | `list()` | deeds | export-csv |
 | api.deeds | `listWithBlocks()` | deeds, blocks | DeedsListPage |
 | api.deeds | `get(id)` | deeds, blocks | DeedViewPage, FillFormPage, DeedFormPage, RecordViewPage, export-csv |
-| api.deeds | `create()` | deeds (в т.ч. `analytics_config`), blocks | DeedFormPage |
-| api.deeds | `update()` | deeds (в т.ч. `analytics_config`), blocks | DeedFormPage |
+| api.deeds | `create()` | deeds (в т.ч. `analytics_config`, `quick_add_defaults_enabled`), blocks | DeedFormPage |
+| api.deeds | `update()` | deeds (в т.ч. `analytics_config`, `quick_add_defaults_enabled`), blocks | DeedFormPage |
 | api.deeds | `delete()` | deeds | DeedViewPage |
 | api.deeds | `deleteBlock()` | deeds, blocks | DeedFormPage |
 | api.deeds | `records(deedId)` | deeds, records, record_answers | DeedViewPage, export-csv |
 | api.deeds | `recentRecords(deedId, limit?)` | deeds, records, record_answers | FillFormPage |
 | api.deeds | `recordsByDeedIds(ids)` | deeds, records, record_answers | DeedsListPage |
 | api.deeds | `listAllRecordsWithDeedInfo()` | records, record_answers, deeds | HistoryPage |
-| api.deeds | `createRecord()` | deeds, records, record_answers | FillFormPage |
+| api.deeds | `createRecord()` | deeds, records, record_answers | FillFormPage, DeedCard, DeedViewPage (быстрое добавление из дефолтов) |
 | api.records | `get(id)` | records, record_answers, deeds | RecordViewPage |
 | api.records | `update()` | records, record_answers, deeds | RecordViewPage |
 

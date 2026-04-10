@@ -34,13 +34,14 @@ import { PageLoading } from "@/components/PageLoading";
 import { DurationInput } from "@/components/DurationInput";
 import { EmojiPickerButton } from "@/components/EmojiPickerButton";
 import scaleSegmentedStyles from "@/components/ScaleSegmentedControl.module.css";
-import { ArrowBottomRightIcon, ArrowDownIcon, ArrowUpIcon, CheckIcon, ChevronDownIcon, Cross2Icon, PlusIcon, TrashIcon } from "@radix-ui/react-icons";
+import { ArrowBottomRightIcon, ArrowDownIcon, ArrowUpIcon, CheckIcon, ChevronDownIcon, Cross2Icon, PlusIcon, QuestionMarkIcon, TrashIcon } from "@radix-ui/react-icons";
 import { api } from "@/lib/api";
 import {
   RADIX_COLOR_9_PRESETS,
   findRadixColor9PresetByHex,
 } from "@/lib/radix-color9-presets";
 import {
+  areDefaultValuesCompleteForBlocks,
   createInitialDefaultForBlockType,
   normalizeDefaultValueForBlock,
 } from "@/lib/block-default-value";
@@ -52,6 +53,7 @@ import { DEFAULT_DEED_ANALYTICS_CONFIG } from "@/types/deed-analytics-config";
 import { normalizeDeedAnalyticsConfig } from "@/lib/deed-analytics-config";
 import layoutStyles from "@/styles/layout.module.css";
 import styles from "./DeedFormPage.module.css";
+import { useOnboarding } from "@/lib/onboarding-context";
 
 /** Модель блока в UI — может не иметь id до сохранения в БД */
 type UiBlock = {
@@ -139,10 +141,7 @@ function DeedBlockDefaultValueEditor({
   if (block.block_type === "number") {
     const n = (block.default_value as { number?: number } | null)?.number ?? 1;
     return (
-      <Flex direction="column" gap="1" mt="2">
-        <Text size="2" weight="medium" as="label">
-          Значение по умолчанию
-        </Text>
+      <Flex direction="column" mt="1">
         <TextField.Root
           size="3"
           color={hasValidationError ? "red" : undefined}
@@ -165,16 +164,13 @@ function DeedBlockDefaultValueEditor({
           </Text>
         ) : null}
       </Flex>
-    );
+  );
   }
 
   if (block.block_type === "text_paragraph") {
     const t = (block.default_value as { text?: string } | null)?.text ?? "";
     return (
-      <Flex direction="column" gap="1" mt="2">
-        <Text size="2" weight="medium" as="label">
-          Текст по умолчанию
-        </Text>
+      <Flex direction="column" mt="1">
         <TextField.Root
           size="3"
           color={hasValidationError ? "red" : undefined}
@@ -199,10 +195,7 @@ function DeedBlockDefaultValueEditor({
   if (block.block_type === "single_select") {
     const oid = (block.default_value as { optionId?: string } | null)?.optionId ?? "";
     return (
-      <Flex direction="column" gap="1" mt="2">
-        <Text size="2" weight="medium" as="label">
-          Вариант по умолчанию
-        </Text>
+      <Flex direction="column" mt="1">
         <Select.Root
           size="3"
           value={oid || undefined}
@@ -237,10 +230,7 @@ function DeedBlockDefaultValueEditor({
   if (block.block_type === "multi_select") {
     const ids = (block.default_value as { optionIds?: string[] } | null)?.optionIds ?? [];
     return (
-      <Flex direction="column" gap="1" mt="2">
-        <Text size="2" weight="medium">
-          Варианты по умолчанию
-        </Text>
+      <Flex direction="column" mt="1">
         <CheckboxGroup.Root
           size="3"
           value={ids}
@@ -273,10 +263,7 @@ function DeedBlockDefaultValueEditor({
   if (block.block_type === "scale") {
     const sv = (block.default_value as { scaleValue?: number } | null)?.scaleValue ?? 1;
     return (
-      <Flex direction="column" gap="1" mt="2">
-        <Text size="2" weight="medium">
-          Деление по умолчанию
-        </Text>
+      <Flex direction="column" mt="1">
         <SegmentedControl.Root
           className={scaleSegmentedStyles.root}
           value={String(sv)}
@@ -301,10 +288,7 @@ function DeedBlockDefaultValueEditor({
   if (block.block_type === "yes_no") {
     const yn = (block.default_value as { yesNo?: boolean } | null)?.yesNo === true;
     return (
-      <Flex direction="column" gap="1" mt="2">
-        <Text size="2" weight="medium">
-          По умолчанию отмечено «Выполнено»
-        </Text>
+      <Flex mt="1">
         <Switch
           size="3"
           checked={yn}
@@ -323,10 +307,7 @@ function DeedBlockDefaultValueEditor({
     const hms =
       (block.default_value as { durationHms?: string } | null)?.durationHms ?? "00:00:00";
     return (
-      <Flex direction="column" gap="1" mt="2">
-        <Text size="2" weight="medium" as="label">
-          Длительность по умолчанию
-        </Text>
+      <Flex mt="1">
         <DurationInput
           value={hms}
           onChange={(next) =>
@@ -615,6 +596,9 @@ export function DeedFormPage() {
   const [analyticsConfig, setAnalyticsConfig] = useState<DeedAnalyticsConfigV1>(
     () => ({ ...DEFAULT_DEED_ANALYTICS_CONFIG }),
   );
+  /** Быстрое «+» на карточке и экране дела — только при полных дефолтах и явном включении. */
+  const [quickAddDefaultsEnabled, setQuickAddDefaultsEnabled] = useState(false);
+  const { openFlow } = useOnboarding();
   const formRef = useRef<HTMLFormElement>(null);
   /** Ошибки после попытки сохранить — подсветка полей и тексты (кнопка сохранения не блокируется) */
   const [nameFieldError, setNameFieldError] = useState(false);
@@ -749,6 +733,7 @@ export function DeedFormPage() {
         }) ?? [createDefaultBlock()];
         setBlocks(mapped.length ? mapped : [createDefaultBlock()]);
         setAnalyticsConfig(normalizeDeedAnalyticsConfig(deed.analytics_config));
+        setQuickAddDefaultsEnabled(deed.quick_add_defaults_enabled ?? false);
       })
       .catch((e) => {
         if (!cancelled) {
@@ -763,6 +748,13 @@ export function DeedFormPage() {
       cancelled = true;
     };
   }, [id, isNew, navigate]);
+
+  /** Пока не у всех блоков валидные дефолты — выключаем быстрое добавление (нельзя оставить противоречие с БД). */
+  useEffect(() => {
+    if (!areDefaultValuesCompleteForBlocks(blocks)) {
+      setQuickAddDefaultsEnabled(false);
+    }
+  }, [blocks]);
 
   // Если пользователь ввёл свою категорию, а она появилась в списке — сбрасываем custom
   useEffect(() => {
@@ -895,6 +887,8 @@ export function DeedFormPage() {
       });
 
       const analyticsPayload: DeedAnalyticsConfigV1 = analyticsConfig;
+      const quickAddPayload =
+        quickAddDefaultsEnabled && areDefaultValuesCompleteForBlocks(blocks);
 
       if (isNew) {
         const deed = await api.deeds.create({
@@ -904,6 +898,7 @@ export function DeedFormPage() {
           category: category.trim() || null,
           card_color: cardColor.trim() || null,
           analytics_config: analyticsPayload,
+          quick_add_defaults_enabled: quickAddPayload,
           blocks: payloadBlocks,
         });
         navigate(`/deeds/${deed.id}`);
@@ -915,6 +910,7 @@ export function DeedFormPage() {
           category: category.trim() || null,
           card_color: cardColor.trim() || null,
           analytics_config: analyticsPayload,
+          quick_add_defaults_enabled: quickAddPayload,
           blocks: payloadBlocks,
         });
         navigate(`/deeds/${id}`);
@@ -1463,20 +1459,18 @@ export function DeedFormPage() {
                     type="button"
                     className={styles.blockAdditionalAccordionTrigger}
                   >
-                    <Text size="2" weight="medium" as="span">
-                      Дополнительно
+                    <Text size="3" weight="medium" as="span">
+                      Дополнительные настройки
                     </Text>
                     <ChevronDownIcon
                       className={styles.blockAdditionalAccordionChevron}
-                      width={16}
-                      height={16}
                       aria-hidden
                     />
                   </Collapsible.Trigger>
                   <Collapsible.Content>
                     <Flex direction="column" gap="3" mt="2" pb="1">
                       <Flex align="center" justify="between" gap="3" wrap="wrap">
-                        <Text size="2">Обязательное поле</Text>
+                        <Text size="3">Обязательное поле</Text>
                         <Switch
                           size="3"
                           checked={block.is_required}
@@ -1488,7 +1482,7 @@ export function DeedFormPage() {
                       {(block.block_type === "number" ||
                         block.block_type === "single_select") && (
                         <Flex align="center" justify="between" gap="3" wrap="wrap">
-                          <Text size="2">Подсказки из недавних записей</Text>
+                          <Text size="3">Подсказки из недавних записей</Text>
                           <Switch
                             size="3"
                             checked={block.recent_suggestions_enabled}
@@ -1503,11 +1497,11 @@ export function DeedFormPage() {
                       )}
                       {block.block_type === "single_select" && (
                         <Flex direction="column" gap="2">
-                          <Text size="2" weight="medium" as="span">
-                            Как показывать при заполнении
+                          <Text size="3" weight="medium" as="span">
+                            Вид списка
                           </Text>
                           <SegmentedControl.Root
-                            size="2"
+                            size="3"
                             value={
                               block.config?.singleSelectUi === "checkbox"
                                 ? "checkbox"
@@ -1535,7 +1529,7 @@ export function DeedFormPage() {
                       )}
                       <Flex direction="column" gap="2">
                         <Flex align="center" justify="between" gap="3" wrap="wrap">
-                          <Text size="2">Подставлять при новой записи</Text>
+                          <Text size="3">Значение по умолчанию</Text>
                           <Switch
                             size="3"
                             checked={block.default_value_enabled}
@@ -1586,12 +1580,45 @@ export function DeedFormPage() {
           <Button 
           type="button" 
           variant="soft" 
-          size="3" 
+          size="4" 
           onClick={addBlock} 
           aria-label="Добавить блок">
             <PlusIcon /> 
             Добавить блок
           </Button>
+
+          <Card>
+            <Flex direction="column" gap="3">
+              <Flex align="center" justify="between" gap="3" wrap="wrap">
+                <Flex direction="column" gap="1" style={{ flex: "1", minWidth: 0 }}>
+                  <Heading size="3">Быстрое добавление</Heading>
+                  <Text size="2" color="gray">
+                    Короткое нажатие «+» создаёт запись с дефолтами; удерживайте «+», чтобы
+                    открыть форму. Сначала задайте значение по умолчанию для каждого блока.
+                  </Text>
+                </Flex>
+                <Flex align="center" gap="2" style={{ flexShrink: 0 }}>
+                  <Switch
+                    size="3"
+                    checked={quickAddDefaultsEnabled}
+                    disabled={!areDefaultValuesCompleteForBlocks(blocks)}
+                    onCheckedChange={setQuickAddDefaultsEnabled}
+                    aria-label="Быстрое добавление записей по умолчанию"
+                  />
+                  <IconButton
+                    type="button"
+                    size="3"
+                    color="gray"
+                    variant="surface"
+                    aria-label="Справка о быстром добавлении"
+                    onClick={() => openFlow("help_quick_add_defaults")}
+                  >
+                    <QuestionMarkIcon />
+                  </IconButton>
+                </Flex>
+              </Flex>
+            </Flex>
+          </Card>
         </Flex>
           </Tabs.Content>
 
@@ -1693,7 +1720,7 @@ export function DeedFormPage() {
                     {/* Видимость карточек сводки на карточке дела */}
                     <Flex direction="column" gap="3">
                       <Flex align="center" justify="between" gap="3">
-                        <Text size="2">Блок «Сегодня»</Text>
+                        <Text size="3">Блок «Сегодня»</Text>
                         <Switch
                         size="3"
                         color="gray"
@@ -1709,7 +1736,7 @@ export function DeedFormPage() {
                         />
                       </Flex>
                       <Flex align="center" justify="between" gap="3">
-                        <Text size="2">Блок «За месяц»</Text>
+                        <Text size="3">Блок «За месяц»</Text>
                         <Switch
                         size="3"
                         color="gray"
@@ -1725,7 +1752,7 @@ export function DeedFormPage() {
                         />
                       </Flex>
                       <Flex align="center" justify="between" gap="3">
-                        <Text size="2">Блок «Всего»</Text>
+                        <Text size="3">Блок «Всего»</Text>
                         <Switch
                         size="3"
                         color="gray"
@@ -1794,7 +1821,7 @@ export function DeedFormPage() {
                 {analyticsConfig.activity.enabled ? (
                     <Flex direction="column" gap="3">
                       <Flex align="center" justify="between" gap="3">
-                        <Text size="2">Блок «Текущий стрик»</Text>
+                        <Text size="3">Блок «Текущий стрик»</Text>
                         <Switch
                           size="3"
                           color="gray"
@@ -1811,7 +1838,7 @@ export function DeedFormPage() {
                       </Flex>
                       {analyticsConfig.activity.streak_enabled ? (
                         <Flex align="center" justify="between" gap="3" pl="4">
-                          <Text size="2">Счётчик «Максимальный стрик»</Text>
+                          <Text size="3">Счётчик «Максимальный стрик»</Text>
                           <Switch
                             size="3"
                             color="gray"
@@ -1827,7 +1854,7 @@ export function DeedFormPage() {
                       ) : null}
                       <Flex direction="column" gap="3">
                         <Flex align="center" justify="between" gap="3">
-                          <Text size="2">Блок «Всего записей»</Text>
+                          <Text size="3">Блок «Всего записей»</Text>
                           <Switch
                             size="3"
                             color="gray"
@@ -1844,7 +1871,7 @@ export function DeedFormPage() {
                         </Flex>
                         {analyticsConfig.activity.record_count_enabled ? (
                           <Flex align="center" justify="between" gap="3" pl="4">
-                            <Text size="2">Счётчик «Будни · Выходные»</Text>
+                            <Text size="3">Счётчик «Будни · Выходные»</Text>
                             <Switch
                               size="3"
                               color="gray"
@@ -2030,7 +2057,7 @@ export function DeedFormPage() {
                   {/* Оформление сетки теплокарты на карточке дела */}
                   <Flex direction="column" gap="3">
                     <Flex align="center" justify="between" gap="3">
-                      <Text size="2">Подписи «Дни недели»</Text>
+                      <Text size="3">Подписи «Дни недели»</Text>
                       <Switch
                         size="3"
                         color="gray"
@@ -2044,7 +2071,7 @@ export function DeedFormPage() {
                       />
                     </Flex>
                     <Flex align="center" justify="between" gap="3">
-                      <Text size="2">Подписи «Месяц»</Text>
+                      <Text size="3">Подписи «Месяц»</Text>
                       <Switch
                         size="3"
                         color="gray"
@@ -2058,7 +2085,7 @@ export function DeedFormPage() {
                       />
                     </Flex>
                     <Flex align="center" justify="between" gap="3">
-                      <Text size="2">Пик и легенда уровней «Меньше — Больше»</Text>
+                      <Text size="3">Пик и легенда уровней</Text>
                       <Switch
                         size="3"
                         color="gray"

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
 import { AlertDialog, Box, Button, Card, DropdownMenu, Flex, Heading, IconButton, Separator, Text } from '@radix-ui/themes'
 import { DeedActivityHeatmap } from '@/components/DeedActivityHeatmap'
@@ -6,7 +6,7 @@ import { DeedDescriptionText } from '@/components/DeedDescriptionText'
 import { AppBar } from '@/components/AppBar'
 import { useOnboarding } from '@/lib/onboarding-context'
 import { PageLoading } from '@/components/PageLoading'
-import { DotsHorizontalIcon, PlusIcon, Pencil1Icon, TrashIcon, QuestionMarkCircledIcon } from '@radix-ui/react-icons'
+import { CheckIcon, DotsHorizontalIcon, PlusIcon, Pencil1Icon, TrashIcon, QuestionMarkCircledIcon, UpdateIcon } from '@radix-ui/react-icons'
 import { api } from '@/lib/api'
 import { RecordCard } from '@/components/RecordCard'
 import type { DeedWithBlocks } from '@/types/database'
@@ -14,11 +14,8 @@ import layoutStyles from '@/styles/layout.module.css'
 import styles from './DeedViewPage.module.css'
 import { formatDate, nowTimeLocal, pluralRecords, todayLocalISO } from '@/lib/format-utils'
 import { triggerHaptic } from '@/lib/haptics'
-import {
-  getDeedDisplayNumbers,
-  getSingleYesNoBlock,
-  type RecordWithAnswersLoose,
-} from '@/lib/deed-utils'
+import { deedQuickAddFromDefaultsActive, getQuickAddRecordAnswers, QUICK_ADD_FROM_DEFAULTS_LONG_PRESS_MS } from '@/lib/deed-quick-add'
+import { getDeedDisplayNumbers, type RecordWithAnswersLoose } from '@/lib/deed-utils'
 import { currentStreak, maxStreak, workdayWeekendCounts } from '@/lib/deed-analytics'
 import {
   heatmapDisplayColor,
@@ -44,10 +41,28 @@ export function DeedViewPage() {
   /** UI-диалог вместо `window.confirm` — во встроенном браузере Cursor нативные диалоги могут не показываться. */
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleteLoading, setDeleteLoading] = useState(false)
-  /** Создание записи одним тапом «+» для дела с одним блоком «Да/Нет». */
+  /** Создание записи одним тапом «+» при включённом быстром добавлении из дефолтов. */
   const [addingRecord, setAddingRecord] = useState(false)
+  const [quickAddSuccess, setQuickAddSuccess] = useState(false)
   /** Ошибка быстрого добавления — не смешиваем с `error` загрузки, чтобы не терять экран дела. */
   const [quickAddError, setQuickAddError] = useState<string | null>(null)
+  const successHideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const longPressConsumedClickRef = useRef(false)
+
+  const clearLongPressTimer = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current)
+      longPressTimerRef.current = null
+    }
+  }
+
+  useEffect(() => {
+    return () => {
+      if (successHideTimeoutRef.current) clearTimeout(successHideTimeoutRef.current)
+      clearLongPressTimer()
+    }
+  }, [])
 
   // --- Загрузка дела и записей ---
   useEffect(() => {
@@ -184,28 +199,67 @@ export function DeedViewPage() {
   const showAnalyticsBlock =
     showSummaryRow || showActivityRow || showHeatmap
 
-  const singleYesNoBlock = useMemo(
-    () => getSingleYesNoBlock(deed?.blocks),
-    [deed?.blocks],
+  const quickAddFromDefaults = useMemo(
+    () => (deed ? deedQuickAddFromDefaultsActive(deed) : false),
+    [deed],
   )
 
-  async function handleQuickAddYesNoRecord() {
-    if (!id || !singleYesNoBlock || addingRecord) return
+  async function handleQuickAddFromDefaultsRecord() {
+    if (!id || !deed || addingRecord || quickAddSuccess) return
+    const answers = getQuickAddRecordAnswers(deed)
+    if (!answers) return
     setAddingRecord(true)
     setQuickAddError(null)
     try {
       await api.deeds.createRecord(id, {
         record_date: todayLocalISO(),
         record_time: nowTimeLocal(),
-        answers: { [singleYesNoBlock.id]: { yesNo: true } },
+        answers,
       })
       const recordsData = await api.deeds.records(id)
       setRecords(recordsData)
       triggerHaptic('success', { intensity: 1 })
+      if (successHideTimeoutRef.current) clearTimeout(successHideTimeoutRef.current)
+      setQuickAddSuccess(true)
+      successHideTimeoutRef.current = setTimeout(() => {
+        setQuickAddSuccess(false)
+        successHideTimeoutRef.current = null
+      }, 1000)
     } catch (e) {
       setQuickAddError(e instanceof Error ? e.message : 'Не удалось добавить запись')
     } finally {
       setAddingRecord(false)
+    }
+  }
+
+  /** Удержание — через паузу открываем форму (и без быстрого добавления), без ожидания отпускания. */
+  function handlePlusPointerDown(e: React.PointerEvent<HTMLButtonElement>) {
+    if (e.pointerType === 'mouse' && e.button !== 0) return
+    if (!id || (quickAddFromDefaults && (addingRecord || quickAddSuccess))) return
+    longPressConsumedClickRef.current = false
+    clearLongPressTimer()
+    longPressTimerRef.current = setTimeout(() => {
+      longPressTimerRef.current = null
+      longPressConsumedClickRef.current = true
+      navigate(`/deeds/${id}/fill`)
+      triggerHaptic('medium', { intensity: 0.45 })
+    }, QUICK_ADD_FROM_DEFAULTS_LONG_PRESS_MS)
+  }
+
+  function handlePlusPointerEnd() {
+    clearLongPressTimer()
+  }
+
+  function handlePlusClick(e: React.MouseEvent) {
+    e.preventDefault()
+    if (longPressConsumedClickRef.current) {
+      longPressConsumedClickRef.current = false
+      return
+    }
+    if (quickAddFromDefaults) {
+      void handleQuickAddFromDefaultsRecord()
+    } else if (id) {
+      navigate(`/deeds/${id}/fill`)
     }
   }
 
@@ -233,29 +287,49 @@ export function DeedViewPage() {
         title=""
         actions={
           <Flex gap="2" align="center">
-            {singleYesNoBlock ? (
+            {quickAddFromDefaults && quickAddSuccess ? (
+              <IconButton
+                type="button"
+                size="3"
+                color="green"
+                variant="solid"
+                radius="full"
+                title="Запись добавлена"
+                aria-label="Запись добавлена"
+                onClick={(e) => e.preventDefault()}
+              >
+                <CheckIcon />
+              </IconButton>
+            ) : quickAddFromDefaults && addingRecord ? (
+              <IconButton
+                type="button"
+                size="3"
+                variant="soft"
+                radius="full"
+                aria-label="Добавление записи"
+                disabled
+              >
+                <UpdateIcon />
+              </IconButton>
+            ) : (
               <IconButton
                 type="button"
                 size="3"
                 variant="classic"
                 radius="full"
+                title={
+                  quickAddFromDefaults
+                    ? 'Нажать — запись с дефолтами. Удерживать — форма с датой и временем'
+                    : 'Нажать — форма записи. Удерживать — та же форма после короткой паузы'
+                }
                 aria-label={addingRecord ? 'Добавление…' : 'Добавить запись'}
-                disabled={addingRecord}
-                onClick={() => void handleQuickAddYesNoRecord()}
+                onPointerDown={handlePlusPointerDown}
+                onPointerUp={handlePlusPointerEnd}
+                onPointerCancel={handlePlusPointerEnd}
+                onPointerLeave={handlePlusPointerEnd}
+                onClick={handlePlusClick}
               >
                 <PlusIcon />
-              </IconButton>
-            ) : (
-              <IconButton
-                asChild
-                size="3"
-                variant="classic"
-                radius="full"
-                aria-label="Добавить запись"
-              >
-                <Link to={`/deeds/${id}/fill`}>
-                  <PlusIcon />
-                </Link>
               </IconButton>
             )}
             <Separator orientation="vertical" />

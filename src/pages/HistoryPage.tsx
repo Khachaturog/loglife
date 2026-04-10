@@ -218,7 +218,7 @@ export function HistoryPage() {
                     {formatDate(date)}
                   </Text>
                   <Badge
-                  size="3" 
+                  size="2" 
                   color="gray" 
                   variant="soft"
                   radius="full"

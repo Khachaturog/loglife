@@ -4,7 +4,8 @@ import { Box, Card, Flex, IconButton, Text } from '@radix-ui/themes'
 import { CheckIcon, PlusIcon, UpdateIcon } from '@radix-ui/react-icons'
 import type { DeedWithBlocks } from '@/types/database'
 import type { RecordRow, RecordAnswerRow } from '@/types/database'
-import { getDeedDisplayNumbers, getSingleYesNoBlock } from '@/lib/deed-utils'
+import { getDeedDisplayNumbers } from '@/lib/deed-utils'
+import { deedQuickAddFromDefaultsActive, getQuickAddRecordAnswers, QUICK_ADD_FROM_DEFAULTS_LONG_PRESS_MS } from '@/lib/deed-quick-add'
 import { api } from '@/lib/api'
 import { nowTimeLocal, todayLocalISO } from '@/lib/format-utils'
 import { triggerHaptic } from '@/lib/haptics'
@@ -13,12 +14,9 @@ import deedCardStyles from '@/components/DeedCard.module.css'
 type DeedCardProps = {
   deed: DeedWithBlocks
   records: (RecordRow & { record_answers?: RecordAnswerRow[] })[]
-  /** После успешного быстрого «+» для одного блока «Да/Нет» — обновить счётчики на карточке. */
+  /** После успешного быстрого «+» — обновить счётчики на карточке. */
   onRecordsRefresh?: (deedId: string) => void | Promise<void>
 }
-
-/** Удержание «+» на карточке с одним «Да/Нет» — открыть форму заполнения (короткое нажатие = быстрая запись). */
-const YES_NO_LONG_PRESS_MS = 500
 
 /**
  * Карточка дела в списке.
@@ -29,10 +27,7 @@ export function DeedCard({ deed, records, onRecordsRefresh }: DeedCardProps) {
   const navigate = useNavigate()
   const { today, total } = getDeedDisplayNumbers(deed.blocks ?? [], records)
 
-  const singleYesNoBlock = useMemo(
-    () => getSingleYesNoBlock(deed.blocks),
-    [deed.blocks],
-  )
+  const quickAddActive = useMemo(() => deedQuickAddFromDefaultsActive(deed), [deed])
 
   const [addingRecord, setAddingRecord] = useState(false)
   const [quickAddSuccess, setQuickAddSuccess] = useState(false)
@@ -56,21 +51,21 @@ export function DeedCard({ deed, records, onRecordsRefresh }: DeedCardProps) {
     }
   }, [])
 
-  async function handleQuickAddYesNo(e: React.MouseEvent) {
+  async function handleQuickAddFromDefaults(e: React.MouseEvent) {
     e.preventDefault()
     e.stopPropagation()
-    if (!singleYesNoBlock || addingRecord || quickAddSuccess) return
+    const answers = getQuickAddRecordAnswers(deed)
+    if (!answers || addingRecord || quickAddSuccess) return
     setAddingRecord(true)
     setQuickAddError(null)
     try {
       await api.deeds.createRecord(deed.id, {
         record_date: todayLocalISO(),
         record_time: nowTimeLocal(),
-        answers: { [singleYesNoBlock.id]: { yesNo: true } },
+        answers,
       })
       await onRecordsRefresh?.(deed.id)
       triggerHaptic('success', { intensity: 1 })
-      // Краткая зелёная галочка вместо «+» — явный success после обновления счётчиков
       if (successHideTimeoutRef.current) clearTimeout(successHideTimeoutRef.current)
       setQuickAddSuccess(true)
       successHideTimeoutRef.current = setTimeout(() => {
@@ -84,9 +79,10 @@ export function DeedCard({ deed, records, onRecordsRefresh }: DeedCardProps) {
     }
   }
 
-  function handleYesNoPlusPointerDown(e: React.PointerEvent<HTMLButtonElement>) {
+  /** Удержание — через фиксированную паузу открываем форму (без ожидания отпускания), короткий тап — см. handlePlusClick. */
+  function handlePlusPointerDown(e: React.PointerEvent<HTMLButtonElement>) {
     if (e.pointerType === 'mouse' && e.button !== 0) return
-    if (addingRecord || quickAddSuccess) return
+    if (quickAddActive && (addingRecord || quickAddSuccess)) return
     longPressConsumedClickRef.current = false
     clearLongPressTimer()
     longPressTimerRef.current = setTimeout(() => {
@@ -94,21 +90,25 @@ export function DeedCard({ deed, records, onRecordsRefresh }: DeedCardProps) {
       longPressConsumedClickRef.current = true
       navigate(`/deeds/${deed.id}/fill`)
       triggerHaptic('medium', { intensity: 0.45 })
-    }, YES_NO_LONG_PRESS_MS)
+    }, QUICK_ADD_FROM_DEFAULTS_LONG_PRESS_MS)
   }
 
-  function handleYesNoPlusPointerEnd() {
+  function handlePlusPointerEnd() {
     clearLongPressTimer()
   }
 
-  function handleYesNoPlusClick(e: React.MouseEvent) {
+  function handlePlusClick(e: React.MouseEvent) {
     e.preventDefault()
     e.stopPropagation()
     if (longPressConsumedClickRef.current) {
       longPressConsumedClickRef.current = false
       return
     }
-    void handleQuickAddYesNo(e)
+    if (quickAddActive) {
+      void handleQuickAddFromDefaults(e)
+    } else {
+      navigate(`/deeds/${deed.id}/fill`)
+    }
   }
 
   const deedOpenLabel = `Открыть дело «${deed.name}»${deed.category ? `. ${deed.category}` : ''}. ${today} сегодня, ${total} всего`
@@ -129,11 +129,6 @@ export function DeedCard({ deed, records, onRecordsRefresh }: DeedCardProps) {
               <Flex direction="column" gap="1">
                 <Flex align="center" gapX="2" gapY="1" wrap="wrap">
                   <Text weight="medium">{deed.name}</Text>
-                  {/* {deed.category && (
-                    <Badge size="1" color="gray" radius="large" variant="surface">
-                      {deed.category}
-                    </Badge>
-                  )} */}
                 </Flex>
                 <Text as="p" size="2" color="gray">
                   {today} сегодня · {total} всего
@@ -141,72 +136,56 @@ export function DeedCard({ deed, records, onRecordsRefresh }: DeedCardProps) {
               </Flex>
             </Flex>
 
-            {singleYesNoBlock ? (
-              quickAddSuccess ? (
-                <IconButton
-                  type="button"
-                  size="3"
-                  color="green"
-                  variant="solid"
-                  radius="full"
-                  className={deedCardStyles.cardActionButton}
-                  title="Запись добавлена"
-                  aria-label="Запись добавлена"
-                  onClick={(e) => {
-                    e.preventDefault()
-                    e.stopPropagation()
-                  }}
-                >
-                  <CheckIcon />
-                </IconButton>
-              ) : addingRecord ? (
-                <IconButton
-                  type="button"
-                  size="3"
-                  variant="soft"
-                  radius="full"
-                  className={deedCardStyles.cardActionButton}
-                  title="Добавление записи…"
-                  aria-label="Добавление записи"
-                  disabled
-                >
-                  <UpdateIcon className={deedCardStyles.iconSpin} />
-                </IconButton>
-              ) : (
-                <IconButton
-                  type="button"
-                  size="3"
-                  variant="classic"
-                  radius="full"
-                  className={deedCardStyles.cardActionButton}
-                  title="Нажать — быстрая запись «Да». Удерживать — форма с датой и временем"
-                  aria-label="Добавить запись"
-                  onPointerDown={handleYesNoPlusPointerDown}
-                  onPointerUp={handleYesNoPlusPointerEnd}
-                  onPointerCancel={handleYesNoPlusPointerEnd}
-                  onPointerLeave={handleYesNoPlusPointerEnd}
-                  onClick={handleYesNoPlusClick}
-                >
-                  <PlusIcon />
-                </IconButton>
-              )
+            {quickAddActive && quickAddSuccess ? (
+              <IconButton
+                type="button"
+                size="3"
+                color="green"
+                variant="solid"
+                radius="full"
+                className={deedCardStyles.cardActionButton}
+                title="Запись добавлена"
+                aria-label="Запись добавлена"
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                }}
+              >
+                <CheckIcon />
+              </IconButton>
+            ) : quickAddActive && addingRecord ? (
+              <IconButton
+                type="button"
+                size="3"
+                variant="soft"
+                radius="full"
+                className={deedCardStyles.cardActionButton}
+                title="Добавление записи…"
+                aria-label="Добавление записи"
+                disabled
+              >
+                <UpdateIcon className={deedCardStyles.iconSpin} />
+              </IconButton>
             ) : (
               <IconButton
+                type="button"
                 size="3"
                 variant="classic"
-                // color="gray"
                 radius="full"
-                asChild
-                title="Добавить запись"
+                className={deedCardStyles.cardActionButton}
+                title={
+                  quickAddActive
+                    ? 'Нажать — запись с дефолтами. Удерживать — форма с датой и временем'
+                    : 'Нажать — форма записи. Удерживать — та же форма после короткой паузы'
+                }
                 aria-label="Добавить запись"
+                onPointerDown={handlePlusPointerDown}
+                onPointerUp={handlePlusPointerEnd}
+                onPointerCancel={handlePlusPointerEnd}
+                onPointerLeave={handlePlusPointerEnd}
+                onClick={handlePlusClick}
               >
-                <Link
-                  to={`/deeds/${deed.id}/fill`}
-                  className={deedCardStyles.cardActionButton}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <PlusIcon />
-                </Link>
+                <PlusIcon />
               </IconButton>
             )}
           </Flex>

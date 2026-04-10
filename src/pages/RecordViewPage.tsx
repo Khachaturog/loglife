@@ -405,37 +405,16 @@ export function RecordViewPage() {
         title={editing ? 'Редактирование' : 'Запись'}
         actions={
           editing ? (
-            <Flex gap="2" align="center">
-              <IconButton
-                variant="classic"
-                radius="full"
-                size="3"
-                disabled={saving}
-                onClick={handleSave}
-                aria-label={saving ? 'Сохранение…' : 'Сохранить'}
-              >
-                <CheckIcon />
-              </IconButton>
-              <DropdownMenu.Root>
-                <DropdownMenu.Trigger>
-                  <IconButton
-                    type="button"
-                    variant="classic"
-                    color="gray"
-                    radius="full"
-                    size="3"
-                    aria-label="Действия с записью"
-                  >
-                    <DotsHorizontalIcon />
-                  </IconButton>
-                </DropdownMenu.Trigger>
-                <DropdownMenu.Content variant="solid" size="2" align="end" sideOffset={8}>
-                  <DropdownMenu.Item onSelect={() => openFlow('help_record')}>
-                    Справка
-                  </DropdownMenu.Item>
-                </DropdownMenu.Content>
-              </DropdownMenu.Root>
-            </Flex>
+            <IconButton
+              variant="classic"
+              radius="full"
+              size="3"
+              disabled={saving}
+              onClick={handleSave}
+              aria-label={saving ? 'Сохранение…' : 'Сохранить'}
+            >
+              <CheckIcon />
+            </IconButton>
           ) : (
             <Flex align="center" gap="2" wrap="wrap" justify="end">
               {/* Дублировать: новая запись с теми же ответами по блокам; дата/время — на форме «сейчас» */}
@@ -539,18 +518,18 @@ export function RecordViewPage() {
         <Flex direction="column" gap="4">
 
           <Flex direction="column" gap="1">
-            <Text size="2" weight="medium" as="label" htmlFor="deed">Дело</Text>
+            <Text size="3" weight="medium" as="label" htmlFor="deed">Дело</Text>
             <Text size="3">{deed?.name}</Text>
           </Flex>
 
           <Flex gap="3" wrap="wrap">
             <Flex direction="column" gap="1">
-              <Text size="2" weight="medium" as="label" htmlFor="date">Дата</Text>
+              <Text size="3" weight="medium" as="label" htmlFor="date">Дата</Text>
               <DatePicker value={recordDate} onChange={setRecordDate} />
             </Flex>
 
             <Flex direction="column" gap="1">
-              <Text size="2" weight="medium" as="label" htmlFor="time">Время</Text>
+              <Text size="3" weight="medium" as="label" htmlFor="time">Время</Text>
               <TextField.Root
                 size="3"
                 type="time"

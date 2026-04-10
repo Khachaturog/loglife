@@ -6,8 +6,9 @@ import { api } from '@/lib/api'
 import { formatAnswerPreviewSegment, formatYesNoOnlyRecordListPreview } from '@/lib/format-utils'
 import { triggerHaptic } from '@/lib/haptics'
 import { persistHistoryListScrollY } from '@/lib/history-scroll-storage'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import styles from './RecordCard.module.css'
+import { BackpackIcon, CopyIcon, Pencil1Icon, PlusIcon, TrashIcon } from '@radix-ui/react-icons'
 
 type RecordAnswer = { block_id: string; value_json: unknown }
 
@@ -32,7 +33,7 @@ type RecordCardProps = {
 
 /**
  * Карточка записи в списке.
- * Вся карточка = ссылка: короткий тап / ЛКМ — просмотр записи; long tap / ПКМ — меню (дублировать, редактировать, удалить).
+ * Вся карточка = ссылка: короткий тап / ЛКМ — просмотр записи; long tap / ПКМ — меню (к делу, новая запись, дублировать, редактировать, удалить).
  */
 export function RecordCard({
   record,
@@ -45,6 +46,7 @@ export function RecordCard({
   onRecordDeleted,
 }: RecordCardProps) {
   const navigate = useNavigate()
+  const deleteConfirmButtonRef = useRef<HTMLButtonElement>(null)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
@@ -79,6 +81,17 @@ export function RecordCard({
           persistHistoryListScrollY()
         }
       : undefined
+
+  /** Страница дела; с истории — сохраняем скролл списка, как при тапе по карточке. */
+  function handleGoToDeed() {
+    if (linkState?.from === 'history') persistHistoryListScrollY()
+    navigate(`/deeds/${record.deed_id}`)
+  }
+
+  /** Пустая форма новой записи по тому же делу (как кнопка на странице записи). */
+  function handleNewRecord() {
+    navigate(`/deeds/${record.deed_id}/fill`)
+  }
 
   function handleDuplicate() {
     navigate(`/deeds/${record.deed_id}/fill`, {
@@ -127,7 +140,7 @@ export function RecordCard({
                 className={styles.recordLink}
                 onPointerDownCapture={historyScrollCapture}
               >
-                <Flex align="start" gap="2" width="100%">
+                <Flex align="baseline" gap="2" width="100%">
                   {!hideAvatar ? <Text size="2">{emoji}</Text> : null}
                   <Flex direction="column" gap="1" flexGrow="1" minWidth="0">
                     {title ? (
@@ -151,16 +164,36 @@ export function RecordCard({
         <ContextMenu.Content size="2" variant="solid">
           <ContextMenu.Item
             onSelect={() => {
+              handleGoToDeed()
+            }}
+          >
+            <BackpackIcon />
+            Перейти к делу
+          </ContextMenu.Item>
+          <ContextMenu.Separator />
+          <ContextMenu.Item
+            onSelect={() => {
+              handleNewRecord()
+            }}
+          >
+            <PlusIcon />
+            Новая запись
+          </ContextMenu.Item>
+          <ContextMenu.Item
+            onSelect={() => {
               handleDuplicate()
             }}
           >
+            <CopyIcon />
             Дублировать
           </ContextMenu.Item>
+          <ContextMenu.Separator />
           <ContextMenu.Item
             onSelect={() => {
               handleEdit()
             }}
           >
+            <Pencil1Icon />
             Редактировать
           </ContextMenu.Item>
           <ContextMenu.Separator />
@@ -171,13 +204,21 @@ export function RecordCard({
               setDeleteOpen(true)
             }}
           >
+            <TrashIcon />
             Удалить
           </ContextMenu.Item>
         </ContextMenu.Content>
       </ContextMenu.Root>
 
       <AlertDialog.Root open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <AlertDialog.Content maxWidth="450px">
+        <AlertDialog.Content
+          maxWidth="450px"
+          onOpenAutoFocus={(e) => {
+            e.preventDefault()
+            // Radix по умолчанию фокусирует «Отмену»; переносим на «Удалить», чтобы Enter подтверждал.
+            deleteConfirmButtonRef.current?.focus({ preventScroll: true })
+          }}
+        >
           <AlertDialog.Title>Удалить запись?</AlertDialog.Title>
           <AlertDialog.Description size="2">Запись будет удалена без возможности восстановления</AlertDialog.Description>
           {deleteError ? (
@@ -192,6 +233,7 @@ export function RecordCard({
               </Button>
             </AlertDialog.Cancel>
             <Button
+              ref={deleteConfirmButtonRef}
               type="button"
               size="3"
               color="red"

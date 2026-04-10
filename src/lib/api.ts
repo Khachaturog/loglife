@@ -204,6 +204,7 @@ export const api = {
       category?: string | null
       card_color?: string | null
       analytics_config?: DeedAnalyticsConfigV1 | null
+      quick_add_defaults_enabled?: boolean
       blocks?: Partial<BlockRow>[]
     }): Promise<DeedRow> {
       const uid = await getUserIdOrThrow()
@@ -217,6 +218,9 @@ export const api = {
           category: payload.category ?? null,
           card_color: payload.card_color ?? null,
           ...(payload.analytics_config !== undefined && { analytics_config: payload.analytics_config }),
+          ...(payload.quick_add_defaults_enabled !== undefined && {
+            quick_add_defaults_enabled: payload.quick_add_defaults_enabled,
+          }),
         })
         .select()
         .single()
@@ -262,6 +266,7 @@ export const api = {
       category?: string | null
       card_color?: string | null
       analytics_config?: DeedAnalyticsConfigV1 | null
+      quick_add_defaults_enabled?: boolean
       blocks?: Partial<BlockRow>[]
     }): Promise<void> {
       const uid = await getUserIdOrThrow()
@@ -275,6 +280,9 @@ export const api = {
           ...(payload.category !== undefined && { category: payload.category }),
           ...(payload.card_color !== undefined && { card_color: payload.card_color }),
           ...(payload.analytics_config !== undefined && { analytics_config: payload.analytics_config }),
+          ...(payload.quick_add_defaults_enabled !== undefined && {
+            quick_add_defaults_enabled: payload.quick_add_defaults_enabled,
+          }),
         })
         .eq('id', id)
         .eq('user_id', uid)

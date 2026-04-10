@@ -6,13 +6,6 @@ export type RecordWithAnswersLoose = RecordRow & {
   record_answers?: { block_id: string; value_json: unknown }[]
 }
 
-/** Ровно один активный блок и он «Да/Нет» — для быстрого добавления записи с экрана дела. */
-export function getSingleYesNoBlock(blocks: BlockRow[] | undefined): BlockRow | null {
-  const list = blocks ?? []
-  if (list.length !== 1 || list[0].block_type !== 'yes_no') return null
-  return list[0]
-}
-
 // --- Логика отображения "N сегодня · N всего" на карточке дела ---
 //
 // • Если есть блоки number / scale / duration:

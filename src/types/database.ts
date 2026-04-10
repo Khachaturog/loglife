@@ -108,6 +108,8 @@ export interface DeedRow {
   card_color: string | null
   /** Настройки отображения аналитики на карточке дела; null/отсутствует = дефолты в приложении. */
   analytics_config?: DeedAnalyticsConfigV1 | null
+  /** Короткое «+» создаёт запись с дефолтами блоков (если у всех блоков заданы валидные дефолты). */
+  quick_add_defaults_enabled?: boolean
   created_at: string
   updated_at: string
   blocks?: BlockRow[]
