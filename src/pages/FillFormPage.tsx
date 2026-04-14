@@ -9,7 +9,6 @@ import {
   CheckboxGroup,
   Flex,
   IconButton,
-  SegmentedControl,
   Text,
   TextField,
 } from '@radix-ui/themes'
@@ -29,11 +28,11 @@ import {
 } from '@/lib/fill-form-recent-suggestions'
 import { DatePicker } from '@/components/DatePicker'
 import { DurationInput } from '@/components/DurationInput'
+import { ScaleAnswerField } from '@/components/ScaleAnswerField'
 import { todayLocalISO, nowTimeLocal } from '@/lib/format-utils'
 import { blurActiveInputInForm, blurInputOnEnter } from '@/lib/ios-input-blur'
 import { triggerHaptic } from '@/lib/haptics'
 import type { BlockConfig, BlockRow, DeedWithBlocks, ValueJson } from '@/types/database'
-import scaleSegmentedStyles from '@/components/ScaleSegmentedControl.module.css'
 import layoutStyles from '@/styles/layout.module.css'
 
 function getBlockOptions(block: BlockRow): { id: string; label: string }[] {
@@ -563,28 +562,16 @@ export function FillFormPage() {
                 </CheckboxGroup.Root>
               )}
               {block.block_type === 'scale' && (
-                <SegmentedControl.Root
-                  className={scaleSegmentedStyles.root}
+                <ScaleAnswerField
                   key={`${block.id}-fill-scale-${answers[block.id] !== undefined ? 'set' : 'none'}`}
-                  value={
-                    (answers[block.id] as { scaleValue?: number } | undefined)?.scaleValue?.toString()
-                  }
-                  onValueChange={(v) => {
+                  config={block.config as BlockConfig | null}
+                  value={(answers[block.id] as { scaleValue?: number } | undefined)?.scaleValue}
+                  onScaleValueChange={(n) => {
                     triggerHaptic('medium', { intensity: 1 })
-                    setAnswer(block.id, { scaleValue: Number(v) })
+                    setAnswer(block.id, { scaleValue: n })
                   }}
-                  // Узкий экран — компактнее по ширине; высота — через ScaleSegmentedControl.module.css.
                   size={{ initial: '1', sm: '2' }}
-                >
-                  {Array.from(
-                    { length: Math.min(10, Math.max(1, (block.config as BlockConfig | null)?.divisions ?? 5)) },
-                    (_, i) => i + 1
-                  ).map((n) => (
-                    <SegmentedControl.Item key={n} value={String(n)}>
-                      {n}
-                    </SegmentedControl.Item>
-                  ))}
-                </SegmentedControl.Root>
+                />
               )}
               {block.block_type === 'duration' && (
                 <DurationInput

@@ -123,8 +123,12 @@ const inFlightRecordsByDeedIds = new Map<string, Promise<Record<string, (RecordR
 
 async function getUserId(): Promise<string | null> {
   if (cachedUserId) return cachedUserId
-  const { data: { session } } = await supabase.auth.getSession()
-  return session?.user?.id ?? null
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+  const id = session?.user?.id ?? null
+  if (id) cachedUserId = id
+  return id
 }
 
 async function getUserIdOrThrow(): Promise<string> {

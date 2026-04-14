@@ -1,4 +1,5 @@
 import type { BlockConfig, BlockRow, DeedWithBlocks, RecordAnswerRow, ValueJson } from '@/types/database'
+import { formatScaleAnswerForDisplay } from '@/lib/scale-block'
 import { api } from '@/lib/api'
 
 const MAX_BLOCK_COLUMNS = 15
@@ -36,6 +37,9 @@ function formatAnswerForCsv(value: ValueJson, block: BlockRow): string {
   if ('optionIds' in value && Array.isArray(value.optionIds)) {
     const opts = getBlockOptions(block)
     return value.optionIds.map((id) => opts.find((x) => x.id === id)?.label ?? id).join('; ')
+  }
+  if ('scaleValue' in value && typeof value.scaleValue === 'number') {
+    return formatScaleAnswerForDisplay(block.config as BlockConfig | null, value.scaleValue)
   }
   return formatValueForCsv(value)
 }

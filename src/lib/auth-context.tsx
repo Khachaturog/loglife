@@ -46,12 +46,16 @@ function getInitialUser(): User | null {
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  // Синхронный кеш из localStorage — только для начального состояния; истёкший access-токен
-  // здесь обнуляется, но refresh по-прежнему сработает в getSession() ниже.
-  const [user, setUser] = useState<User | null>(getInitialUser)
-  // Пока не завершилась первая getSession(), App не решает «редирект на логин» — иначе при
-  // просроченном access-токене и валидном refresh показывался бы лишний экран входа.
-  const [loading, setLoading] = useState(true)
+  // Синхронно: user из localStorage + setApiUserId — чтобы первый запрос api (главная) не вызывал
+  // лишний getSession() до завершения hydrateSession.
+  const [user, setUser] = useState<User | null>(() => {
+    const u = getInitialUser()
+    setApiUserId(u?.id ?? null)
+    return u
+  })
+  // Полноэкранная заглушка только если пользователя в storage ещё не было: иначе shell (TabBar и т.д.)
+  // показываем сразу, а getSession() в фоне подтвердит/обновит сессию (в т.ч. refresh токена).
+  const [loading, setLoading] = useState(() => getInitialUser() === null)
 
   useEffect(() => {
     let cancelled = false

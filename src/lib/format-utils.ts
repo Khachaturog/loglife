@@ -1,3 +1,4 @@
+import { formatScaleAnswerForDisplay } from '@/lib/scale-block'
 import type { BlockConfig, BlockRow, ValueJson } from '@/types/database'
 
 /** Текущая дата в локальном часовом поясе в формате YYYY-MM-DD (для input type="date" и отображения). */
@@ -43,7 +44,9 @@ export function formatAnswer(
     const opts = optionsOverride ?? getBlockOptions(block)
     return value.optionIds.map((id) => opts.find((x) => x.id === id)?.label ?? id).join(', ') || '—'
   }
-  if ('scaleValue' in value) return String(value.scaleValue)
+  if ('scaleValue' in value) {
+    return formatScaleAnswerForDisplay(block.config as BlockConfig | null, value.scaleValue)
+  }
   if ('yesNo' in value) return value.yesNo ? 'Выполнено' : 'Не выполнено'
   if ('durationHms' in value) return (value as { durationHms: string }).durationHms || '—'
   return '—'
@@ -115,13 +118,20 @@ export function formatRecordDateTimeDisplay(isoDate: string, recordTime?: string
 }
 
 /** Краткий превью ответа для списков (число, текст до 20–25 символов, галочки и т.д.) */
-export function previewAnswer(value: ValueJson | null | undefined, maxTextLen = 20): string {
+export function previewAnswer(
+  value: ValueJson | null | undefined,
+  maxTextLen = 20,
+  block?: BlockRow,
+): string {
   if (!value) return '—'
   if ('number' in value && value.number !== undefined) return String(value.number)
   if ('text' in value && value.text) return value.text.length > maxTextLen ? value.text.slice(0, maxTextLen) + '…' : value.text
   if ('optionId' in value) return '✅'
   if ('optionIds' in value && Array.isArray(value.optionIds)) return value.optionIds.length ? `✓ ${value.optionIds.length}` : '—'
-  if ('scaleValue' in value) return String(value.scaleValue)
+  if ('scaleValue' in value) {
+    if (block) return formatScaleAnswerForDisplay(block.config as BlockConfig | null, value.scaleValue)
+    return String(value.scaleValue)
+  }
   if ('yesNo' in value) return value.yesNo ? 'Выполнено' : 'Не выполнено'
   if ('durationHms' in value) return (value as { durationHms: string }).durationHms || '—'
   return '—'
@@ -170,7 +180,7 @@ export function formatAnswerPreviewSegment(
   value: ValueJson,
   block: BlockRow | undefined
 ): string {
-  if (!block) return previewAnswer(value)
+  if (!block) return previewAnswer(value, 20, undefined)
   if ('text' in value && (value.text ?? '').trim() === '') return ''
   return formatAnswer(value, block)
 }

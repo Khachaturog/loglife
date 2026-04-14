@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Box, Card, Flex, IconButton, Text } from '@radix-ui/themes'
+import { Box, Card, Flex, IconButton, Skeleton, Text } from '@radix-ui/themes'
 import { CheckIcon, PlusIcon, UpdateIcon } from '@radix-ui/react-icons'
 import type { DeedWithBlocks } from '@/types/database'
 import type { RecordRow, RecordAnswerRow } from '@/types/database'
@@ -9,11 +9,14 @@ import { deedQuickAddFromDefaultsActive, getQuickAddRecordAnswers, QUICK_ADD_FRO
 import { api } from '@/lib/api'
 import { nowTimeLocal, todayLocalISO } from '@/lib/format-utils'
 import { triggerHaptic } from '@/lib/haptics'
+import { useDelayedActionLoader } from '@/lib/use-delayed-action-loader'
 import deedCardStyles from '@/components/DeedCard.module.css'
 
 type DeedCardProps = {
   deed: DeedWithBlocks
   records: (RecordRow & { record_answers?: RecordAnswerRow[] })[]
+  /** Второй запрос на главной ещё не вернул записи — не показываем ложные нули в счётчиках. */
+  countersLoading?: boolean
   /** После успешного быстрого «+» — обновить счётчики на карточке. */
   onRecordsRefresh?: (deedId: string) => void | Promise<void>
 }
@@ -23,13 +26,15 @@ type DeedCardProps = {
  * Клик по карточке — просмотр дела (полноразмерная ссылка под контентом).
  * Кнопка «+» — добавление записи (pointer-events только на кнопке).
  */
-export function DeedCard({ deed, records, onRecordsRefresh }: DeedCardProps) {
+export function DeedCard({ deed, records, countersLoading = false, onRecordsRefresh }: DeedCardProps) {
   const navigate = useNavigate()
   const { today, total } = getDeedDisplayNumbers(deed.blocks ?? [], records)
+  const { spinnerVisible, run: runQuickAddWithDelayedSpinner } = useDelayedActionLoader()
 
   const quickAddActive = useMemo(() => deedQuickAddFromDefaultsActive(deed), [deed])
 
-  const [addingRecord, setAddingRecord] = useState(false)
+  /** Быстрый «+»: лоадер с задержкой и минимальной длительностью — см. useDelayedActionLoader. */
+  const [actionPending, setActionPending] = useState(false)
   const [quickAddSuccess, setQuickAddSuccess] = useState(false)
   const [quickAddError, setQuickAddError] = useState<string | null>(null)
   const successHideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -55,16 +60,18 @@ export function DeedCard({ deed, records, onRecordsRefresh }: DeedCardProps) {
     e.preventDefault()
     e.stopPropagation()
     const answers = getQuickAddRecordAnswers(deed)
-    if (!answers || addingRecord || quickAddSuccess) return
-    setAddingRecord(true)
+    if (!answers || actionPending || quickAddSuccess) return
+    setActionPending(true)
     setQuickAddError(null)
     try {
-      await api.deeds.createRecord(deed.id, {
-        record_date: todayLocalISO(),
-        record_time: nowTimeLocal(),
-        answers,
+      await runQuickAddWithDelayedSpinner(async () => {
+        await api.deeds.createRecord(deed.id, {
+          record_date: todayLocalISO(),
+          record_time: nowTimeLocal(),
+          answers,
+        })
+        await onRecordsRefresh?.(deed.id)
       })
-      await onRecordsRefresh?.(deed.id)
       triggerHaptic('success', { intensity: 1 })
       if (successHideTimeoutRef.current) clearTimeout(successHideTimeoutRef.current)
       setQuickAddSuccess(true)
@@ -75,14 +82,14 @@ export function DeedCard({ deed, records, onRecordsRefresh }: DeedCardProps) {
     } catch (err) {
       setQuickAddError(err instanceof Error ? err.message : 'Не удалось добавить запись')
     } finally {
-      setAddingRecord(false)
+      setActionPending(false)
     }
   }
 
   /** Удержание — через фиксированную паузу открываем форму (без ожидания отпускания), короткий тап — см. handlePlusClick. */
   function handlePlusPointerDown(e: React.PointerEvent<HTMLButtonElement>) {
     if (e.pointerType === 'mouse' && e.button !== 0) return
-    if (quickAddActive && (addingRecord || quickAddSuccess)) return
+    if (quickAddActive && (actionPending || quickAddSuccess)) return
     longPressConsumedClickRef.current = false
     clearLongPressTimer()
     longPressTimerRef.current = setTimeout(() => {
@@ -111,7 +118,9 @@ export function DeedCard({ deed, records, onRecordsRefresh }: DeedCardProps) {
     }
   }
 
-  const deedOpenLabel = `Открыть дело «${deed.name}»${deed.category ? `. ${deed.category}` : ''}. ${today} сегодня, ${total} всего`
+  const deedOpenLabel = countersLoading
+    ? `Открыть дело «${deed.name}»${deed.category ? `. ${deed.category}` : ''}. Статистика загружается`
+    : `Открыть дело «${deed.name}»${deed.category ? `. ${deed.category}` : ''}. ${today} сегодня, ${total} всего`
 
   return (
     <Card className={`${deedCardStyles.cardNoPadding} ${deedCardStyles.cardInteractive}`}>
@@ -131,7 +140,20 @@ export function DeedCard({ deed, records, onRecordsRefresh }: DeedCardProps) {
                   <Text weight="medium">{deed.name}</Text>
                 </Flex>
                 <Text as="p" size="2" color="gray">
-                  {today} сегодня · {total} всего
+                  {countersLoading ? (
+                    <>
+                      <Skeleton loading width="1rem" height="1em" style={{ display: 'inline-block', verticalAlign: 'text-bottom' }}>
+                        <Text as="span" size="2">{today}</Text>
+                      </Skeleton>
+                      {' '}сегодня ·{' '}
+                      <Skeleton loading width="1rem" height="1em" style={{ display: 'inline-block', verticalAlign: 'text-bottom' }}>
+                        <Text as="span" size="2">{total}</Text>
+                      </Skeleton>
+                      {' '}всего
+                    </>
+                  ) : (
+                    `${today} сегодня · ${total} всего`
+                  )}
                 </Text>
               </Flex>
             </Flex>
@@ -153,7 +175,7 @@ export function DeedCard({ deed, records, onRecordsRefresh }: DeedCardProps) {
               >
                 <CheckIcon />
               </IconButton>
-            ) : quickAddActive && addingRecord ? (
+            ) : quickAddActive && actionPending && spinnerVisible ? (
               <IconButton
                 type="button"
                 size="3"
@@ -165,6 +187,19 @@ export function DeedCard({ deed, records, onRecordsRefresh }: DeedCardProps) {
                 disabled
               >
                 <UpdateIcon className={deedCardStyles.iconSpin} />
+              </IconButton>
+            ) : quickAddActive && actionPending ? (
+              <IconButton
+                type="button"
+                size="3"
+                variant="classic"
+                radius="full"
+                className={deedCardStyles.cardActionButton}
+                title="Добавление записи…"
+                aria-label="Добавление записи"
+                disabled
+              >
+                <PlusIcon />
               </IconButton>
             ) : (
               <IconButton

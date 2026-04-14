@@ -8,6 +8,7 @@ import { flushSync } from "react-dom";
 import { useNavigate, useParams } from "react-router-dom";
 import * as Collapsible from "@radix-ui/react-collapsible";
 import {
+  AlertDialog,
   Box,
   Button,
   Card,
@@ -598,6 +599,8 @@ export function DeedFormPage() {
   );
   /** Быстрое «+» на карточке и экране дела — только при полных дефолтах и явном включении. */
   const [quickAddDefaultsEnabled, setQuickAddDefaultsEnabled] = useState(false);
+  /** Предложение включить быстрое добавление при сохранении (полные дефолты, тогл выкл). */
+  const [quickAddOptInOpen, setQuickAddOptInOpen] = useState(false);
   const { openFlow } = useOnboarding();
   const formRef = useRef<HTMLFormElement>(null);
   /** Ошибки после попытки сохранить — подсветка полей и тексты (кнопка сохранения не блокируется) */
@@ -790,6 +793,90 @@ export function DeedFormPage() {
     setBlocks((prev) => [...prev, createDefaultBlock()]);
   }
 
+  /**
+   * Сохранение после успешной валидации.
+   * `quickAddPayload` — итоговое значение `quick_add_defaults_enabled` для API.
+   */
+  async function persistDeed(quickAddPayload: boolean) {
+    setSaving(true);
+    try {
+      const payloadBlocks = blocks.map((b, index) => {
+        const rawConfig = b.config ?? null;
+        let config =
+          b.block_type === "single_select" || b.block_type === "multi_select"
+            ? normalizeSelectOptionsForPayload(rawConfig)
+            : rawConfig;
+        if (b.block_type === "single_select" && config) {
+          config = {
+            ...config,
+            singleSelectUi: getSingleSelectUi(config),
+          };
+        }
+        const normalizedDefault =
+          b.default_value === null
+            ? null
+            : normalizeDefaultValueForBlock(
+                { block_type: b.block_type, config },
+                b.default_value,
+              );
+        return {
+          id: b.id,
+          sort_order: index,
+          title: b.title.trim(),
+          block_type: b.block_type,
+          is_required: b.is_required,
+          recent_suggestions_enabled: b.recent_suggestions_enabled,
+          default_value_enabled: b.default_value_enabled,
+          default_value: normalizedDefault,
+          config,
+        };
+      });
+
+      const analyticsPayload: DeedAnalyticsConfigV1 = analyticsConfig;
+
+      if (isNew) {
+        const deed = await api.deeds.create({
+          emoji: emoji || "📋",
+          name: name.trim(),
+          description: description.trim() || undefined,
+          category: category.trim() || null,
+          card_color: cardColor.trim() || null,
+          analytics_config: analyticsPayload,
+          quick_add_defaults_enabled: quickAddPayload,
+          blocks: payloadBlocks,
+        });
+        navigate(`/deeds/${deed.id}`);
+      } else if (id) {
+        await api.deeds.update(id, {
+          emoji: emoji || "📋",
+          name: name.trim(),
+          description: description.trim() || undefined,
+          category: category.trim() || null,
+          card_color: cardColor.trim() || null,
+          analytics_config: analyticsPayload,
+          quick_add_defaults_enabled: quickAddPayload,
+          blocks: payloadBlocks,
+        });
+        navigate(`/deeds/${id}`);
+      }
+    } catch (err: unknown) {
+      console.error(
+        err instanceof Error ? err.message : "Ошибка сохранения дела",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  /** Ответ в модалке «включить быстрое добавление?»: затем сохранение с выбранным флагом. */
+  async function handleQuickAddOptInChoice(enableQuickAdd: boolean) {
+    setQuickAddOptInOpen(false);
+    if (enableQuickAdd) {
+      setQuickAddDefaultsEnabled(true);
+    }
+    await persistDeed(enableQuickAdd);
+  }
+
   /** Отправка формы: создание или обновление дела через API */
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault(); // без этого страница перезагрузится
@@ -850,78 +937,14 @@ export function DeedFormPage() {
     }
 
     clearAllSubmitValidation();
-    setSaving(true);
-    try {
-      // Преобразуем UI-блоки в формат API (добавляем sort_order)
-      const payloadBlocks = blocks.map((b, index) => {
-        const rawConfig = b.config ?? null;
-        let config =
-          b.block_type === "single_select" || b.block_type === "multi_select"
-            ? normalizeSelectOptionsForPayload(rawConfig)
-            : rawConfig;
-        // В jsonb всегда явный singleSelectUi для «один из списка» (как после миграции).
-        if (b.block_type === "single_select" && config) {
-          config = {
-            ...config,
-            singleSelectUi: getSingleSelectUi(config),
-          };
-        }
-        const normalizedDefault =
-          b.default_value === null
-            ? null
-            : normalizeDefaultValueForBlock(
-                { block_type: b.block_type, config },
-                b.default_value,
-              );
-        return {
-          id: b.id,
-          sort_order: index,
-          title: b.title.trim(),
-          block_type: b.block_type,
-          is_required: b.is_required,
-          recent_suggestions_enabled: b.recent_suggestions_enabled,
-          default_value_enabled: b.default_value_enabled,
-          default_value: normalizedDefault,
-          config,
-        };
-      });
 
-      const analyticsPayload: DeedAnalyticsConfigV1 = analyticsConfig;
-      const quickAddPayload =
-        quickAddDefaultsEnabled && areDefaultValuesCompleteForBlocks(blocks);
-
-      if (isNew) {
-        const deed = await api.deeds.create({
-          emoji: emoji || "📋",
-          name: name.trim(),
-          description: description.trim() || undefined,
-          category: category.trim() || null,
-          card_color: cardColor.trim() || null,
-          analytics_config: analyticsPayload,
-          quick_add_defaults_enabled: quickAddPayload,
-          blocks: payloadBlocks,
-        });
-        navigate(`/deeds/${deed.id}`);
-      } else if (id) {
-        await api.deeds.update(id, {
-          emoji: emoji || "📋",
-          name: name.trim(),
-          description: description.trim() || undefined,
-          category: category.trim() || null,
-          card_color: cardColor.trim() || null,
-          analytics_config: analyticsPayload,
-          quick_add_defaults_enabled: quickAddPayload,
-          blocks: payloadBlocks,
-        });
-        navigate(`/deeds/${id}`);
-      }
-    } catch (err: unknown) {
-      console.error(
-        err instanceof Error ? err.message : "Ошибка сохранения дела",
-      );
-    } finally {
-      setSaving(false);
+    const defsComplete = areDefaultValuesCompleteForBlocks(blocks);
+    if (defsComplete && !quickAddDefaultsEnabled) {
+      setQuickAddOptInOpen(true);
+      return;
     }
+
+    await persistDeed(quickAddDefaultsEnabled && defsComplete);
   }
 
   if (loading) {
@@ -2108,6 +2131,52 @@ export function DeedFormPage() {
           </Tabs.Content>
         </Tabs.Root>
       </form>
+
+      <AlertDialog.Root open={quickAddOptInOpen} onOpenChange={setQuickAddOptInOpen}>
+        <AlertDialog.Content maxWidth="450px">
+          <AlertDialog.Title>Включить быстрое добавление?</AlertDialog.Title>
+          <AlertDialog.Description size="2">
+            У всех блоков заданы значения по умолчанию. 
+            <br />Можно включить добавление записи через короткое нажатие «+» (удерживайте «+», чтобы открыть форму). Или сохранить дело
+            без этой опции.
+          </AlertDialog.Description>
+          <Flex gap="3" justify="end" mt="4">
+            <AlertDialog.Cancel>
+              <Button
+                type="button"
+                size="3"
+                color="gray"
+                variant="soft"
+                disabled={saving}
+                aria-label="Отменить сохранение"
+              >
+                Отмена
+              </Button>
+            </AlertDialog.Cancel>
+            <Button
+              type="button"
+              size="3"
+              color="gray"
+              variant="solid"
+              disabled={saving}
+              aria-label="Сохранить дело без быстрого добавления"
+              onClick={() => void handleQuickAddOptInChoice(false)}
+            >
+              Нет, позже
+            </Button>
+            <Button
+              type="button"
+              size="3"
+              variant="classic"
+              disabled={saving}
+              aria-label="Включить быстрое добавление и сохранить дело"
+              onClick={() => void handleQuickAddOptInChoice(true)}
+            >
+              {saving ? "Сохранение…" : "Да, включить"}
+            </Button>
+          </Flex>
+        </AlertDialog.Content>
+      </AlertDialog.Root>
     </Box>
   );
 }

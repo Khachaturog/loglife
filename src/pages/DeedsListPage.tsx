@@ -17,15 +17,16 @@ import { useOnboarding } from '@/lib/onboarding-context'
  * Показывает дела с фильтром по категории, статистику (сегодня/всего) и кнопку добавления записи.
  *
  * Прогрессивная загрузка: список дел появляется сразу после первого запроса,
- * счётчики записей (сегодня/всего) доподгружаются вторым запросом незаметно.
+ * счётчики записей (сегодня/всего) доподгружаются вторым запросом (плейсхолдер, без ложных нулей).
  */
 export function DeedsListPage() {
   const { openFlow } = useOnboarding()
   // --- Состояние ---
   const [deeds, setDeeds] = useState<DeedWithBlocks[]>([])
   const [recordsByDeedId, setRecordsByDeedId] = useState<Record<string, (RecordRow & { record_answers?: RecordAnswerRow[] })[]>>({})
-  // Два флага загрузки: deedsLoading блокирует рендер, recordsLoading — нет
+  // deedsLoading — полный экран; recordsLoading — только счётчики на карточках (второй запрос)
   const [deedsLoading, setDeedsLoading] = useState(true)
+  const [recordsLoading, setRecordsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
 
@@ -39,18 +40,24 @@ export function DeedsListPage() {
         // Показываем список дел немедленно, не ждём второго запроса
         setDeeds(data)
         setDeedsLoading(false)
-        // DeedCard умеет работать с пустым records[] — покажет «0 сегодня, 0 всего»
+        if (data.length === 0) {
+          setRecordsLoading(false)
+        } else {
+          setRecordsLoading(true)
+        }
         return api.deeds.recordsByDeedIds(data.map((d) => d.id), { skipDeedCheck: true })
       })
       .then((byId) => {
         // Записи приходят позже — счётчики обновятся без перерисовки всего списка
         if (cancelled || !byId) return
         setRecordsByDeedId(byId)
+        setRecordsLoading(false)
       })
       .catch((e) => {
         if (!cancelled) {
           setError(e?.message ?? 'Ошибка загрузки')
           setDeedsLoading(false)
+          setRecordsLoading(false)
         }
       })
     return () => { cancelled = true }
@@ -217,6 +224,7 @@ export function DeedsListPage() {
               key={deed.id}
               deed={deed}
               records={recordsByDeedId[deed.id] ?? []}
+              countersLoading={recordsLoading}
               onRecordsRefresh={refreshRecordsForDeed}
             />
           ))}

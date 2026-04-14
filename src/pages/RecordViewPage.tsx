@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { Link, useParams, useNavigate, useLocation } from 'react-router-dom'
-import { AlertDialog, Box, Button, Checkbox, CheckboxGroup, DropdownMenu, Flex, IconButton, SegmentedControl, Separator, Text, TextField, Badge } from '@radix-ui/themes'
+import { AlertDialog, Box, Button, Checkbox, CheckboxGroup, DropdownMenu, Flex, IconButton, Separator, Text, TextField, Badge } from '@radix-ui/themes'
 import { AUTO_GROW_TEXTAREA_MIN_ONE_LINE_PX, AutoGrowTextArea } from '@/components/AutoGrowTextArea'
 import { AppBar } from '@/components/AppBar'
 import { useOnboarding } from '@/lib/onboarding-context'
@@ -15,9 +15,9 @@ import { answersFromRecord } from '@/lib/answers-from-record'
 import type { BlockConfig, BlockRow, DeedWithBlocks, RecordAnswerRow, RecordWithAnswers, ValueJson } from '@/types/database'
 import { DatePicker } from '@/components/DatePicker'
 import { DurationInput } from '@/components/DurationInput'
+import { ScaleAnswerField } from '@/components/ScaleAnswerField'
 import { formatAnswer, formatRecordDateTimeDisplay } from '@/lib/format-utils'
 import { blurInputOnEnter } from '@/lib/ios-input-blur'
-import scaleSegmentedStyles from '@/components/ScaleSegmentedControl.module.css'
 import layoutStyles from '@/styles/layout.module.css'
 
 function getBlockOptions(block: BlockRow): { id: string; label: string }[] {
@@ -647,24 +647,13 @@ export function RecordViewPage() {
                 </CheckboxGroup.Root>
               )}
               {block.block_type === 'scale' && (
-                <SegmentedControl.Root
-                  className={scaleSegmentedStyles.root}
+                <ScaleAnswerField
                   key={`${block.id}-edit-scale-${isEditBlockDirty(block.id) ? 'd' : 's'}`}
-                  value={
-                    (answers[block.id] as { scaleValue?: number } | undefined)?.scaleValue?.toString()
-                  }
-                  onValueChange={(v) => setAnswer(block.id, { scaleValue: Number(v) })}
+                  config={block.config as BlockConfig | null}
+                  value={(answers[block.id] as { scaleValue?: number } | undefined)?.scaleValue}
+                  onScaleValueChange={(n) => setAnswer(block.id, { scaleValue: n })}
                   size={{ initial: '1', sm: '3' }}
-                >
-                  {Array.from(
-                    { length: Math.min(10, Math.max(1, (block.config as BlockConfig | null)?.divisions ?? 5)) },
-                    (_, i) => i + 1
-                  ).map((n) => (
-                    <SegmentedControl.Item key={n} value={String(n)}>
-                      {n}
-                    </SegmentedControl.Item>
-                  ))}
-                </SegmentedControl.Root>
+                />
               )}
               {block.block_type === 'duration' && (
                 <DurationInput
@@ -731,7 +720,6 @@ export function RecordViewPage() {
             }
 
             const currentOptions = getBlockOptions(block)
-            const divisions = Math.min(10, Math.max(1, (block.config as BlockConfig | null)?.divisions ?? 5))
             const oldVal = value as ValueJson | undefined
             const draft = updateDraft[block.id] ?? (unfilled ? undefined : getMigratedValue(block, oldVal))
 
@@ -868,23 +856,17 @@ export function RecordViewPage() {
                     </CheckboxGroup.Root>
                   )}
                   {block.block_type === 'scale' && (
-                    <SegmentedControl.Root
-                      className={scaleSegmentedStyles.root}
+                    <ScaleAnswerField
                       // После «Сбросить» value приходит из миграции, но Radix может
                       // оставить визуально старый сегмент — key синхронизирует с черновиком/сбросом.
                       key={`${block.id}-scale-${updateDraft[block.id] != null ? 'draft' : 'migrated'}`}
-                      value={
-                        (draft as { scaleValue?: number } | undefined)?.scaleValue?.toString()
+                      config={block.config as BlockConfig | null}
+                      value={(draft as { scaleValue?: number } | undefined)?.scaleValue}
+                      onScaleValueChange={(n) =>
+                        setUpdateDraftValue(block.id, { scaleValue: n })
                       }
-                      onValueChange={(v) => setUpdateDraftValue(block.id, { scaleValue: Number(v) })}
                       size={{ initial: '1', sm: '3' }}
-                    >
-                      {Array.from({ length: divisions }, (_, i) => i + 1).map((n) => (
-                        <SegmentedControl.Item key={n} value={String(n)}>
-                          {n}
-                        </SegmentedControl.Item>
-                      ))}
-                    </SegmentedControl.Root>
+                    />
                   )}
                   {block.block_type === 'duration' && (
                     <DurationInput
