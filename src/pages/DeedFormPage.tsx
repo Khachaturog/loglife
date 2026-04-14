@@ -2172,7 +2172,7 @@ export function DeedFormPage() {
               aria-label="Включить быстрое добавление и сохранить дело"
               onClick={() => void handleQuickAddOptInChoice(true)}
             >
-              {saving ? "Сохранение…" : "Да, включить"}
+              {saving ? "Включаем…" : "Да, включить"}
             </Button>
           </Flex>
         </AlertDialog.Content>
