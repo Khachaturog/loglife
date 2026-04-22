@@ -10,6 +10,7 @@ import type {
   ValueJson,
 } from '@/types/database'
 import type { DeedAnalyticsConfigV1 } from '@/types/deed-analytics-config'
+import { omitOptionalEmptyTextFromRecordAnswers } from '@/lib/block-default-value'
 
 function getBlockOptions(block: BlockRow): { id: string; label: string; sort_order: number }[] {
   const fromConfig = (block.config as BlockConfig | null)?.options
@@ -543,8 +544,12 @@ export const api = {
           .eq('user_id', uid)
           .single()
         const blocks = deedWithBlocks?.blocks ?? []
+        const answersForInsert = omitOptionalEmptyTextFromRecordAnswers(blocks, payload.answers)
+        if (Object.keys(answersForInsert).length === 0) {
+          return record
+        }
         const inserts: { record_id: string; block_id: string; value_json: ValueJson; config_version_id: string | null }[] = []
-        for (const [block_id, value_json] of Object.entries(payload.answers)) {
+        for (const [block_id, value_json] of Object.entries(answersForInsert)) {
           const block = blocks.find((b: BlockRow) => b.id === block_id)
           const config_version_id = block ? await findOrCreateConfigVersion(block) : null
           inserts.push({
@@ -608,7 +613,22 @@ export const api = {
           .eq('user_id', uid)
           .single()
         const blocks = deedWithBlocks?.blocks ?? []
-        for (const [block_id, value_json] of Object.entries(payload.answers)) {
+        const raw = payload.answers
+        // Необязательный пустой текст не храним: удаляем существующую строку ответа.
+        for (const b of blocks) {
+          if (!b.id || b.block_type !== 'text_paragraph' || b.is_required !== false) continue
+          const v = raw[b.id]
+          if (
+            v &&
+            typeof v === 'object' &&
+            'text' in v &&
+            String((v as { text?: string }).text ?? '').trim() === ''
+          ) {
+            await supabase.from('record_answers').delete().eq('record_id', id).eq('block_id', b.id)
+          }
+        }
+        const answersCleaned = omitOptionalEmptyTextFromRecordAnswers(blocks, raw)
+        for (const [block_id, value_json] of Object.entries(answersCleaned)) {
           const block = blocks.find((b: BlockRow) => b.id === block_id)
           const config_version_id = block ? await findOrCreateConfigVersion(block) : null
           const { data: existing } = await supabase.from('record_answers').select('id').eq('record_id', id).eq('block_id', block_id).single()

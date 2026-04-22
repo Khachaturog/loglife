@@ -198,8 +198,11 @@ export function FillFormPage() {
       if (v.number === 0) return null
       return v
     }
+    // Пустой текст не включаем в payload — на сервер уходит без ключа (см. `omitOptionalEmptyTextFromRecordAnswers` в api).
     if ('text' in v) {
-      return v.text.trim() === '' ? null : v
+      const t = v.text ?? ''
+      if (t.trim() === '') return null
+      return v
     }
     if ('optionId' in v) {
       return v.optionId ? v : null

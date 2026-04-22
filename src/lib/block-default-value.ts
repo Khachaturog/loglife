@@ -14,27 +14,31 @@ function scaleDivisions(block: Pick<BlockRow, 'config'>): number {
 
 /**
  * Проверяет JSON дефолта на соответствие типу блока и актуальному config.
- * Число 0 не считаем валидным дефолтом (как в FillForm: пусто).
+ * Для «Число»: любое конечное значение, кроме 0 (ноль не считаем валидным дефолтом, как «пусто» на форме); дроби не округляем.
+ * Для «Текст»: пустой/пробельный ввод — `null`, если блок обязательный; иначе `{ text: '' }`.
  */
 export function normalizeDefaultValueForBlock(
-  block: Pick<BlockRow, 'block_type' | 'config'>,
+  block: Pick<BlockRow, 'block_type' | 'config'> & { is_required?: boolean },
   raw: unknown,
 ): ValueJson | null {
   if (raw === null || raw === undefined) return null
   if (typeof raw !== 'object' || Array.isArray(raw)) return null
 
   const t = block.block_type
+  const required = block.is_required !== false
 
   if (t === 'number') {
     const n = (raw as { number?: unknown }).number
-    if (typeof n !== 'number' || !Number.isFinite(n) || n < 1) return null
-    return { number: Math.floor(n) }
+    if (typeof n !== 'number' || !Number.isFinite(n) || n === 0) return null
+    return { number: n }
   }
 
   if (t === 'text_paragraph') {
     const text = (raw as { text?: unknown }).text
-    if (typeof text !== 'string' || text.trim() === '') return null
-    return { text }
+    if (typeof text !== 'string') return null
+    const trimmed = text.trim()
+    if (trimmed === '') return required ? null : { text: '' }
+    return { text: trimmed }
   }
 
   if (t === 'single_select') {
@@ -81,6 +85,31 @@ export function normalizeDefaultValueForBlock(
   return null
 }
 
+/**
+ * Payload ответов записи: не передаём на сервер необязательный текст с пустым содержимым
+ * (нет строки в `record_answers` — в просмотре показывается «Не заполнено» / приглашение дописать).
+ */
+export function omitOptionalEmptyTextFromRecordAnswers(
+  blocks: Pick<BlockRow, 'id' | 'block_type' | 'is_required'>[],
+  answers: Record<string, ValueJson>,
+): Record<string, ValueJson> {
+  const byId = new Map(blocks.filter((b) => b.id).map((b) => [b.id!, b]))
+  const out: Record<string, ValueJson> = {}
+  for (const [id, v] of Object.entries(answers)) {
+    const b = byId.get(id)
+    if (
+      b?.block_type === 'text_paragraph' &&
+      b.is_required === false &&
+      'text' in v &&
+      String((v as { text?: string }).text ?? '').trim() === ''
+    ) {
+      continue
+    }
+    out[id] = v
+  }
+  return out
+}
+
 /** Стартовое значение при включении тоггла «дефолт» в редакторе дела (насколько возможно валидно). */
 export function createInitialDefaultForBlockType(
   block_type: BlockType,
@@ -123,7 +152,16 @@ export function initialAnswersFromBlockDefaults(
     if (!b.id || existingKeys.has(b.id)) continue
     if (!b.default_value_enabled) continue
     const normalized = normalizeDefaultValueForBlock(b, b.default_value)
-    if (normalized) out[b.id] = normalized
+    if (!normalized) continue
+    if (
+      b.block_type === 'text_paragraph' &&
+      b.is_required === false &&
+      'text' in normalized &&
+      String((normalized as { text: string }).text ?? '').trim() === ''
+    ) {
+      continue
+    }
+    out[b.id] = normalized
   }
   return out
 }
@@ -148,6 +186,14 @@ export function getCompleteDefaultAnswers(blocks: BlockRow[] | undefined): Recor
     if (!b.default_value_enabled) return null
     const normalized = normalizeDefaultValueForBlock(b, b.default_value)
     if (!normalized) return null
+    if (
+      b.block_type === 'text_paragraph' &&
+      b.is_required === false &&
+      'text' in normalized &&
+      String((normalized as { text: string }).text ?? '').trim() === ''
+    ) {
+      continue
+    }
     out[b.id] = normalized
   }
   return out
@@ -165,6 +211,7 @@ export function areDefaultValuesCompleteForBlocks(
   blocks:
     | Array<
         Pick<BlockRow, 'block_type' | 'config' | 'default_value_enabled' | 'default_value'> & {
+          is_required?: boolean
           deleted_at?: string | null
         }
       >

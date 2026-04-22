@@ -122,50 +122,120 @@ function deedFormGetBlockOptions(config: BlockConfig | null): { id: string; labe
   return [];
 }
 
+/** Строка дефолта числа из блока (для синхронизации с `blocks`). */
+function numberDefaultDraftFromBlock(block: UiBlock): string {
+  const n = (block.default_value as { number?: number } | null)?.number;
+  if (typeof n === "number" && Number.isFinite(n) && n !== 0) return String(n);
+  return "";
+}
+
+/**
+ * Числовой дефолт: ввод накапливается в локальном черновике, в `blocks` попадает только на blur
+ * (удобно вводить «0,45» и нечисловые промежутки без сброса поля).
+ */
+function DeedNumberDefaultInput({
+  block,
+  blockIndex,
+  updateBlock,
+  hasValidationError,
+  onValidateBlockDefaultOnBlur,
+}: {
+  block: UiBlock;
+  blockIndex: number;
+  updateBlock: (index: number, updater: (b: UiBlock) => UiBlock) => void;
+  hasValidationError: boolean;
+  onValidateBlockDefaultOnBlur?: (payload: {
+    defaultValue: ValueJson | null;
+  }) => void;
+}) {
+  const [draft, setDraft] = useState(() => numberDefaultDraftFromBlock(block));
+
+  useEffect(() => {
+    setDraft(numberDefaultDraftFromBlock(block));
+  }, [block.default_value]);
+
+  function commitOnBlur() {
+    const normalized = draft.trim().replace(/\s/g, "").replace(",", ".");
+    if (normalized === "") {
+      flushSync(() => {
+        updateBlock(blockIndex, (b) => ({ ...b, default_value: null }));
+      });
+      onValidateBlockDefaultOnBlur?.({ defaultValue: null });
+      return;
+    }
+    const parsed = Number(normalized);
+    if (!Number.isFinite(parsed) || parsed === 0) {
+      flushSync(() => {
+        updateBlock(blockIndex, (b) => ({ ...b, default_value: null }));
+      });
+      onValidateBlockDefaultOnBlur?.({ defaultValue: null });
+      return;
+    }
+    flushSync(() => {
+      updateBlock(blockIndex, (b) => ({
+        ...b,
+        default_value: { number: parsed },
+      }));
+    });
+    onValidateBlockDefaultOnBlur?.({ defaultValue: { number: parsed } });
+  }
+
+  return (
+    <Flex direction="column" mt="1">
+      <TextField.Root
+        size="3"
+        color={hasValidationError ? "red" : undefined}
+        type="text"
+        inputMode="decimal"
+        value={draft}
+        aria-invalid={hasValidationError}
+        onKeyDown={blurInputOnEnter}
+        onBlur={commitOnBlur}
+        onChange={(e) => setDraft(e.target.value)}
+      />
+      {hasValidationError ? (
+        <Text size="1" color="red" role="alert">
+          Укажи целое или дробное число, кроме 0
+        </Text>
+      ) : null}
+    </Flex>
+  );
+}
+
 /**
  * Редактор значения по умолчанию для блока (футер карточки на DeedFormPage).
+ * Для числа и текста: сброс ошибки при валидном вводе и проверка при blur (подсветка при невалидном).
  */
 function DeedBlockDefaultValueEditor({
   block,
   blockIndex,
   updateBlock,
   hasValidationError,
+  onClearBlockDefaultError,
+  onValidateBlockDefaultOnBlur,
 }: {
   block: UiBlock;
   blockIndex: number;
   updateBlock: (index: number, updater: (b: UiBlock) => UiBlock) => void;
   hasValidationError: boolean;
+  onClearBlockDefaultError?: () => void;
+  onValidateBlockDefaultOnBlur?: (payload?: {
+    defaultValue: ValueJson | null;
+  }) => void;
 }) {
   const opts = deedFormGetBlockOptions(block.config);
   const divisions = Math.min(10, Math.max(1, block.config?.divisions ?? 5));
 
   if (block.block_type === "number") {
-    const n = (block.default_value as { number?: number } | null)?.number ?? 1;
     return (
-      <Flex direction="column" mt="1">
-        <TextField.Root
-          size="3"
-          color={hasValidationError ? "red" : undefined}
-          type="text"
-          inputMode="numeric"
-          value={String(n)}
-          onKeyDown={blurInputOnEnter}
-          onChange={(e) => {
-            const parsed = Number(e.target.value);
-            if (!Number.isFinite(parsed) || parsed < 1) return;
-            updateBlock(blockIndex, (b) => ({
-              ...b,
-              default_value: { number: Math.floor(parsed) },
-            }));
-          }}
-        />
-        {hasValidationError ? (
-          <Text size="1" color="red" role="alert">
-            Укажи целое число не меньше 1
-          </Text>
-        ) : null}
-      </Flex>
-  );
+      <DeedNumberDefaultInput
+        block={block}
+        blockIndex={blockIndex}
+        updateBlock={updateBlock}
+        hasValidationError={hasValidationError}
+        onValidateBlockDefaultOnBlur={onValidateBlockDefaultOnBlur}
+      />
+    );
   }
 
   if (block.block_type === "text_paragraph") {
@@ -176,17 +246,35 @@ function DeedBlockDefaultValueEditor({
           size="3"
           color={hasValidationError ? "red" : undefined}
           value={t}
+          aria-invalid={hasValidationError}
           onKeyDown={blurInputOnEnter}
-          onChange={(e) =>
+          onBlur={() => onValidateBlockDefaultOnBlur?.()}
+          onChange={(e) => {
+            const nextText = e.target.value;
             updateBlock(blockIndex, (b) => ({
               ...b,
-              default_value: { text: e.target.value },
-            }))
-          }
+              default_value: { text: nextText },
+            }));
+            const ok = normalizeDefaultValueForBlock(
+              {
+                block_type: block.block_type,
+                config: block.config,
+                is_required: block.is_required,
+              },
+              { text: nextText },
+            );
+            if (ok) onClearBlockDefaultError?.();
+          }}
         />
         {hasValidationError ? (
           <Text size="1" color="red" role="alert">
-            Текст не может быть пустым
+            {block.is_required
+              ? "Для обязательного поля нужен заполненный текст. Пустой текст может быть только в необязательном блоке"
+              : "Проверьте значение по умолчанию."}
+          </Text>
+        ) : !block.is_required ? (
+          <Text size="2" color="gray" as="p">
+            Пустой текст может быть только в необязательном блоке
           </Text>
         ) : null}
       </Flex>
@@ -728,7 +816,7 @@ export function DeedFormPage() {
             default_value_enabled: b.default_value_enabled ?? false,
             default_value:
               normalizeDefaultValueForBlock(
-                { block_type: b.block_type, config },
+                { block_type: b.block_type, config, is_required: b.is_required },
                 b.default_value,
               ) ?? null,
             config,
@@ -816,7 +904,7 @@ export function DeedFormPage() {
           b.default_value === null
             ? null
             : normalizeDefaultValueForBlock(
-                { block_type: b.block_type, config },
+                { block_type: b.block_type, config, is_required: b.is_required },
                 b.default_value,
               );
         return {
@@ -912,7 +1000,7 @@ export function DeedFormPage() {
         return;
       }
       const ok = normalizeDefaultValueForBlock(
-        { block_type: b.block_type, config: b.config },
+        { block_type: b.block_type, config: b.config, is_required: b.is_required },
         b.default_value,
       );
       if (!ok) defaultValErrIndices.push(bi);
@@ -1582,7 +1670,7 @@ export function DeedFormPage() {
                           />
                         </Flex>
                         {/* Редактор дефолта только при включённой подстановке; JSON в состоянии сохраняем при выкл. */}
-                        {block.default_value_enabled && block.default_value !== null ? (
+                        {block.default_value_enabled ? (
                           <DeedBlockDefaultValueEditor
                             block={block}
                             blockIndex={index}
@@ -1590,6 +1678,33 @@ export function DeedFormPage() {
                             hasValidationError={blockDefaultErrorIndices.includes(
                               index,
                             )}
+                            onClearBlockDefaultError={() => {
+                              setBlockDefaultErrorIndices((prev) =>
+                                prev.filter((i) => i !== index),
+                              );
+                            }}
+                            onValidateBlockDefaultOnBlur={(payload) => {
+                              const b = blocks[index];
+                              if (!b?.default_value_enabled) return;
+                              const rawDefault = payload
+                                ? payload.defaultValue
+                                : b.default_value;
+                              const ok = normalizeDefaultValueForBlock(
+                                {
+                                  block_type: b.block_type,
+                                  config: b.config,
+                                  is_required: b.is_required,
+                                },
+                                rawDefault,
+                              );
+                              setBlockDefaultErrorIndices((prev) =>
+                                ok
+                                  ? prev.filter((i) => i !== index)
+                                  : prev.includes(index)
+                                    ? prev
+                                    : [...prev, index],
+                              );
+                            }}
                           />
                         ) : null}
                       </Flex>
