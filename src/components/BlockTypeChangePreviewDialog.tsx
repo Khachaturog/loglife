@@ -1,7 +1,7 @@
 /**
  * Модалка превью «Было → Стало» при смене типа блока в редакторе дела.
  */
-import { Box, Button, Dialog, Flex, RadioGroup, Separator, Table, Text } from '@radix-ui/themes'
+import { Box, Button, Dialog, Flex, RadioGroup, Table, Text } from '@radix-ui/themes'
 import { formatDate } from '@/lib/format-utils'
 import type { BlockTypeChangePreviewRow, DurationNumberUnit } from '@/lib/block-value-type-conversion'
 

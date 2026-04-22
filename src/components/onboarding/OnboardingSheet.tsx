@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Box, Button, Dialog, Flex, IconButton, Text } from '@radix-ui/themes'
-import { CheckIcon, Cross2Icon, ArrowLeftIcon, ArrowRightIcon } from '@radix-ui/react-icons'
+import { Box, Button, Dialog, Flex, Text } from '@radix-ui/themes'
+import { CheckIcon, ArrowLeftIcon, ArrowRightIcon } from '@radix-ui/react-icons'
 import type { OnboardingStep } from '@/onboarding/types'
 import type { OnboardingFlowId } from '@/onboarding/flows'
 import styles from './OnboardingSheet.module.css'
