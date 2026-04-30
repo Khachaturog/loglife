@@ -15,16 +15,10 @@
   background: var(--color-panel-solid);
   border-top: 1px solid var(--gray-a4);
   /* HIG: не меньше 16pt от контента до «опасных» зон; на вырезе — берём больший из отступов */
-  padding-left: max(var(--space-4), env(safe-area-inset-left, 0px));
-  padding-right: max(var(--space-4), env(safe-area-inset-right, 0px));
+  padding-left: max(var(--space-2), env(safe-area-inset-left, 0px));
+  padding-right: max(var(--space-2), env(safe-area-inset-right, 0px));
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
-
-/* @media (max-width: 768px) {
-  .barWrapper {
-    border-radius: 0;
-  }
-} */
 
 /* .backButton:hover {
   color: var(--gray-12);
@@ -69,5 +63,18 @@
 .tabActive {
   color: var(--accent-10);
   background: var(--gray-a3);
-  border-radius: var(--radius-thumb);
+  border-radius: var(--radius-3);
+}
+
+@media (max-width: 768px) {
+
+  .barWrapper {
+    padding-left: max(var(--space-4), env(safe-area-inset-left, 0px));
+    padding-right: max(var(--space-4), env(safe-area-inset-right, 0px));
+  }
+
+  .tabActive {
+    border-radius: var(--radius-5);
+  }
+
 }
