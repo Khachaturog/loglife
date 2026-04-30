@@ -12,9 +12,9 @@
   min-height: 0;
 }
 
-/* Отступ снизу, когда панель видна */
+/* Отступ снизу: padding-block табов (2×space-2) + min-height пункта 44px + safe-area у обёртки TabBar */
 .mainWithTabBar {
-  padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px));
 }
 
 /* Загрузка (глобальная и fallback) */

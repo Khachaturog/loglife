@@ -15,7 +15,7 @@ export function useTabBarVisible(): boolean {
   return true
 }
 
-/** Плавающая нижняя панель: 4 раздела (механика iOS 26, стиль Radix) */
+/** Нижняя панель на всю ширину, прижата к краю экрана: 4 раздела */
 export function TabBar() {
   const visible = useTabBarVisible()
   // В этой версии TabBar нет кнопки «Назад» — она должна быть единственным хедером/навигацией на странице.

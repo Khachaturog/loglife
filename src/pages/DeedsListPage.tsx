@@ -9,8 +9,31 @@ import { DeedCard } from '@/components/DeedCard'
 import type { DeedWithBlocks } from '@/types/database'
 import layoutStyles from '@/styles/layout.module.css'
 import type { RecordRow, RecordAnswerRow } from '@/types/database'
-import { DotsHorizontalIcon, PlusIcon, QuestionMarkCircledIcon } from '@radix-ui/react-icons'
+import { CaretSortIcon, DotsHorizontalIcon, PlusIcon, QuestionMarkCircledIcon } from '@radix-ui/react-icons'
 import { useOnboarding } from '@/lib/onboarding-context'
+import { getDeedDisplayNumbers } from '@/lib/deed-utils'
+
+/** Режим сортировки списка на главной: метрики совпадают с подписью карточки «N сегодня · M всего». */
+type DeedSortMode = 'default' | 'today' | 'total'
+
+const DEEDS_LIST_SORT_STORAGE_KEY = 'log-life:deeds-list-sort'
+
+/** Восстановление из localStorage; невалидное значение — как «По умолчанию». */
+function readStoredDeedSortMode(): DeedSortMode {
+  try {
+    const raw = localStorage.getItem(DEEDS_LIST_SORT_STORAGE_KEY)
+    if (raw === 'default' || raw === 'today' || raw === 'total') return raw
+  } catch {
+    /* приватный режим и т.п. */
+  }
+  return 'default'
+}
+
+function deedCreatedAtDesc(a: DeedWithBlocks, b: DeedWithBlocks): number {
+  const ta = new Date(a.created_at).getTime()
+  const tb = new Date(b.created_at).getTime()
+  return tb - ta
+}
 
 /**
  * Страница списка дел.
@@ -18,6 +41,8 @@ import { useOnboarding } from '@/lib/onboarding-context'
  *
  * Прогрессивная загрузка: список дел появляется сразу после первого запроса,
  * счётчики записей (сегодня/всего) доподгружаются вторым запросом (плейсхолдер, без ложных нулей).
+ * Сортировка по выпадающему меню — по тем же today/total, что на карточке; порядок по умолчанию — как из API (created_at убывание).
+ * Выбор сортировки сохраняется в `localStorage` (этот браузер); после F5 и при следующих визитах не теряется, пока не очищены данные сайта.
  */
 export function DeedsListPage() {
   const { openFlow } = useOnboarding()
@@ -29,6 +54,16 @@ export function DeedsListPage() {
   const [recordsLoading, setRecordsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
+  const [sortMode, setSortMode] = useState<DeedSortMode>(() => readStoredDeedSortMode())
+
+  // Запись выбора сортировки: без частых сбросов при обычном F5/возврате на вкладку.
+  useEffect(() => {
+    try {
+      localStorage.setItem(DEEDS_LIST_SORT_STORAGE_KEY, sortMode)
+    } catch {
+      /* квота / приватный режим */
+    }
+  }, [sortMode])
 
   // --- Загрузка дел и записей ---
   useEffect(() => {
@@ -87,6 +122,23 @@ export function DeedsListPage() {
     return deeds.filter((d) => (d.category?.trim() ?? '') === selectedCategory)
   }, [deeds, selectedCategory])
 
+  // Список после фильтра категории и опциональной сортировки (по числам карточки, убывание; ничья — по created_at из API).
+  const deedsForList = useMemo(() => {
+    if (sortMode === 'default') return filteredDeeds
+    const rows = filteredDeeds.map((deed) => {
+      const records = recordsByDeedId[deed.id] ?? []
+      const { today, total } = getDeedDisplayNumbers(deed.blocks ?? [], records)
+      return { deed, today, total }
+    })
+    rows.sort((a, b) => {
+      const primary =
+        sortMode === 'today' ? b.today - a.today : b.total - a.total
+      if (primary !== 0) return primary
+      return deedCreatedAtDesc(a.deed, b.deed)
+    })
+    return rows.map((r) => r.deed)
+  }, [filteredDeeds, recordsByDeedId, sortMode])
+
   /** После быстрого «+» на карточке (один блок «Да/Нет») подтягиваем записи и обновляем счётчики. */
   const refreshRecordsForDeed = useCallback(async (deedId: string) => {
     const recs = await api.deeds.records(deedId)
@@ -95,7 +147,7 @@ export function DeedsListPage() {
 
   // --- Рендер состояний загрузки и ошибки ---
   if (deedsLoading) {
-    return <PageLoading title="" titleReserve actionsReserveCount={1} />
+    return <PageLoading title="" titleReserve actionsReserveCount={2} />
   }
 
   if (error) {
@@ -106,7 +158,7 @@ export function DeedsListPage() {
     return (
       <Flex direction="column" style={{ flex: 1, minHeight: 0, width: '100%' }}>
         <Box className={layoutStyles.pageContainer}>
-          <AppBar title="" titleReserve actionsReserveCount={1} />
+          <AppBar title="" titleReserve actionsReserveCount={2} />
         </Box>
         <Box className={layoutStyles.pageContainer} style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
           <PageErrorState
@@ -130,7 +182,41 @@ export function DeedsListPage() {
         title="Дела"
         /* Основные действия главной — в overflow-меню (позже добавим пункты). «Создать» не дублируем текстовой кнопкой. */
         actions={
-          <Flex>
+          <Flex gap="2">
+            {/* Сортировка: те же метрики, что на карточке (getDeedDisplayNumbers). */}
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger>
+                <IconButton
+                  type="button"
+                  size="3"
+                  color="gray"
+                  variant="classic"
+                  radius="full"
+                  aria-label="Сортировка списка"
+                >
+                  <CaretSortIcon />
+                </IconButton>
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Content variant="solid" size="2" align="end" sideOffset={8}>
+                <DropdownMenu.Label>Сортировка</DropdownMenu.Label>
+                <DropdownMenu.RadioGroup
+                  value={sortMode}
+                  onValueChange={(v) => {
+                    setSortMode(v as DeedSortMode)
+                  }}
+                >
+                  <DropdownMenu.RadioItem value="default">
+                    По умолчанию
+                  </DropdownMenu.RadioItem>
+                  <DropdownMenu.RadioItem value="today">
+                    По количеству сегодня
+                  </DropdownMenu.RadioItem>
+                  <DropdownMenu.RadioItem value="total">
+                    По количеству всего
+                  </DropdownMenu.RadioItem>
+                </DropdownMenu.RadioGroup>
+              </DropdownMenu.Content>
+            </DropdownMenu.Root>
             <DropdownMenu.Root>
               <DropdownMenu.Trigger>
                 <IconButton
@@ -219,7 +305,7 @@ export function DeedsListPage() {
       ) : (
         <Flex direction="column" gap="2">
           {/* Карточки дел: клик по левой части — просмотр, кнопка + — добавить запись */}
-          {filteredDeeds.map((deed) => (
+          {deedsForList.map((deed) => (
             <DeedCard
               key={deed.id}
               deed={deed}
