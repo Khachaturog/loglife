@@ -1,6 +1,7 @@
 /**
  * Превью и MVP-конвертация ответов при смене типа блока (модалка в DeedFormPage).
  * Целевые типы single/multi/scale/duration/yes_no как приёмник — вне MVP: ответы не трогаем.
+ * «Ссылка URL» ↔ «Текст»: строка копируется как есть. В ссылку из других типов автопереноса нет.
  */
 import { formatAnswer } from '@/lib/format-utils'
 import type { BlockConfig, BlockRow, BlockType, RecordAnswerRow, RecordRow, ValueJson } from '@/types/database'
@@ -45,9 +46,14 @@ export function isBlockedTypeTransition(fromType: BlockType, toType: BlockType):
   return false
 }
 
-/** MVP: автоматически переписываем value_json только в число или текст. */
-export function supportsAutomaticAnswerMigration(toType: BlockType): boolean {
-  return toType === 'number' || toType === 'text_paragraph'
+/**
+ * Автоперенос value_json: в число и текст — из любого типа.
+ * В «Ссылку URL» — только из текста (строка копируется как есть).
+ */
+export function supportsAutomaticAnswerMigration(toType: BlockType, fromType?: BlockType): boolean {
+  if (toType === 'number' || toType === 'text_paragraph') return true
+  if (toType === 'url') return fromType === 'text_paragraph'
+  return false
 }
 
 function scaleDivisions(block: Pick<BlockRow, 'config'>): number {
@@ -102,6 +108,8 @@ export function valueJsonMatchesBlockType(
       return typeof o.yesNo === 'boolean'
     case 'duration':
       return typeof o.durationHms === 'string'
+    case 'url':
+      return typeof o.url === 'string'
     default:
       return false
   }
@@ -120,7 +128,7 @@ export type MvpMigrationResult = {
 }
 
 /**
- * MVP-правила: цель только number | text_paragraph.
+ * MVP-правила: цель number | text_paragraph, плюс text_paragraph → url.
  * Для duration→number нужен выбор единицы (секунды из строки → деление).
  */
 export function migrateValueMvp(params: {
@@ -148,6 +156,11 @@ export function migrateValueMvp(params: {
     if (fromType === 'duration' && 'durationHms' in value) {
       const hms = (value as { durationHms: string }).durationHms
       return { newValue: { text: hms }, afterLabel: hms || '—' }
+    }
+    // Ссылка URL → текст: адрес без преобразований.
+    if (fromType === 'url' && 'url' in value) {
+      const u = (value as { url: string }).url
+      return { newValue: { text: u }, afterLabel: u.trim() === '' ? '—' : u }
     }
     const s = meaningString(value, sourceBlock)
     return { newValue: { text: s }, afterLabel: s || '—' }
@@ -186,6 +199,12 @@ export function migrateValueMvp(params: {
     return { newValue: { number: n }, afterLabel: String(n) }
   }
 
+  // Текст → ссылка URL: строка без преобразований.
+  if (toType === 'url' && fromType === 'text_paragraph' && 'text' in value) {
+    const t = (value as { text: string }).text
+    return { newValue: { url: t }, afterLabel: t.trim() === '' ? '—' : t }
+  }
+
   return { newValue: null, afterLabel: '—' }
 }
 
@@ -210,7 +229,7 @@ export function buildBlockTypeChangePreviewRows(params: {
 }): BlockTypeChangePreviewRow[] {
   const { records, blockId, nextType, snapshotAsBlockRow, durationUnit } = params
   const out: BlockTypeChangePreviewRow[] = []
-  const auto = supportsAutomaticAnswerMigration(nextType)
+  const auto = supportsAutomaticAnswerMigration(nextType, snapshotAsBlockRow.block_type)
 
   for (const rec of records) {
     const ans = rec.record_answers?.find((a) => a.block_id === blockId)

@@ -58,6 +58,28 @@ describe('migrateValueMvp', () => {
       text: '3 из 5',
     })
   })
+  it('text to url copies the string', () => {
+    const b = stubBlock({ block_type: 'text_paragraph' })
+    expect(
+      migrateValueMvp({
+        value: { text: 'https://example.com/a' },
+        fromType: 'text_paragraph',
+        toType: 'url',
+        sourceBlock: b,
+      }).newValue,
+    ).toEqual({ url: 'https://example.com/a' })
+  })
+  it('url to text copies the string', () => {
+    const b = stubBlock({ block_type: 'url' })
+    expect(
+      migrateValueMvp({
+        value: { url: 'https://example.com/a' },
+        fromType: 'url',
+        toType: 'text_paragraph',
+        sourceBlock: b,
+      }).newValue,
+    ).toEqual({ text: 'https://example.com/a' })
+  })
   it('duration to number in minutes', () => {
     const b = stubBlock({ block_type: 'duration' })
     const r = migrateValueMvp({
@@ -79,5 +101,13 @@ describe('valueJsonMatchesBlockType', () => {
   it('accepts matching shape', () => {
     const b = stubBlock({ block_type: 'number' })
     expect(valueJsonMatchesBlockType(b, { number: 5 })).toBe(true)
+  })
+  it('url shape does not match a text block', () => {
+    const b = stubBlock({ block_type: 'text_paragraph' })
+    expect(valueJsonMatchesBlockType(b, { url: 'https://example.com' })).toBe(false)
+  })
+  it('url shape matches a url block', () => {
+    const b = stubBlock({ block_type: 'url' })
+    expect(valueJsonMatchesBlockType(b, { url: 'https://example.com' })).toBe(true)
   })
 })

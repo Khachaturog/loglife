@@ -8,13 +8,11 @@
     "dev:mobile": "concurrently \"VITE_TUNNEL=1 vite\" \"npx localtunnel --port 5173\"",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "test": "vitest run",
     "preview": "vite preview"
   },
   "dependencies": {
     "@emoji-mart/data": "^1.2.1",
     "@emoji-mart/react": "^1.1.1",
-    "@radix-ui/react-collapsible": "^1.1.12",
     "@radix-ui/react-icons": "^1.3.2",
     "@radix-ui/themes": "^3.3.0",
     "@supabase/supabase-js": "^2.47.10",
@@ -41,7 +39,6 @@
     "supabase": "^2.76.8",
     "typescript": "~5.6.2",
     "typescript-eslint": "^8.15.0",
-    "vite": "^6.0.1",
-    "vitest": "^2.1.9"
+    "vite": "^6.0.1"
   }
 }

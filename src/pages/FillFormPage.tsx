@@ -55,6 +55,7 @@ function isRequiredBlockInvalid(block: BlockRow, answers: Record<string, ValueJs
     const hms = v.durationHms ?? ''
     if (hms.length < 8 || !/^\d{2}:\d{2}:\d{2}$/.test(hms)) return true
   }
+  if ('url' in v && (v.url ?? '').trim() === '') return true
   return false
 }
 
@@ -219,6 +220,10 @@ export function FillFormPage() {
     if ('durationHms' in v) {
       const hms = v.durationHms
       if (hms.length < 8 || !/^\d{2}:\d{2}:\d{2}$/.test(hms)) return null
+      return v
+    }
+    if ('url' in v) {
+      if ((v.url ?? '').trim() === '') return null
       return v
     }
     return null
@@ -492,6 +497,18 @@ export function FillFormPage() {
                   onChange={(e) => setAnswer(block.id, { text: e.target.value })}
                   placeholder=""
                   minHeightPx={AUTO_GROW_TEXTAREA_MIN_ONE_LINE_PX}
+                />
+              )}
+              {block.block_type === 'url' && (
+                <TextField.Root
+                  size="3"
+                  type="text"
+                  inputMode="url"
+                  autoComplete="url"
+                  placeholder="https://"
+                  value={(answers[block.id] as { url?: string } | undefined)?.url ?? ''}
+                  onKeyDown={blurInputOnEnter}
+                  onChange={(e) => setAnswer(block.id, { url: e.target.value })}
                 />
               )}
               {block.block_type === 'single_select' && (

@@ -10,6 +10,7 @@ import type {
   ValueJson,
 } from '@/types/database'
 import type { DeedAnalyticsConfigV1 } from '@/types/deed-analytics-config'
+import type { RecordHeaderActionId } from '@/lib/record-header-actions'
 import { omitOptionalEmptyTextFromRecordAnswers } from '@/lib/block-default-value'
 
 function getBlockOptions(block: BlockRow): { id: string; label: string; sort_order: number }[] {
@@ -210,6 +211,7 @@ export const api = {
       card_color?: string | null
       analytics_config?: DeedAnalyticsConfigV1 | null
       quick_add_defaults_enabled?: boolean
+      record_header_pinned?: RecordHeaderActionId[]
       blocks?: Partial<BlockRow>[]
     }): Promise<DeedRow> {
       const uid = await getUserIdOrThrow()
@@ -225,6 +227,9 @@ export const api = {
           ...(payload.analytics_config !== undefined && { analytics_config: payload.analytics_config }),
           ...(payload.quick_add_defaults_enabled !== undefined && {
             quick_add_defaults_enabled: payload.quick_add_defaults_enabled,
+          }),
+          ...(payload.record_header_pinned !== undefined && {
+            record_header_pinned: payload.record_header_pinned,
           }),
         })
         .select()
@@ -272,6 +277,7 @@ export const api = {
       card_color?: string | null
       analytics_config?: DeedAnalyticsConfigV1 | null
       quick_add_defaults_enabled?: boolean
+      record_header_pinned?: RecordHeaderActionId[]
       blocks?: Partial<BlockRow>[]
     }): Promise<void> {
       const uid = await getUserIdOrThrow()
@@ -287,6 +293,9 @@ export const api = {
           ...(payload.analytics_config !== undefined && { analytics_config: payload.analytics_config }),
           ...(payload.quick_add_defaults_enabled !== undefined && {
             quick_add_defaults_enabled: payload.quick_add_defaults_enabled,
+          }),
+          ...(payload.record_header_pinned !== undefined && {
+            record_header_pinned: payload.record_header_pinned,
           }),
         })
         .eq('id', id)
@@ -674,16 +683,20 @@ export const api = {
           .single()
         const blocks = deedWithBlocks?.blocks ?? []
         const raw = payload.answers
-        // Необязательный пустой текст не храним: удаляем существующую строку ответа.
+        // Необязательный пустой текст или ссылку не храним: удаляем существующую строку ответа.
         for (const b of blocks) {
-          if (!b.id || b.block_type !== 'text_paragraph' || b.is_required !== false) continue
+          if (!b.id || b.is_required !== false) continue
           const v = raw[b.id]
-          if (
-            v &&
-            typeof v === 'object' &&
+          if (!v || typeof v !== 'object') continue
+          const emptyText =
+            b.block_type === 'text_paragraph' &&
             'text' in v &&
             String((v as { text?: string }).text ?? '').trim() === ''
-          ) {
+          const emptyUrl =
+            b.block_type === 'url' &&
+            'url' in v &&
+            String((v as { url?: string }).url ?? '').trim() === ''
+          if (emptyText || emptyUrl) {
             await supabase.from('record_answers').delete().eq('record_id', id).eq('block_id', b.id)
           }
         }

@@ -14,8 +14,8 @@
 | api.deeds | `list()` | deeds | export-csv |
 | api.deeds | `listWithBlocks()` | deeds, blocks | DeedsListPage |
 | api.deeds | `get(id)` | deeds, blocks | DeedViewPage, FillFormPage, DeedFormPage, RecordViewPage, export-csv |
-| api.deeds | `create()` | deeds (в т.ч. `analytics_config`, `quick_add_defaults_enabled`), blocks | DeedFormPage |
-| api.deeds | `update()` | deeds (в т.ч. `analytics_config`, `quick_add_defaults_enabled`), blocks | DeedFormPage |
+| api.deeds | `create()` | deeds (в т.ч. `analytics_config`, `quick_add_defaults_enabled`, `record_header_pinned`), blocks | DeedFormPage |
+| api.deeds | `update()` | deeds (в т.ч. `analytics_config`, `quick_add_defaults_enabled`, `record_header_pinned`), blocks | DeedFormPage |
 | api.deeds | `applyBlockTypeChangeAndMigrateAnswers()` | blocks, record_answers, block_config_versions (+ дочерние при необходимости) | DeedFormPage (модалка смены типа блока) |
 | api.deeds | `delete()` | deeds | DeedViewPage |
 | api.deeds | `deleteBlock()` | deeds, blocks | DeedFormPage |

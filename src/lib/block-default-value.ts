@@ -82,13 +82,35 @@ export function normalizeDefaultValueForBlock(
     return { durationHms }
   }
 
+  if (t === 'url') {
+    const url = (raw as { url?: unknown }).url
+    if (typeof url !== 'string') return null
+    const trimmed = url.trim()
+    if (trimmed === '') return required ? null : { url: '' }
+    return { url: trimmed }
+  }
+
   return null
 }
 
 /**
- * Payload ответов записи: не передаём на сервер необязательный текст с пустым содержимым
+ * Payload ответов записи: не передаём на сервер необязательный текст или ссылку с пустым содержимым
  * (нет строки в `record_answers` — в просмотре показывается «Не заполнено» / приглашение дописать).
  */
+function isOptionalEmptyTextOrUrl(
+  block: Pick<BlockRow, 'block_type' | 'is_required'>,
+  v: ValueJson,
+): boolean {
+  if (block.is_required !== false) return false
+  if (block.block_type === 'text_paragraph' && 'text' in v) {
+    return String(v.text ?? '').trim() === ''
+  }
+  if (block.block_type === 'url' && 'url' in v) {
+    return String(v.url ?? '').trim() === ''
+  }
+  return false
+}
+
 export function omitOptionalEmptyTextFromRecordAnswers(
   blocks: Pick<BlockRow, 'id' | 'block_type' | 'is_required'>[],
   answers: Record<string, ValueJson>,
@@ -97,14 +119,7 @@ export function omitOptionalEmptyTextFromRecordAnswers(
   const out: Record<string, ValueJson> = {}
   for (const [id, v] of Object.entries(answers)) {
     const b = byId.get(id)
-    if (
-      b?.block_type === 'text_paragraph' &&
-      b.is_required === false &&
-      'text' in v &&
-      String((v as { text?: string }).text ?? '').trim() === ''
-    ) {
-      continue
-    }
+    if (b && isOptionalEmptyTextOrUrl(b, v)) continue
     out[id] = v
   }
   return out
@@ -135,6 +150,8 @@ export function createInitialDefaultForBlockType(
       return { yesNo: false }
     case 'duration':
       return { durationHms: '00:00:00' }
+    case 'url':
+      return { url: '' }
     default:
       return null
   }
@@ -153,14 +170,7 @@ export function initialAnswersFromBlockDefaults(
     if (!b.default_value_enabled) continue
     const normalized = normalizeDefaultValueForBlock(b, b.default_value)
     if (!normalized) continue
-    if (
-      b.block_type === 'text_paragraph' &&
-      b.is_required === false &&
-      'text' in normalized &&
-      String((normalized as { text: string }).text ?? '').trim() === ''
-    ) {
-      continue
-    }
+    if (isOptionalEmptyTextOrUrl(b, normalized)) continue
     out[b.id] = normalized
   }
   return out
@@ -186,14 +196,7 @@ export function getCompleteDefaultAnswers(blocks: BlockRow[] | undefined): Recor
     if (!b.default_value_enabled) return null
     const normalized = normalizeDefaultValueForBlock(b, b.default_value)
     if (!normalized) return null
-    if (
-      b.block_type === 'text_paragraph' &&
-      b.is_required === false &&
-      'text' in normalized &&
-      String((normalized as { text: string }).text ?? '').trim() === ''
-    ) {
-      continue
-    }
+    if (isOptionalEmptyTextOrUrl(b, normalized)) continue
     out[b.id] = normalized
   }
   return out

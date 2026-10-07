@@ -49,7 +49,33 @@ export function formatAnswer(
   }
   if ('yesNo' in value) return value.yesNo ? 'Выполнено' : 'Не выполнено'
   if ('durationHms' in value) return (value as { durationHms: string }).durationHms || '—'
+  if ('url' in value) {
+    const u = (value as { url: string }).url ?? ''
+    return u.trim() === '' ? '—' : u
+  }
   return '—'
+}
+
+/**
+ * href для просмотра ссылки: только http/https.
+ * Без схемы подставляем https://, если строка похожа на адрес (без пробелов и с точкой, либо localhost).
+ */
+export function safeUrlHref(raw: string): string | null {
+  const s = raw.trim()
+  if (!s) return null
+  const hasScheme = /^[a-z][a-z0-9+.-]*:/i.test(s)
+  if (!hasScheme) {
+    const looksLikeHost =
+      !/\s/.test(s) && (s.includes('.') || /^localhost(?::\d+)?(?:\/|$)/i.test(s))
+    if (!looksLikeHost) return null
+  }
+  try {
+    const u = new URL(hasScheme ? s : `https://${s}`)
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null
+    return u.href
+  } catch {
+    return null
+  }
 }
 
 /** Склонение "день/дня/дней" для числа n (только слово). */
@@ -134,6 +160,11 @@ export function previewAnswer(
   }
   if ('yesNo' in value) return value.yesNo ? 'Выполнено' : 'Не выполнено'
   if ('durationHms' in value) return (value as { durationHms: string }).durationHms || '—'
+  if ('url' in value) {
+    const u = value.url ?? ''
+    if (!u.trim()) return '—'
+    return u.length > maxTextLen ? u.slice(0, maxTextLen) + '…' : u
+  }
   return '—'
 }
 

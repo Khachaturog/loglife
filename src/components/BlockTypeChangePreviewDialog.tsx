@@ -14,7 +14,7 @@ type Props = {
   loading: boolean
   error: string | null
   rows: BlockTypeChangePreviewRow[]
-  /** Есть ли автоматическая перезапись ответов (MVP: только число и текст). */
+  /** Есть ли автоматическая перезапись ответов (число, текст, текст → ссылка). */
   supportsMigrate: boolean
   /** Показать выбор сек / мин / ч для duration → number. */
   showDurationUnit: boolean

@@ -17,6 +17,7 @@ auth.users (Supabase Auth)
 │  id · user_id · emoji · name · description     │
 │  category · card_color · analytics_config      │
 │  quick_add_defaults_enabled                    │
+│  record_header_pinned                          │
 │  created_at · updated_at                       │
 └────────────────────┬────────────────────────────┘
                      │ deed_id
@@ -70,6 +71,7 @@ auth.users (Supabase Auth)
 | `card_color` | text | | Цвет карточки (опционально) |
 | `analytics_config` | jsonb | | Настройки отображения аналитики на карточке дела (см. ниже); `null` = дефолты в приложении |
 | `quick_add_defaults_enabled` | boolean | NOT NULL, DEFAULT false | Вкл. у пользователя: короткое «+» создаёт запись из дефолтов блоков, если дефолты полные и валидны |
+| `record_header_pinned` | text[] | NOT NULL, DEFAULT `{edit}` | До двух id действий в шапке записи, в порядке кнопок: `edit`, `new`, `duplicate`, `delete`, `help`. Пустой массив — только меню «⋯». Check: длина ≤ 2 и значения из этого списка |
 | `created_at` | timestamptz | NOT NULL, DEFAULT now() | |
 | `updated_at` | timestamptz | NOT NULL, DEFAULT now() | |
 
@@ -141,6 +143,7 @@ auth.users (Supabase Auth)
 | `scale` | Шкала (1–N делений) |
 | `yes_no` | Да/Нет |
 | `duration` | Продолжительность (HH:MM:SS) |
+| `url` | Ссылка URL |
 
 **Структура `config` jsonb по типам:**
 
@@ -157,7 +160,7 @@ auth.users (Supabase Auth)
 // single_select — те же options плюс режим ввода (после миграции всегда задано для строк с этим типом)
 { "options": [...], "singleSelectUi": "select" }  // или "checkbox" — чекбоксы как у multi_select; просмотр записи — по-прежнему текст
 
-// duration, yes_no, text_paragraph — config не используется
+// duration, yes_no, text_paragraph, url — config не используется
 ```
 
 ---
@@ -210,6 +213,9 @@ auth.users (Supabase Auth)
 
 // duration
 { "seconds": 3720 }  // 1 ч 02 мин
+
+// url
+{ "url": "https://example.com" }
 ```
 
 ---
@@ -307,3 +313,5 @@ auth.users (Supabase Auth)
 | `20260329` | Тип `text_short` удалён, данные мигрированы в `text_paragraph` |
 | `20260402` | Добавлена `deeds.analytics_config` (jsonb) |
 | `20260409` | В `blocks.config` для `single_select` бэкфилл `singleSelectUi: "select"` |
+| `20261008` | Добавлен тип блока `url` |
+| `20261008` | Добавлена `deeds.record_header_pinned` (text[], закреплённые действия шапки записи) |

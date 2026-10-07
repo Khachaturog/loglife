@@ -18,6 +18,7 @@ function formatValueForCsv(value: ValueJson): string {
   if ('scaleValue' in value) return String(value.scaleValue)
   if ('yesNo' in value) return value.yesNo ? 'Выполнено' : 'Не выполнено'
   if ('durationHms' in value) return (value as { durationHms: string }).durationHms ?? ''
+  if ('url' in value) return (value as { url: string }).url ?? ''
   return ''
 }
 

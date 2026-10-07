@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { Link, useParams, useNavigate, useLocation } from 'react-router-dom'
-import { AlertDialog, Box, Button, Card, Checkbox, CheckboxGroup, DropdownMenu, Flex, IconButton, Separator, Text, TextField, Badge } from '@radix-ui/themes'
+import { AlertDialog, Badge, Box, Button, Card, Checkbox, CheckboxGroup, DropdownMenu, Flex, IconButton, Link as ThemeLink, Separator, Text, TextField } from '@radix-ui/themes'
 import { AUTO_GROW_TEXTAREA_MIN_ONE_LINE_PX, AutoGrowTextArea } from '@/components/AutoGrowTextArea'
 import { AppBar } from '@/components/AppBar'
 import { useOnboarding } from '@/lib/onboarding-context'
 import { SingleSelectAnswerField } from '@/components/SingleSelectAnswerField'
 import { FillFormNumberStepper } from '@/components/FillFormNumberStepper'
 import { PageLoading } from '@/components/PageLoading'
-import { BackpackIcon, CheckIcon, CopyIcon, DotsHorizontalIcon, Pencil1Icon, PlusIcon, QuestionMarkCircledIcon, ResetIcon, TrashIcon } from '@radix-ui/react-icons'
+import { BackpackIcon, CheckIcon, CopyIcon, DotsHorizontalIcon, GearIcon, Pencil1Icon, PlusIcon, QuestionMarkCircledIcon, ResetIcon, TrashIcon } from '@radix-ui/react-icons'
 import { getSingleSelectUi } from '@/lib/block-config'
 import { api } from '@/lib/api'
 import { answersFromRecord } from '@/lib/answers-from-record'
@@ -17,9 +17,29 @@ import { DatePicker } from '@/components/DatePicker'
 import { DurationInput } from '@/components/DurationInput'
 import { ScaleAnswerField } from '@/components/ScaleAnswerField'
 import { valueJsonMatchesBlockType } from '@/lib/block-value-type-conversion'
-import { formatAnswer, formatRecordDateTimeDisplay } from '@/lib/format-utils'
+import { formatAnswer, formatRecordDateTimeDisplay, safeUrlHref } from '@/lib/format-utils'
 import { blurInputOnEnter } from '@/lib/ios-input-blur'
+import {
+  RECORD_HEADER_ACTION_LABEL,
+  normalizeRecordHeaderPinned,
+  type RecordHeaderActionId,
+} from '@/lib/record-header-actions'
 import layoutStyles from '@/styles/layout.module.css'
+
+function recordHeaderActionIcon(id: RecordHeaderActionId) {
+  switch (id) {
+    case 'edit':
+      return <Pencil1Icon />
+    case 'new':
+      return <PlusIcon />
+    case 'duplicate':
+      return <CopyIcon />
+    case 'delete':
+      return <TrashIcon />
+    case 'help':
+      return <QuestionMarkCircledIcon />
+  }
+}
 
 function getBlockOptions(block: BlockRow): { id: string; label: string }[] {
   const fromConfig = (block.config as BlockConfig | null)?.options
@@ -28,6 +48,26 @@ function getBlockOptions(block: BlockRow): { id: string; label: string }[] {
 }
 
 type ConfigVersionData = { scale?: { divisions: number; labels: (string | null)[] }; options?: { id: string; label: string; sort_order: number }[] }
+
+/** Просмотр ответа «Ссылка URL»: адрес кликабелен и открывается в новой вкладке. */
+function UrlAnswerView({ raw }: { raw: string }) {
+  const href = safeUrlHref(raw)
+  const wrap = { overflowWrap: 'anywhere' as const }
+  if (!href) {
+    return (
+      <Text as="p" size="3" style={wrap}>
+        {raw.trim() === '' ? '—' : raw}
+      </Text>
+    )
+  }
+  return (
+    <Text as="p" size="3" style={wrap}>
+      <ThemeLink href={href} size="3" underline="hover" target="_blank" rel="noopener noreferrer">
+        {raw}
+      </ThemeLink>
+    </Text>
+  )
+}
 
 /** Несовпадение формы value_json с текущим типом/конфигом блока (в т.ч. после смены типа в деле). */
 function isAnswerShapeOutdated(block: BlockRow | null, valueJson: unknown): boolean {
@@ -295,6 +335,10 @@ export function RecordViewPage() {
         const hms = (draft as { durationHms?: string }).durationHms ?? ''
         return hms.length >= 8 && /^\d{2}:\d{2}:\d{2}$/.test(hms)
       }
+      case 'url': {
+        const u = (draft as { url?: string }).url
+        return typeof u === 'string' && u.trim().length > 0
+      }
       default:
         return false
     }
@@ -381,7 +425,7 @@ export function RecordViewPage() {
   }
 
   if (loading) {
-    return <PageLoading title="" titleReserve actionsReserveCount={4} />
+    return <PageLoading title="" titleReserve actionsReserveCount={fromHistory ? 3 : 2} />
   }
 
   const backLink = fromHistory ? '/history' : (record?.deed_id ? `/deeds/${record.deed_id}` : '/')
@@ -395,6 +439,45 @@ export function RecordViewPage() {
         </Text>
       </Box>
     )
+  }
+
+  const pinnedHeaderActions = normalizeRecordHeaderPinned(deed?.record_header_pinned)
+  // В «⋯» всегда весь каталог, даже если действие уже вынесено кнопкой в шапку.
+  // Сужение `record` не доходит внутрь вложенной функции — берём локальную константу.
+  const viewRecord = record
+
+  function headerMenuItem(actionId: RecordHeaderActionId) {
+    return (
+      <DropdownMenu.Item
+        key={actionId}
+        color={actionId === 'delete' ? 'red' : actionId === 'help' ? 'gray' : undefined}
+        onSelect={() => runHeaderAction(actionId)}
+      >
+        {recordHeaderActionIcon(actionId)} {RECORD_HEADER_ACTION_LABEL[actionId]}
+      </DropdownMenu.Item>
+    )
+  }
+
+  function runHeaderAction(actionId: RecordHeaderActionId) {
+    switch (actionId) {
+      case 'edit':
+        setEditAnswersBaseline(structuredClone(answers))
+        setEditing(true)
+        return
+      case 'new':
+        navigate(`/deeds/${viewRecord.deed_id}/fill`)
+        return
+      case 'duplicate':
+        navigate(`/deeds/${viewRecord.deed_id}/fill`, {
+          state: { fillDuplicateAnswers: answersFromRecord(viewRecord) },
+        })
+        return
+      case 'delete':
+        openDeleteDialog()
+        return
+      case 'help':
+        openFlow('help_record')
+    }
   }
 
   return (
@@ -429,23 +512,21 @@ export function RecordViewPage() {
             </IconButton>
           ) : (
             <Flex align="center" gap="2" wrap="wrap" justify="end">
-              {/* Дублировать: новая запись с теми же ответами по блокам; дата/время — на форме «сейчас» */}
-              <IconButton
-                type="button"
-                size="3"
-                color="gray"
-                variant="classic"
-                radius="full"
-                aria-label="Дублировать"
-                onClick={() =>
-                  navigate(`/deeds/${record.deed_id}/fill`, {
-                    state: { fillDuplicateAnswers: answersFromRecord(record) },
-                  })
-                }
-              >
-                <CopyIcon />
-              </IconButton>
-              {/* К делу — только с экрана «История» */}
+              {pinnedHeaderActions.map((actionId) => (
+                <IconButton
+                  key={actionId}
+                  type="button"
+                  size="3"
+                  color={actionId === 'delete' ? 'red' : 'gray'}
+                  variant="classic"
+                  radius="full"
+                  aria-label={RECORD_HEADER_ACTION_LABEL[actionId]}
+                  onClick={() => runHeaderAction(actionId)}
+                >
+                  {recordHeaderActionIcon(actionId)}
+                </IconButton>
+              ))}
+              {/* К делу — только с экрана «История», не из списка закреплений */}
               {fromHistory && (
                 <IconButton
                   type="button"
@@ -459,13 +540,15 @@ export function RecordViewPage() {
                   <BackpackIcon />
                 </IconButton>
               )}
-              <Separator orientation="vertical" />
+              {(pinnedHeaderActions.length > 0 || fromHistory) && (
+                <Separator orientation="vertical" />
+              )}
               <DropdownMenu.Root>
                 <DropdownMenu.Trigger>
                   <IconButton
                     type="button"
                     size="3"
-                    variant="classic" 
+                    variant="classic"
                     color="gray"
                     radius="full"
                     aria-label="Действия с записью"
@@ -478,28 +561,27 @@ export function RecordViewPage() {
                     <Link to={`/deeds/${record.deed_id}`}> <BackpackIcon /> Перейти к делу</Link>
                   </DropdownMenu.Item>
                   <DropdownMenu.Separator />
-                  <DropdownMenu.Item asChild>
-                    <Link to={`/deeds/${record.deed_id}/fill`}> <PlusIcon /> Новая запись</Link>
-                  </DropdownMenu.Item>
-                  <DropdownMenu.Item asChild>
-                    <Link to={`/deeds/${record.deed_id}/fill`} state={{ fillDuplicateAnswers: answersFromRecord(record) }}> <CopyIcon /> Дублировать</Link>
-                  </DropdownMenu.Item>
+                  {headerMenuItem('new')}
+                  {headerMenuItem('duplicate')}
+                  <DropdownMenu.Separator />
+                  {headerMenuItem('edit')}
+                  <DropdownMenu.Separator />
+                  {headerMenuItem('delete')}
+                  <DropdownMenu.Separator />
+                  {headerMenuItem('help')}
                   <DropdownMenu.Separator />
                   <DropdownMenu.Item
-                    onSelect={() => {
-                      setEditAnswersBaseline(structuredClone(answers))
-                      setEditing(true)
-                    }}
+                    onSelect={() =>
+                      navigate(`/deeds/${record.deed_id}/edit`, {
+                        state: {
+                          editorTab: 'quickAccess',
+                          returnToRecordId: record.id,
+                          ...(fromHistory ? { returnFromHistory: true } : {}),
+                        },
+                      })
+                    }
                   >
-                    <Pencil1Icon /> Редактировать
-                  </DropdownMenu.Item>
-                  <DropdownMenu.Separator />
-                  <DropdownMenu.Item color="red" onSelect={() => openDeleteDialog()}>
-                    <TrashIcon /> Удалить
-                  </DropdownMenu.Item>
-                  <DropdownMenu.Separator />
-                  <DropdownMenu.Item color="gray" onSelect={() => openFlow('help_record')}>
-                    <QuestionMarkCircledIcon /> Справка
+                    <GearIcon /> Настроить действия
                   </DropdownMenu.Item>
                 </DropdownMenu.Content>
               </DropdownMenu.Root>
@@ -616,6 +698,18 @@ export function RecordViewPage() {
                   minHeightPx={AUTO_GROW_TEXTAREA_MIN_ONE_LINE_PX}
                 />
               )}
+              {block.block_type === 'url' && (
+                <TextField.Root
+                  size="3"
+                  type="text"
+                  inputMode="url"
+                  autoComplete="url"
+                  placeholder="https://"
+                  value={(answers[block.id] as { url?: string } | undefined)?.url ?? ''}
+                  onKeyDown={blurInputOnEnter}
+                  onChange={(e) => setAnswer(block.id, { url: e.target.value })}
+                />
+              )}
               {block.block_type === 'single_select' && (
                 <SingleSelectAnswerField
                   uiMode={getSingleSelectUi(block.config as BlockConfig)}
@@ -720,6 +814,14 @@ export function RecordViewPage() {
             const optionsOverride = versionConfig?.options?.map((o) => ({ id: o.id, label: o.label }))
 
             if (!outdated && !unfilled) {
+              if (block.block_type === 'url' && value && 'url' in value) {
+                return (
+                  <Card key={block.id}>
+                    <Text size="3" color="gray" weight="medium">{block.title}</Text>
+                    <UrlAnswerView raw={value.url} />
+                  </Card>
+                )
+              }
               if (block.block_type === 'yes_no' && value) {
                 const done = (value as { yesNo: boolean }).yesNo === true
                 return (
@@ -834,6 +936,18 @@ export function RecordViewPage() {
                       value={(draft as { text?: string } | undefined)?.text ?? ''}
                       onChange={(e) => setUpdateDraftValue(block.id, { text: e.target.value })}
                       minHeightPx={AUTO_GROW_TEXTAREA_MIN_ONE_LINE_PX}
+                    />
+                  )}
+                  {block.block_type === 'url' && (
+                    <TextField.Root
+                      size="3"
+                      type="text"
+                      inputMode="url"
+                      autoComplete="url"
+                      placeholder="https://"
+                      value={(draft as { url?: string } | undefined)?.url ?? ''}
+                      onKeyDown={blurInputOnEnter}
+                      onChange={(e) => setUpdateDraftValue(block.id, { url: e.target.value })}
                     />
                   )}
                   {block.block_type === 'single_select' && (

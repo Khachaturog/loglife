@@ -6,6 +6,7 @@ export type BlockType =
   | 'scale'
   | 'yes_no'
   | 'duration'
+  | 'url'
 
 /** Значение ответа в записи и в `blocks.default_value`. */
 export type ValueJson =
@@ -16,6 +17,7 @@ export type ValueJson =
   | { scaleValue: number }
   | { yesNo: boolean }
   | { durationHms: string }
+  | { url: string }
 
 export interface BlockRow {
   id: string
@@ -97,6 +99,7 @@ export interface BlockConfigSelectOptionVersionRow {
 }
 
 import type { DeedAnalyticsConfigV1 } from '@/types/deed-analytics-config'
+import type { RecordHeaderActionId } from '@/lib/record-header-actions'
 
 export interface DeedRow {
   id: string
@@ -110,6 +113,8 @@ export interface DeedRow {
   analytics_config?: DeedAnalyticsConfigV1 | null
   /** Короткое «+» создаёт запись с дефолтами блоков (если у всех блоков заданы валидные дефолты). */
   quick_add_defaults_enabled?: boolean
+  /** До двух действий, закреплённых кнопками в шапке записи. Пустой массив — только меню «⋯». */
+  record_header_pinned?: RecordHeaderActionId[]
   created_at: string
   updated_at: string
   blocks?: BlockRow[]

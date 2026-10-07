@@ -5,7 +5,7 @@
 import type { CSSProperties } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import * as Collapsible from "@radix-ui/react-collapsible";
 import {
   AlertDialog,
@@ -36,7 +36,7 @@ import { PageLoading } from "@/components/PageLoading";
 import { DurationInput } from "@/components/DurationInput";
 import { EmojiPickerButton } from "@/components/EmojiPickerButton";
 import scaleSegmentedStyles from "@/components/ScaleSegmentedControl.module.css";
-import { ArrowBottomRightIcon, ArrowDownIcon, ArrowUpIcon, CheckIcon, ChevronDownIcon, Cross2Icon, PlusIcon, QuestionMarkIcon, TrashIcon } from "@radix-ui/react-icons";
+import { ArrowBottomRightIcon, ArrowDownIcon, ArrowUpIcon, CheckIcon, ChevronDownIcon, CopyIcon, Cross2Icon, Pencil1Icon, PlusIcon, QuestionMarkCircledIcon, QuestionMarkIcon, TrashIcon } from "@radix-ui/react-icons";
 import { api } from "@/lib/api";
 import {
   RADIX_COLOR_9_PRESETS,
@@ -68,6 +68,13 @@ import {
 import type { DeedAnalyticsConfigV1 } from "@/types/deed-analytics-config";
 import { DEFAULT_DEED_ANALYTICS_CONFIG } from "@/types/deed-analytics-config";
 import { normalizeDeedAnalyticsConfig } from "@/lib/deed-analytics-config";
+import {
+  DEFAULT_RECORD_HEADER_PINNED,
+  RECORD_HEADER_ACTION_LABEL,
+  normalizeRecordHeaderPinned,
+  recordHeaderActionRows,
+  type RecordHeaderActionId,
+} from "@/lib/record-header-actions";
 import layoutStyles from "@/styles/layout.module.css";
 import styles from "./DeedFormPage.module.css";
 import { useOnboarding } from "@/lib/onboarding-context";
@@ -94,6 +101,7 @@ const BLOCK_TYPE_LABEL: Record<BlockType, string> = {
   scale: "Шкала",
   yes_no: "Да/Нет",
   duration: "Время",
+  url: "Ссылка URL",
 };
 
 /** Создаёт пустой блок с дефолтными значениями (текст вопроса — только placeholder, без автозаполнения) */
@@ -434,6 +442,49 @@ function DeedBlockDefaultValueEditor({
     );
   }
 
+  if (block.block_type === "url") {
+    const u = (block.default_value as { url?: string } | null)?.url ?? "";
+    return (
+      <Flex direction="column" mt="1">
+        <TextField.Root
+          size="3"
+          type="text"
+          inputMode="url"
+          autoComplete="url"
+          placeholder="https://"
+          color={hasValidationError ? "red" : undefined}
+          value={u}
+          aria-invalid={hasValidationError}
+          onKeyDown={blurInputOnEnter}
+          onBlur={() => onValidateBlockDefaultOnBlur?.()}
+          onChange={(e) => {
+            const nextUrl = e.target.value;
+            updateBlock(blockIndex, (b) => ({
+              ...b,
+              default_value: { url: nextUrl },
+            }));
+            const ok = normalizeDefaultValueForBlock(
+              {
+                block_type: block.block_type,
+                config: block.config,
+                is_required: block.is_required,
+              },
+              { url: nextUrl },
+            );
+            if (ok) onClearBlockDefaultError?.();
+          }}
+        />
+        {hasValidationError ? (
+          <Text size="1" color="red" role="alert">
+            {block.is_required
+              ? "Для обязательного поля нужна ссылка. Пустая ссылка может быть только в необязательном блоке"
+              : "Проверьте значение по умолчанию."}
+          </Text>
+        ) : null}
+      </Flex>
+    );
+  }
+
   if (block.block_type === "duration") {
     const hms =
       (block.default_value as { durationHms?: string } | null)?.durationHms ?? "00:00:00";
@@ -701,10 +752,28 @@ function ScaleBlockConfig({
   );
 }
 
+type DeedEditorTab = "deed" | "quickAccess" | "analytics";
+
+function recordHeaderActionIcon(id: RecordHeaderActionId) {
+  switch (id) {
+    case "edit":
+      return <Pencil1Icon />;
+    case "new":
+      return <PlusIcon />;
+    case "duplicate":
+      return <CopyIcon />;
+    case "delete":
+      return <TrashIcon />;
+    case "help":
+      return <QuestionMarkCircledIcon />;
+  }
+}
+
 export function DeedFormPage() {
   // === Роутинг и режим ===
   const { id } = useParams<{ id: string }>(); // id из URL: /deeds/123
   const navigate = useNavigate();
+  const location = useLocation();
   const isNew = !id || id === "new"; // создание нового или редактирование
 
   // === Состояние загрузки и сохранения ===
@@ -722,13 +791,36 @@ export function DeedFormPage() {
   /** «Другое»: серый на кнопке пикера, пока не меняли нативный color input */
   const [cardColorPickerPristine, setCardColorPickerPristine] = useState(true);
   const [blocks, setBlocks] = useState<UiBlock[]>([createDefaultBlock()]);
-  /** Вкладка редактора: поля дела или настройки аналитики на карточке. */
-  const [editorTab, setEditorTab] = useState<"deed" | "analytics">("deed");
+  /**
+   * Снимок location.state на маунте: вкладка и куда вернуться после сохранения.
+   */
+  const [openedFromRecord] = useState(() => {
+    const state = location.state as {
+      editorTab?: string;
+      returnToRecordId?: string;
+      returnFromHistory?: boolean;
+    } | null;
+    const returnToRecordId =
+      typeof state?.returnToRecordId === "string" && state.returnToRecordId
+        ? state.returnToRecordId
+        : null;
+    return {
+      editorTab: (state?.editorTab === "quickAccess" ? "quickAccess" : "deed") as DeedEditorTab,
+      returnToRecordId,
+      returnFromHistory: Boolean(state?.returnFromHistory) && returnToRecordId != null,
+    };
+  });
+  /** Вкладка редактора. С записи можно открыть сразу «Быстрый доступ». */
+  const [editorTab, setEditorTab] = useState<DeedEditorTab>(openedFromRecord.editorTab);
   const [analyticsConfig, setAnalyticsConfig] = useState<DeedAnalyticsConfigV1>(
     () => ({ ...DEFAULT_DEED_ANALYTICS_CONFIG }),
   );
   /** Быстрое «+» на карточке и экране дела — только при полных дефолтах и явном включении. */
   const [quickAddDefaultsEnabled, setQuickAddDefaultsEnabled] = useState(false);
+  /** Кнопки в шапке записи этого дела. Порядок массива — порядок кнопок. */
+  const [recordHeaderPinned, setRecordHeaderPinned] = useState<RecordHeaderActionId[]>(
+    () => [...DEFAULT_RECORD_HEADER_PINNED],
+  );
   /** Предложение включить быстрое добавление при сохранении (полные дефолты, тогл выкл). */
   const [quickAddOptInOpen, setQuickAddOptInOpen] = useState(false);
   const { openFlow } = useOnboarding();
@@ -880,6 +972,7 @@ export function DeedFormPage() {
         setBlocks(mapped.length ? mapped : [createDefaultBlock()]);
         setAnalyticsConfig(normalizeDeedAnalyticsConfig(deed.analytics_config));
         setQuickAddDefaultsEnabled(deed.quick_add_defaults_enabled ?? false);
+        setRecordHeaderPinned(normalizeRecordHeaderPinned(deed.record_header_pinned));
       })
       .catch((e) => {
         if (!cancelled) {
@@ -1011,6 +1104,30 @@ export function DeedFormPage() {
     }
   }
 
+  /** Включить или снять кнопку шапки. Больше двух закреплять нельзя. */
+  function toggleRecordHeaderPinned(actionId: RecordHeaderActionId, on: boolean) {
+    setRecordHeaderPinned((prev) => {
+      if (on) {
+        if (prev.includes(actionId) || prev.length >= 2) return prev;
+        return [...prev, actionId];
+      }
+      return prev.filter((id) => id !== actionId);
+    });
+  }
+
+  /** Порядок закреплённых — порядок кнопок в шапке записи. */
+  function moveRecordHeaderPinned(actionId: RecordHeaderActionId, direction: "up" | "down") {
+    setRecordHeaderPinned((prev) => {
+      const index = prev.indexOf(actionId);
+      if (index < 0) return prev;
+      const targetIndex = direction === "up" ? index - 1 : index + 1;
+      if (targetIndex < 0 || targetIndex >= prev.length) return prev;
+      const next = [...prev];
+      [next[targetIndex], next[index]] = [next[index], next[targetIndex]];
+      return next;
+    });
+  }
+
   /** Поменять блок местами с соседом (вверх/вниз) */
   function moveBlock(index: number, direction: "up" | "down") {
     clearAllSubmitValidation();
@@ -1084,6 +1201,7 @@ export function DeedFormPage() {
           card_color: cardColor.trim() || null,
           analytics_config: analyticsPayload,
           quick_add_defaults_enabled: quickAddPayload,
+          record_header_pinned: normalizeRecordHeaderPinned(recordHeaderPinned),
           blocks: payloadBlocks,
         });
         navigate(`/deeds/${deed.id}`);
@@ -1096,9 +1214,10 @@ export function DeedFormPage() {
           card_color: cardColor.trim() || null,
           analytics_config: analyticsPayload,
           quick_add_defaults_enabled: quickAddPayload,
+          record_header_pinned: normalizeRecordHeaderPinned(recordHeaderPinned),
           blocks: payloadBlocks,
         });
-        navigate(`/deeds/${id}`);
+        closeOpenedForm();
       }
     } catch (err: unknown) {
       console.error(
@@ -1188,10 +1307,22 @@ export function DeedFormPage() {
     await persistDeed(quickAddDefaultsEnabled && defsComplete);
   }
 
+  /** Закрыть форму: на запись, если пришли из «Настроить действия», иначе на дело. */
+  function closeOpenedForm() {
+    if (openedFromRecord.returnToRecordId) {
+      navigate(`/records/${openedFromRecord.returnToRecordId}`, {
+        state: openedFromRecord.returnFromHistory ? { from: "history" } : undefined,
+      });
+      return;
+    }
+    navigate(id ? `/deeds/${id}` : "/");
+  }
+
   if (loading) {
     return (
       <PageLoading
-        backHref="/"
+        backHref={openedFromRecord.returnToRecordId ? undefined : "/"}
+        onBack={openedFromRecord.returnToRecordId ? closeOpenedForm : undefined}
         backButtonIcon="close"
         title=""
         titleReserve
@@ -1203,7 +1334,8 @@ export function DeedFormPage() {
   return (
     <Box className={layoutStyles.pageContainer}>
       <AppBar
-        backHref={id ? `/deeds/${id}` : "/"}
+        backHref={openedFromRecord.returnToRecordId ? undefined : id ? `/deeds/${id}` : "/"}
+        onBack={openedFromRecord.returnToRecordId ? closeOpenedForm : undefined}
         backButtonIcon="close"
         title={isNew ? "Новое дело" : "Редактирование дела"}
         actions={
@@ -1226,9 +1358,10 @@ export function DeedFormPage() {
 
       <form ref={formRef} onSubmit={handleSubmit}>
 
-        <Tabs.Root value={editorTab} onValueChange={(v) => setEditorTab(v as "deed" | "analytics")}>
+        <Tabs.Root value={editorTab} onValueChange={(v) => setEditorTab(v as DeedEditorTab)}>
           <Tabs.List>
             <Tabs.Trigger value="deed">Дело</Tabs.Trigger>
+            <Tabs.Trigger value="quickAccess">Быстрый доступ</Tabs.Trigger>
             <Tabs.Trigger value="analytics">Аналитика</Tabs.Trigger>
           </Tabs.List>
 
@@ -1897,6 +2030,66 @@ export function DeedFormPage() {
         </Flex>
           </Tabs.Content>
 
+          <Tabs.Content value="quickAccess">
+            <Flex direction="column" gap="4" mt="4">
+              <Card>
+                <Flex direction="column" gap="3">
+                  <Flex direction="column" gap="1">
+                    <Heading as="h2" size="3">Действия в шапке записи</Heading>
+                    <Text as="p" size="2" color="gray">
+                      До двух кнопок справа в шапке. В меню «⋯» по-прежнему все действия.
+                    </Text>
+                  </Flex>
+                  {recordHeaderActionRows(recordHeaderPinned).map((row) => {
+                    const pinIndex = recordHeaderPinned.indexOf(row.id);
+                    return (
+                      <Flex key={row.id} align="center" gap="3">
+                        <Flex align="center" gap="2" style={{ flex: 1, minWidth: 0 }}>
+                          {recordHeaderActionIcon(row.id)}
+                          <Text size="3" truncate>{RECORD_HEADER_ACTION_LABEL[row.id]}</Text>
+                        </Flex>
+                        {row.pinned ? (
+                          <Flex gap="1">
+                            <IconButton
+                              type="button"
+                              size="1"
+                              color="gray"
+                              variant="surface"
+                              disabled={pinIndex <= 0}
+                              onClick={() => moveRecordHeaderPinned(row.id, "up")}
+                              aria-label={`Переместить «${RECORD_HEADER_ACTION_LABEL[row.id]}» выше`}
+                            >
+                              <ArrowUpIcon />
+                            </IconButton>
+                            <IconButton
+                              type="button"
+                              size="1"
+                              color="gray"
+                              variant="surface"
+                              disabled={pinIndex < 0 || pinIndex >= recordHeaderPinned.length - 1}
+                              onClick={() => moveRecordHeaderPinned(row.id, "down")}
+                              aria-label={`Переместить «${RECORD_HEADER_ACTION_LABEL[row.id]}» ниже`}
+                            >
+                              <ArrowDownIcon />
+                            </IconButton>
+                          </Flex>
+                        ) : null}
+                        <Switch
+                          size="3"
+                          color="gray"
+                          checked={row.pinned}
+                          disabled={!row.pinned && recordHeaderPinned.length >= 2}
+                          onCheckedChange={(checked) => toggleRecordHeaderPinned(row.id, checked)}
+                          aria-label={`${RECORD_HEADER_ACTION_LABEL[row.id]} в шапке`}
+                        />
+                      </Flex>
+                    );
+                  })}
+                </Flex>
+              </Card>
+            </Flex>
+          </Tabs.Content>
+
           <Tabs.Content value="analytics">
             <Flex direction="column" gap="4" mt="4">
               {/* Сводка: Сегодня / За месяц / Всего */}
@@ -2396,7 +2589,10 @@ export function DeedFormPage() {
           loading={typeChangeModal.loading}
           error={typeChangeModal.error}
           rows={typeChangeModal.rows}
-          supportsMigrate={supportsAutomaticAnswerMigration(typeChangeModal.nextType)}
+          supportsMigrate={supportsAutomaticAnswerMigration(
+            typeChangeModal.nextType,
+            typeChangeModal.snapshot.block_type,
+          )}
           showDurationUnit={
             typeChangeModal.snapshot.block_type === "duration" &&
             typeChangeModal.nextType === "number"
