@@ -12,7 +12,7 @@ import { RecordCard } from '@/components/RecordCard'
 import type { DeedWithBlocks } from '@/types/database'
 import layoutStyles from '@/styles/layout.module.css'
 import styles from './DeedViewPage.module.css'
-import { formatDate, nowTimeLocal, pluralRecords, todayLocalISO } from '@/lib/format-utils'
+import { formatHistoryGroupDate, nowTimeLocal, pluralRecords, todayLocalISO } from '@/lib/format-utils'
 import { triggerHaptic } from '@/lib/haptics'
 import { deedQuickAddFromDefaultsActive, getQuickAddRecordAnswers, QUICK_ADD_FROM_DEFAULTS_LONG_PRESS_MS } from '@/lib/deed-quick-add'
 import { getDeedDisplayNumbers, type RecordWithAnswersLoose } from '@/lib/deed-utils'
@@ -495,7 +495,7 @@ export function DeedViewPage() {
           {byDate.map(([date, dayRecords]) => (
             <Flex key={date} direction="column" gap="2">
               <Text as="p" size="3" color="gray">
-                {formatDate(date)}
+                {formatHistoryGroupDate(date)}
               </Text>
               <Flex direction="column" gap="2">
                 {dayRecords.map((rec) => (

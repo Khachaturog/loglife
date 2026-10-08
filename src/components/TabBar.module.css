@@ -1,8 +1,8 @@
 /* Панель прижата к низу; safe-area снизу — на обёртке (фон до края экрана). */
 .barWrapper {
   /* Совпадает с pageContainer (668px), на широких экранах полоса визуально как основной контент */
-  max-width: 652px;
-  border-radius: 16px 16px 0 0;
+  max-width: 450px;
+  border-radius: 24px 24px 0 0;
   margin: 0 auto;
   position: fixed;
   left: 0;
@@ -12,12 +12,12 @@
   display: flex;
   align-items: stretch;
   box-sizing: border-box;
+  padding: 8px 0;
   background: var(--color-panel-solid);
   border-top: 1px solid var(--gray-a4);
   /* HIG: не меньше 16pt от контента до «опасных» зон; на вырезе — берём больший из отступов */
   padding-left: max(var(--space-2), env(safe-area-inset-left, 0px));
   padding-right: max(var(--space-2), env(safe-area-inset-right, 0px));
-  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 /* .backButton:hover {
@@ -28,10 +28,9 @@
 .tabBar {
   flex: 1;
   display: flex;
+  gap: 8px;
   width: 100%;
   min-width: 0;
-  padding-block: 8px;
-  padding-inline: 0;
   align-items: stretch;
 }
 
@@ -40,14 +39,13 @@
 .tabActive {
   display: flex;
   width: 100%;
-  min-width: 0;
+  /* max-width: 44px; */
   min-height: 48px;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding-block: 4px;
-  padding-inline: 8px;
+  gap: 2px;
+  padding: 4px;
   box-sizing: border-box;
   color: var(--gray-11);
   text-decoration: none;
@@ -58,24 +56,27 @@
 
 .tab:hover {
   color: var(--black-12);
+  background: var(--gray-a2);
+  border-radius: var(--radius-5);
 }
 
 .tabActive {
   color: var(--accent-10);
   background: var(--gray-a3);
-  border-radius: var(--radius-3);
+  border-radius: var(--radius-5);
 }
 
 @media (max-width: 768px) {
 
   .barWrapper {
-    padding-left: max(var(--space-4), env(safe-area-inset-left, 0px));
-    padding-right: max(var(--space-4), env(safe-area-inset-right, 0px));
+    padding-left: max(var(--space-2), env(safe-area-inset-left, 0px));
+    padding-right: max(var(--space-2), env(safe-area-inset-right, 0px));
+    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 
-  .tabActive {
-    min-height: 52px;
+  /* .tabActive {
+    min-height: 44px;
     border-radius: var(--radius-5);
-  }
+  } */
 
 }

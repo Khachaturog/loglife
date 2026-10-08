@@ -854,14 +854,15 @@ export function RecordViewPage() {
                   </Box>
                   <Flex gap="2" wrap="wrap" flexShrink="0">
                     {outdated && (
-                      <Badge size="3" color="amber" variant="surface">Устарело</Badge>
+                      <Badge size="2" color="amber" variant="surface">Устарело</Badge>
                     )}
                     {unfilled && (
-                      <Badge size="3" color="orange" variant="surface">Не заполнено</Badge>
+                      <Badge size="2" color="orange" variant="surface">Не заполнено</Badge>
                     )}
                   </Flex>
                 </Flex>
-                {value && block.block_type === 'yes_no' ? (
+                {/* У незаполненного блока прочерк не нужен: бейдж и поле ввода уже показывают пустоту. */}
+                {!unfilled && (value && block.block_type === 'yes_no' ? (
                   <Flex align="center" gap="2" mt="1">
                     <Checkbox
                       size="3"
@@ -872,7 +873,7 @@ export function RecordViewPage() {
                   </Flex>
                 ) : (
                   <Text as="p" size="3">{value ? formatAnswer(value, block, optionsOverride) : '—'}</Text>
-                )}
+                ))}
                 <Flex direction="column" gap="1">
                   <Flex direction="row" align="center" gap="3" wrap="wrap">
                     {/* <Flex direction="row" align="center" gap="1">

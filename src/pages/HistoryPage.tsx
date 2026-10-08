@@ -8,7 +8,7 @@ import { PageLoading } from '@/components/PageLoading'
 import { api } from '@/lib/api'
 import { RecordCard } from '@/components/RecordCard'
 import type { BlockRow, RecordRow } from '@/types/database'
-import { formatDate, pluralRecords } from '@/lib/format-utils'
+import { formatHistoryGroupDate, pluralRecords } from '@/lib/format-utils'
 import { HISTORY_SCROLL_STORAGE_KEY, persistHistoryListScrollY } from '@/lib/history-scroll-storage'
 import layoutStyles from '@/styles/layout.module.css'
 
@@ -215,7 +215,7 @@ export function HistoryPage() {
               <Flex direction="column" gap="2">
                 <Flex justify="between" align="center" gap="8">
                   <Text as="p" size="3" color="gray">
-                    {formatDate(date)}
+                    {formatHistoryGroupDate(date)}
                   </Text>
                   <Badge
                   size="2" 

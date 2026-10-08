@@ -77,9 +77,9 @@ export function FillFormNumberStepper({
   return (
     <>
       <IconButton
-        size="4"
+        size="3"
         color="gray"
-        variant="classic"
+        variant="soft"
         radius="full"
         type="button"
         aria-label="Уменьшить значение"
@@ -92,9 +92,9 @@ export function FillFormNumberStepper({
         <MinusIcon />
       </IconButton>
       <IconButton
-        size="4"
+        size="3"
         color="gray"
-        variant="classic"
+        variant="soft"
         radius="full"
         type="button"
         aria-label="Увеличить значение"

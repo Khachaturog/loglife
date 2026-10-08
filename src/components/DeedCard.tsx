@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Box, Card, Flex, IconButton, Skeleton, Text } from '@radix-ui/themes'
+import { Box, Button, Card, Flex, IconButton, Skeleton, Text } from '@radix-ui/themes'
 import { CheckIcon, PlusIcon, UpdateIcon } from '@radix-ui/react-icons'
 import type { DeedWithBlocks } from '@/types/database'
 import type { RecordRow, RecordAnswerRow } from '@/types/database'
@@ -12,6 +12,9 @@ import { triggerHaptic } from '@/lib/haptics'
 import { useDelayedActionLoader } from '@/lib/use-delayed-action-loader'
 import deedCardStyles from '@/components/DeedCard.module.css'
 
+/** row — строка списка; stack — плитка в сетке (эмодзи и название, счётчики, «+» на всю ширину). */
+export type DeedCardLayout = 'row' | 'stack'
+
 type DeedCardProps = {
   deed: DeedWithBlocks
   records: (RecordRow & { record_answers?: RecordAnswerRow[] })[]
@@ -19,6 +22,7 @@ type DeedCardProps = {
   countersLoading?: boolean
   /** После успешного быстрого «+» — обновить счётчики на карточке. */
   onRecordsRefresh?: (deedId: string) => void | Promise<void>
+  layout?: DeedCardLayout
 }
 
 /**
@@ -26,7 +30,13 @@ type DeedCardProps = {
  * Клик по карточке — просмотр дела (полноразмерная ссылка под контентом).
  * Кнопка «+» — добавление записи (pointer-events только на кнопке).
  */
-export function DeedCard({ deed, records, countersLoading = false, onRecordsRefresh }: DeedCardProps) {
+export function DeedCard({
+  deed,
+  records,
+  countersLoading = false,
+  onRecordsRefresh,
+  layout = 'row',
+}: DeedCardProps) {
   const navigate = useNavigate()
   const { today, total } = getDeedDisplayNumbers(deed.blocks ?? [], records)
   const { spinnerVisible, run: runQuickAddWithDelayedSpinner } = useDelayedActionLoader()
@@ -122,116 +132,158 @@ export function DeedCard({ deed, records, countersLoading = false, onRecordsRefr
     ? `Открыть дело «${deed.name}»${deed.category ? `. ${deed.category}` : ''}. Статистика загружается`
     : `Открыть дело «${deed.name}»${deed.category ? `. ${deed.category}` : ''}. ${today} сегодня, ${total} всего`
 
+  const showSuccess = quickAddActive && quickAddSuccess
+  const showSpinner = quickAddActive && actionPending && spinnerVisible
+  const actionIdle = !showSuccess && !(quickAddActive && actionPending)
+
+  const actionLabel = showSuccess
+    ? 'Запись добавлена'
+    : quickAddActive && actionPending
+      ? 'Добавление записи'
+      : 'Добавить запись'
+
+  const actionTitle = actionIdle
+    ? quickAddActive
+      ? 'Нажать — запись с дефолтами. Удерживать — форма с датой и временем'
+      : 'Нажать — форма записи. Удерживать — та же форма после короткой паузы'
+    : showSuccess
+      ? 'Запись добавлена'
+      : 'Добавление записи…'
+
+  const actionIcon = showSuccess ? (
+    <CheckIcon />
+  ) : showSpinner ? (
+    <UpdateIcon className={deedCardStyles.iconSpin} />
+  ) : (
+    <PlusIcon />
+  )
+
+  /** Одни и те же состояния «+»; в сетке кнопка на всю ширину, в списке — IconButton. */
+  const actionButton = layout === 'stack' ? (
+    <Button
+      type="button"
+      size="3"
+      variant="soft"
+      radius="full"
+      color={showSuccess ? 'green' : undefined}
+      className={`${deedCardStyles.cardActionButton} ${deedCardStyles.pillActionButton}`}
+      title={actionTitle}
+      aria-label={actionLabel}
+      disabled={!actionIdle && !showSuccess}
+      onPointerDown={actionIdle ? handlePlusPointerDown : undefined}
+      onPointerUp={actionIdle ? handlePlusPointerEnd : undefined}
+      onPointerCancel={actionIdle ? handlePlusPointerEnd : undefined}
+      onPointerLeave={actionIdle ? handlePlusPointerEnd : undefined}
+      onClick={
+        actionIdle
+          ? handlePlusClick
+          : (e) => {
+              e.preventDefault()
+              e.stopPropagation()
+            }
+      }
+    >
+      {actionIcon}
+    </Button>
+  ) : (
+    <IconButton
+      type="button"
+      size="4"
+      variant="soft"
+      color={showSuccess ? 'green' : undefined}
+      className={deedCardStyles.cardActionButton}
+      title={actionTitle}
+      aria-label={actionLabel}
+      disabled={!actionIdle && !showSuccess}
+      onPointerDown={actionIdle ? handlePlusPointerDown : undefined}
+      onPointerUp={actionIdle ? handlePlusPointerEnd : undefined}
+      onPointerCancel={actionIdle ? handlePlusPointerEnd : undefined}
+      onPointerLeave={actionIdle ? handlePlusPointerEnd : undefined}
+      onClick={
+        actionIdle
+          ? handlePlusClick
+          : (e) => {
+              e.preventDefault()
+              e.stopPropagation()
+            }
+      }
+    >
+      {actionIcon}
+    </IconButton>
+  )
+
+  const counters = (
+    <Text as="p" size="2" color="gray">
+      {countersLoading ? (
+        <>
+          <Skeleton loading width="1rem" height="1em" style={{ display: 'inline-block', verticalAlign: 'text-bottom' }}>
+            <Text as="span" size="2">{today}</Text>
+          </Skeleton>
+          {' '}сегодня ·{' '}
+          <Skeleton loading width="1rem" height="1em" style={{ display: 'inline-block', verticalAlign: 'text-bottom' }}>
+            <Text as="span" size="2">{total}</Text>
+          </Skeleton>
+          {' '}всего
+        </>
+      ) : (
+        `${today} сегодня · ${total} всего`
+      )}
+    </Text>
+  )
+
+  const quickAddErrorNode = quickAddError ? (
+    <Text size="1" color="crimson" role="alert">
+      {quickAddError}
+    </Text>
+  ) : null
+
   return (
-    <Card className={`${deedCardStyles.cardNoPadding} ${deedCardStyles.cardInteractive}`}>
-      <Box position="relative">
+    <Card
+      className={`${deedCardStyles.cardNoPadding} ${deedCardStyles.cardInteractive}${
+        layout === 'stack' ? ` ${deedCardStyles.cardStretch}` : ''
+      }`}
+    >
+      <Box position="relative" height={layout === 'stack' ? '100%' : undefined}>
         {/* Вся карточка — переход к делу; клики проходят сквозь .cardContent и попадают сюда */}
         <Link
           to={`/deeds/${deed.id}`}
           className={deedCardStyles.cardHitArea}
           aria-label={deedOpenLabel}
         />
-        <Flex direction="column" gap="1" className={deedCardStyles.cardContent}>
-          <Flex direction="row" justify="between" align="center" gap="3" p="3" pb={quickAddError ? '0' : '3'}>
-            <Flex align="start" gap="2" flexGrow="1" minWidth="0" aria-hidden="true">
-              {deed.emoji && <Text size="2">{deed.emoji}</Text>}
-              <Flex direction="column" gap="1">
-                <Flex align="center" gapX="2" gapY="1" wrap="wrap">
-                  <Text weight="medium">{deed.name}</Text>
-                </Flex>
-                <Text as="p" size="2" color="gray">
-                  {countersLoading ? (
-                    <>
-                      <Skeleton loading width="1rem" height="1em" style={{ display: 'inline-block', verticalAlign: 'text-bottom' }}>
-                        <Text as="span" size="2">{today}</Text>
-                      </Skeleton>
-                      {' '}сегодня ·{' '}
-                      <Skeleton loading width="1rem" height="1em" style={{ display: 'inline-block', verticalAlign: 'text-bottom' }}>
-                        <Text as="span" size="2">{total}</Text>
-                      </Skeleton>
-                      {' '}всего
-                    </>
-                  ) : (
-                    `${today} сегодня · ${total} всего`
-                  )}
-                </Text>
-              </Flex>
+        {layout === 'stack' ? (
+          <Flex direction="column" gap="2" p="3" height="100%" className={deedCardStyles.cardContent}>
+            <Flex align="center" gap="2" minWidth="0" aria-hidden="true">
+              {deed.emoji ? (
+                <Text size="2" className={deedCardStyles.stackEmoji}>{deed.emoji}</Text>
+              ) : null}
+              <Text weight="medium" truncate className={deedCardStyles.stackTitle}>{deed.name}</Text>
             </Flex>
-
-            {quickAddActive && quickAddSuccess ? (
-              <IconButton
-                type="button"
-                size="3"
-                color="green"
-                variant="solid"
-                radius="full"
-                className={deedCardStyles.cardActionButton}
-                title="Запись добавлена"
-                aria-label="Запись добавлена"
-                onClick={(e) => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                }}
-              >
-                <CheckIcon />
-              </IconButton>
-            ) : quickAddActive && actionPending && spinnerVisible ? (
-              <IconButton
-                type="button"
-                size="3"
-                variant="soft"
-                radius="full"
-                className={deedCardStyles.cardActionButton}
-                title="Добавление записи…"
-                aria-label="Добавление записи"
-                disabled
-              >
-                <UpdateIcon className={deedCardStyles.iconSpin} />
-              </IconButton>
-            ) : quickAddActive && actionPending ? (
-              <IconButton
-                type="button"
-                size="3"
-                variant="classic"
-                radius="full"
-                className={deedCardStyles.cardActionButton}
-                title="Добавление записи…"
-                aria-label="Добавление записи"
-                disabled
-              >
-                <PlusIcon />
-              </IconButton>
-            ) : (
-              <IconButton
-                type="button"
-                size="3"
-                variant="classic"
-                radius="full"
-                className={deedCardStyles.cardActionButton}
-                title={
-                  quickAddActive
-                    ? 'Нажать — запись с дефолтами. Удерживать — форма с датой и временем'
-                    : 'Нажать — форма записи. Удерживать — та же форма после короткой паузы'
-                }
-                aria-label="Добавить запись"
-                onPointerDown={handlePlusPointerDown}
-                onPointerUp={handlePlusPointerEnd}
-                onPointerCancel={handlePlusPointerEnd}
-                onPointerLeave={handlePlusPointerEnd}
-                onClick={handlePlusClick}
-              >
-                <PlusIcon />
-              </IconButton>
-            )}
-          </Flex>
-          {quickAddError ? (
-            <Box px="3" pb="3">
-              <Text size="1" color="crimson" role="alert">
-                {quickAddError}
-              </Text>
+            <Box aria-hidden="true">{counters}</Box>
+            {/* Кнопка у нижнего края, чтобы в ряду разной высоты «+» стояли на одной линии */}
+            <Box mt="auto" width="100%">
+              {actionButton}
             </Box>
-          ) : null}
-        </Flex>
+            {quickAddErrorNode}
+          </Flex>
+        ) : (
+          <Flex direction="column" gap="1" className={deedCardStyles.cardContent}>
+            <Flex direction="row" justify="between" align="center" gap="3" p="3" pb={quickAddError ? '0' : '3'}>
+              <Flex align="start" gap="2" flexGrow="1" minWidth="0" aria-hidden="true">
+                {deed.emoji && <Text size="2">{deed.emoji}</Text>}
+                <Flex direction="column" gap="1">
+                  <Text weight="medium">{deed.name}</Text>
+                  {counters}
+                </Flex>
+              </Flex>
+              {actionButton}
+            </Flex>
+            {quickAddError ? (
+              <Box px="3" pb="3">
+                {quickAddErrorNode}
+              </Box>
+            ) : null}
+          </Flex>
+        )}
       </Box>
     </Card>
   )

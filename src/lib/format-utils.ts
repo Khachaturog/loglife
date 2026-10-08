@@ -122,6 +122,43 @@ export function formatDate(isoDate: string): string {
     .join(' ')
 }
 
+/** Короткие дни недели: индекс совпадает с Date.getDay() (0 — воскресенье). */
+const WEEKDAY_SHORT_RU = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'] as const
+
+/**
+ * Заголовок группы записей в истории.
+ * Ближайшие дни: «Сегодня · 8 октября (чт)», «Вчера · …», «Позавчера · …».
+ * Остальные дни текущего года: «5 октября (пн)».
+ * Другой календарный год: «31 декабря 2025 (ср)».
+ */
+export function formatHistoryGroupDate(isoDate: string): string {
+  const d = new Date(isoDate + 'T12:00:00')
+  const today = new Date()
+  const yesterday = new Date(today)
+  yesterday.setDate(yesterday.getDate() - 1)
+  const dayBeforeYesterday = new Date(today)
+  dayBeforeYesterday.setDate(dayBeforeYesterday.getDate() - 2)
+
+  // Тот же календарный вид, что у formatDate: без года в текущем году, без суффикса « г.».
+  const sameCalendarYear = d.getFullYear() === today.getFullYear()
+  const calendar = new Intl.DateTimeFormat(
+    'ru-RU',
+    sameCalendarYear
+      ? { day: 'numeric', month: 'long' }
+      : { day: 'numeric', month: 'long', year: 'numeric' },
+  )
+    .formatToParts(d)
+    .filter((p) => p.type === 'day' || p.type === 'month' || p.type === 'year')
+    .map((p) => p.value)
+    .join(' ')
+  const withWeekday = `${calendar} (${WEEKDAY_SHORT_RU[d.getDay()]})`
+
+  if (d.toDateString() === today.toDateString()) return `Сегодня · ${withWeekday}`
+  if (d.toDateString() === yesterday.toDateString()) return `Вчера · ${withWeekday}`
+  if (d.toDateString() === dayBeforeYesterday.toDateString()) return `Позавчера · ${withWeekday}`
+  return withWeekday
+}
+
 /**
  * Дата и время записи для экрана просмотра: «27 марта 2026 в 14:30».
  * Дата — день, месяц полностью, год (четыре цифры); время — часы:минуты из `record_time`.

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Box, Button, DropdownMenu, Flex, Heading, IconButton, Text } from '@radix-ui/themes'
+import { Box, Button, DropdownMenu, Flex, Grid, Heading, IconButton, Text } from '@radix-ui/themes'
 import { AppBar } from '@/components/AppBar'
 import { PageLoading } from '@/components/PageLoading'
 import { PageErrorState } from '@/components/PageErrorState'
@@ -16,7 +16,11 @@ import { getDeedDisplayNumbers } from '@/lib/deed-utils'
 /** Режим сортировки списка на главной: метрики совпадают с подписью карточки «N сегодня · M всего». */
 type DeedSortMode = 'default' | 'today' | 'total'
 
+/** list — колонка на всю ширину; cards — сетка (2 колонки до 768px, 3 начиная с sm). */
+type DeedListViewMode = 'list' | 'cards'
+
 const DEEDS_LIST_SORT_STORAGE_KEY = 'log-life:deeds-list-sort'
+const DEEDS_LIST_VIEW_STORAGE_KEY = 'log-life:deeds-list-view'
 
 /** Восстановление из localStorage; невалидное значение — как «По умолчанию». */
 function readStoredDeedSortMode(): DeedSortMode {
@@ -27,6 +31,17 @@ function readStoredDeedSortMode(): DeedSortMode {
     /* приватный режим и т.п. */
   }
   return 'default'
+}
+
+/** Восстановление вида списка; невалидное значение — колонка, как до появления настройки. */
+function readStoredDeedListViewMode(): DeedListViewMode {
+  try {
+    const raw = localStorage.getItem(DEEDS_LIST_VIEW_STORAGE_KEY)
+    if (raw === 'list' || raw === 'cards') return raw
+  } catch {
+    /* приватный режим и т.п. */
+  }
+  return 'list'
 }
 
 function deedCreatedAtDesc(a: DeedWithBlocks, b: DeedWithBlocks): number {
@@ -42,7 +57,7 @@ function deedCreatedAtDesc(a: DeedWithBlocks, b: DeedWithBlocks): number {
  * Прогрессивная загрузка: список дел появляется сразу после первого запроса,
  * счётчики записей (сегодня/всего) доподгружаются вторым запросом (плейсхолдер, без ложных нулей).
  * Сортировка по выпадающему меню — по тем же today/total, что на карточке; порядок по умолчанию — как из API (created_at убывание).
- * Выбор сортировки сохраняется в `localStorage` (этот браузер); после F5 и при следующих визитах не теряется, пока не очищены данные сайта.
+ * Выбор сортировки и вида (список / карточки) сохраняется в `localStorage` (этот браузер); после F5 и при следующих визитах не теряется, пока не очищены данные сайта.
  */
 export function DeedsListPage() {
   const { openFlow } = useOnboarding()
@@ -55,6 +70,7 @@ export function DeedsListPage() {
   const [error, setError] = useState<string | null>(null)
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [sortMode, setSortMode] = useState<DeedSortMode>(() => readStoredDeedSortMode())
+  const [viewMode, setViewMode] = useState<DeedListViewMode>(() => readStoredDeedListViewMode())
 
   // Запись выбора сортировки: без частых сбросов при обычном F5/возврате на вкладку.
   useEffect(() => {
@@ -64,6 +80,14 @@ export function DeedsListPage() {
       /* квота / приватный режим */
     }
   }, [sortMode])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(DEEDS_LIST_VIEW_STORAGE_KEY, viewMode)
+    } catch {
+      /* квота / приватный режим */
+    }
+  }, [viewMode])
 
   // --- Загрузка дел и записей ---
   useEffect(() => {
@@ -235,6 +259,17 @@ export function DeedsListPage() {
                   <Link to="/deeds/new"> <PlusIcon /> Создать дело</Link>
                 </DropdownMenu.Item>
                 <DropdownMenu.Separator />
+                <DropdownMenu.Label>Вид</DropdownMenu.Label>
+                <DropdownMenu.RadioGroup
+                  value={viewMode}
+                  onValueChange={(v) => {
+                    setViewMode(v as DeedListViewMode)
+                  }}
+                >
+                  <DropdownMenu.RadioItem value="list">Список</DropdownMenu.RadioItem>
+                  <DropdownMenu.RadioItem value="cards">Карточки</DropdownMenu.RadioItem>
+                </DropdownMenu.RadioGroup>
+                <DropdownMenu.Separator />
                 <DropdownMenu.Item color="gray" onSelect={() => openFlow('help_deeds_list')}>
                   <QuestionMarkCircledIcon /> Справка
                 </DropdownMenu.Item>
@@ -246,12 +281,13 @@ export function DeedsListPage() {
 
       {/* Фильтр по категориям (скрыт, если нет дел или категорий) */}
       {deeds.length > 0 && categories.length > 0 && (
-        <Flex gap="2" mb="5" wrap="wrap">
+        <Flex gap="1" mb="4" wrap="wrap">
           <Button
             type="button"
             color='gray'
             variant={selectedCategory === null ? 'classic' : 'soft'}
             size="2"
+            radius="full"
             onClick={() => setSelectedCategory(null)}
           >
             Все
@@ -263,6 +299,7 @@ export function DeedsListPage() {
               color='gray'
               variant={selectedCategory === cat ? 'classic' : 'soft'}
               size="2"
+              radius="full"
               onClick={() => setSelectedCategory(cat)}
             >
               {cat}
@@ -303,18 +340,34 @@ export function DeedsListPage() {
           </Button>
         </Flex>
       ) : (
-        <Flex direction="column" gap="2">
-          {/* Карточки дел: клик по левой части — просмотр, кнопка + — добавить запись */}
-          {deedsForList.map((deed) => (
-            <DeedCard
-              key={deed.id}
-              deed={deed}
-              records={recordsByDeedId[deed.id] ?? []}
-              countersLoading={recordsLoading}
-              onRecordsRefresh={refreshRecordsForDeed}
-            />
-          ))}
-        </Flex>
+        /* Вид из меню «⋯»: колонка или сетка (2 колонки до 768px, 3 с sm). */
+        viewMode === 'cards' ? (
+          <Grid columns={{ initial: '2', sm: '3' }} gap="2">
+            {deedsForList.map((deed) => (
+              <DeedCard
+                key={deed.id}
+                layout="stack"
+                deed={deed}
+                records={recordsByDeedId[deed.id] ?? []}
+                countersLoading={recordsLoading}
+                onRecordsRefresh={refreshRecordsForDeed}
+              />
+            ))}
+          </Grid>
+        ) : (
+          <Flex direction="column" gap="2">
+            {/* Карточки дел: клик по левой части — просмотр, кнопка + — добавить запись */}
+            {deedsForList.map((deed) => (
+              <DeedCard
+                key={deed.id}
+                deed={deed}
+                records={recordsByDeedId[deed.id] ?? []}
+                countersLoading={recordsLoading}
+                onRecordsRefresh={refreshRecordsForDeed}
+              />
+            ))}
+          </Flex>
+        )
       )}
     </Box>
   )

@@ -28,6 +28,29 @@
   pointer-events: auto;
 }
 
+/* Сетка карточек: ячейка на всю высоту ряда, текст может сжиматься */
+.cardStretch {
+  height: 100%;
+  min-width: 0;
+}
+
+/* «+» на всю ширину карточки в виде сетки */
+.pillActionButton {
+  width: 100%;
+  justify-content: center;
+}
+
+/* Эмодзи не сжимается, остаток ширины отдаём названию */
+.stackEmoji {
+  flex-shrink: 0;
+}
+
+/* Название в плитке — одна строка, хвост уходит в многоточие */
+.stackTitle {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
 /* Вращение иконки загрузки при быстром добавлении записи «Да/Нет» */
 .iconSpin {
   display: block;

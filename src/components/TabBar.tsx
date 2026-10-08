@@ -32,7 +32,7 @@ export function TabBar() {
         className={({ isActive }) => (isActive ? styles.tabActive : styles.tab)}
       >
         <HomeIcon width={20} height={20} />
-        <span>Главная</span>
+        {/* <span>Главная</span> */}
       </NavLink>
       <NavLink
         to="/widgets"
@@ -41,7 +41,7 @@ export function TabBar() {
         className={({ isActive }) => (isActive ? styles.tabActive : styles.tab)}
       >
         <ViewGridIcon width={20} height={20} />
-        <span>Виджеты</span>
+        {/* <span>Виджеты</span> */}
       </NavLink>
       <NavLink
         to="/history"
@@ -49,7 +49,7 @@ export function TabBar() {
         className={({ isActive }) => (isActive ? styles.tabActive : styles.tab)}
       >
         <ClockIcon width={20} height={20} />
-        <span>История</span>
+        {/* <span>История</span> */}
       </NavLink>
       <NavLink
         to="/profile"
@@ -57,7 +57,7 @@ export function TabBar() {
         className={({ isActive }) => (isActive ? styles.tabActive : styles.tab)}
       >
         <PersonIcon width={20} height={20} />
-        <span>Профиль</span>
+        {/* <span>Профиль</span> */}
       </NavLink>
     </nav>
     </div>
