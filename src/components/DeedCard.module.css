@@ -34,10 +34,52 @@
   min-width: 0;
 }
 
-/* «+» на всю ширину карточки в виде сетки */
+/* «+» или число на всю ширину карточки в виде сетки */
 .pillActionButton {
   width: 100%;
   justify-content: center;
+}
+
+/* Барабан числа «сегодня»: окно в одну цифру по высоте, лента уезжает вверх */
+.slot {
+  --slot-step: 1.15em;
+  display: inline-flex;
+  height: var(--slot-step);
+  overflow: hidden;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  line-height: 1;
+  user-select: none;
+}
+
+.slotDigit {
+  width: 1ch;
+  height: var(--slot-step);
+  overflow: hidden;
+}
+
+.slotStrip {
+  display: flex;
+  flex-direction: column;
+  transition: transform 600ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.slotCell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--slot-step);
+}
+
+/* Пока на кнопке галочка или спиннер, число остаётся в дереве, чтобы не сбрасывать барабан */
+.slotHidden {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slotStrip {
+    transition: none;
+  }
 }
 
 /* Эмодзи не сжимается, остаток ширины отдаём названию */

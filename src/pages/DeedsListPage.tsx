@@ -9,7 +9,7 @@ import { DeedCard } from '@/components/DeedCard'
 import type { DeedWithBlocks } from '@/types/database'
 import layoutStyles from '@/styles/layout.module.css'
 import type { RecordRow, RecordAnswerRow } from '@/types/database'
-import { CaretSortIcon, DotsHorizontalIcon, PlusIcon, QuestionMarkCircledIcon } from '@radix-ui/react-icons'
+import { CaretSortIcon, DotsHorizontalIcon, ListBulletIcon, CardStackIcon, PlusIcon, QuestionMarkCircledIcon } from '@radix-ui/react-icons'
 import { useOnboarding } from '@/lib/onboarding-context'
 import { getDeedDisplayNumbers } from '@/lib/deed-utils'
 
@@ -266,8 +266,8 @@ export function DeedsListPage() {
                     setViewMode(v as DeedListViewMode)
                   }}
                 >
-                  <DropdownMenu.RadioItem value="list">Список</DropdownMenu.RadioItem>
-                  <DropdownMenu.RadioItem value="cards">Карточки</DropdownMenu.RadioItem>
+                  <DropdownMenu.RadioItem value="list"> <ListBulletIcon /> Список</DropdownMenu.RadioItem>
+                  <DropdownMenu.RadioItem value="cards"> <CardStackIcon /> Карточки</DropdownMenu.RadioItem>
                 </DropdownMenu.RadioGroup>
                 <DropdownMenu.Separator />
                 <DropdownMenu.Item color="gray" onSelect={() => openFlow('help_deeds_list')}>

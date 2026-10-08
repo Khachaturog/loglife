@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Box, Button, Card, Flex, IconButton, Skeleton, Text } from '@radix-ui/themes'
-import { CheckIcon, PlusIcon, UpdateIcon } from '@radix-ui/react-icons'
+import { Box, Button, Card, Flex, IconButton, Text } from '@radix-ui/themes'
+import { CheckCircledIcon, CircleIcon, UpdateIcon } from '@radix-ui/react-icons'
 import type { DeedWithBlocks } from '@/types/database'
 import type { RecordRow, RecordAnswerRow } from '@/types/database'
 import { getDeedDisplayNumbers } from '@/lib/deed-utils'
@@ -12,8 +12,86 @@ import { triggerHaptic } from '@/lib/haptics'
 import { useDelayedActionLoader } from '@/lib/use-delayed-action-loader'
 import deedCardStyles from '@/components/DeedCard.module.css'
 
-/** row — строка списка; stack — плитка в сетке (эмодзи и название, счётчики, «+» на всю ширину). */
+/** row — строка списка; stack — плитка в сетке (эмодзи, название, число «сегодня» в кнопке). */
 export type DeedCardLayout = 'row' | 'stack'
+
+const SLOT_GLYPHS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] as const
+
+function prefersReducedMotion(): boolean {
+  return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+}
+
+function toSlotDigits(value: number): number[] {
+  const safe = Math.max(0, Math.floor(value))
+  return String(safe).split('').map((ch) => Number(ch))
+}
+
+function sameSlotDigits(a: number[], b: number[]): boolean {
+  return a.length === b.length && a.every((digit, index) => digit === b[index])
+}
+
+/**
+ * Число за сегодня: на кнопке плитки и под названием в списке.
+ * Каждая цифра — лента 0–9, которая доезжает до новой. Ноль не крутим.
+ */
+function SlotCount({ value }: { value: number }) {
+  const [digits, setDigits] = useState<number[]>([0])
+  const digitsRef = useRef(digits)
+  digitsRef.current = digits
+
+  useEffect(() => {
+    const target = toSlotDigits(value)
+    if (prefersReducedMotion()) {
+      setDigits(target)
+      return
+    }
+    if (sameSlotDigits(digitsRef.current, target)) return
+
+    const frames: number[] = []
+    const schedule = (fn: () => void) => {
+      frames.push(requestAnimationFrame(fn))
+    }
+    const prev = digitsRef.current
+    // Новый разряд сначала показывается нулём, иначе он появится уже на итоговой цифре.
+    if (target.length > prev.length) {
+      const padded = Array.from({ length: target.length }, () => 0)
+      for (let i = 0; i < prev.length; i++) {
+        padded[padded.length - 1 - i] = prev[prev.length - 1 - i]
+      }
+      setDigits(padded)
+      schedule(() => {
+        schedule(() => setDigits(target))
+      })
+    } else {
+      schedule(() => setDigits(target))
+    }
+    return () => {
+      for (const id of frames) cancelAnimationFrame(id)
+    }
+  }, [value])
+
+  return (
+    <span className={deedCardStyles.slot}>
+      {digits.map((digit, index) => {
+        const place = digits.length - 1 - index
+        return (
+          <span key={place} className={deedCardStyles.slotDigit}>
+            <span
+              className={deedCardStyles.slotStrip}
+              style={{ transform: `translateY(calc(${digit} * var(--slot-step) * -1))` }}
+            >
+              {SLOT_GLYPHS.map((glyph) => (
+                <span key={glyph} className={deedCardStyles.slotCell}>
+                  {glyph}
+                </span>
+              ))}
+            </span>
+          </span>
+        )
+      })}
+    </span>
+  )
+}
 
 type DeedCardProps = {
   deed: DeedWithBlocks
@@ -28,7 +106,8 @@ type DeedCardProps = {
 /**
  * Карточка дела в списке.
  * Клик по карточке — просмотр дела (полноразмерная ссылка под контентом).
- * Кнопка «+» — добавление записи (pointer-events только на кнопке).
+ * Кнопка — добавление записи (pointer-events только на кнопке).
+ * Пустой день — кружок, день с записями — галочка.
  */
 export function DeedCard({
   deed,
@@ -38,16 +117,16 @@ export function DeedCard({
   layout = 'row',
 }: DeedCardProps) {
   const navigate = useNavigate()
-  const { today, total } = getDeedDisplayNumbers(deed.blocks ?? [], records)
+  const { today } = getDeedDisplayNumbers(deed.blocks ?? [], records)
   const { spinnerVisible, run: runQuickAddWithDelayedSpinner } = useDelayedActionLoader()
 
   const quickAddActive = useMemo(() => deedQuickAddFromDefaultsActive(deed), [deed])
 
   /** Быстрый «+»: лоадер с задержкой и минимальной длительностью — см. useDelayedActionLoader. */
   const [actionPending, setActionPending] = useState(false)
-  const [quickAddSuccess, setQuickAddSuccess] = useState(false)
   const [quickAddError, setQuickAddError] = useState<string | null>(null)
-  const successHideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  /** Число на кнопке плитки. Пока крутится спиннер, не обновляем — прокрутка видна после него. */
+  const [stackCount, setStackCount] = useState(0)
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   /** После срабатывания long press подавляем следующий click (иначе уйдёт в быстрый «+»). */
   const longPressConsumedClickRef = useRef(false)
@@ -61,7 +140,6 @@ export function DeedCard({
 
   useEffect(() => {
     return () => {
-      if (successHideTimeoutRef.current) clearTimeout(successHideTimeoutRef.current)
       clearLongPressTimer()
     }
   }, [])
@@ -70,7 +148,7 @@ export function DeedCard({
     e.preventDefault()
     e.stopPropagation()
     const answers = getQuickAddRecordAnswers(deed)
-    if (!answers || actionPending || quickAddSuccess) return
+    if (!answers || actionPending) return
     setActionPending(true)
     setQuickAddError(null)
     try {
@@ -83,12 +161,6 @@ export function DeedCard({
         await onRecordsRefresh?.(deed.id)
       })
       triggerHaptic('success', { intensity: 1 })
-      if (successHideTimeoutRef.current) clearTimeout(successHideTimeoutRef.current)
-      setQuickAddSuccess(true)
-      successHideTimeoutRef.current = setTimeout(() => {
-        setQuickAddSuccess(false)
-        successHideTimeoutRef.current = null
-      }, 1000)
     } catch (err) {
       setQuickAddError(err instanceof Error ? err.message : 'Не удалось добавить запись')
     } finally {
@@ -99,7 +171,7 @@ export function DeedCard({
   /** Удержание — через фиксированную паузу открываем форму (без ожидания отпускания), короткий тап — см. handlePlusClick. */
   function handlePlusPointerDown(e: React.PointerEvent<HTMLButtonElement>) {
     if (e.pointerType === 'mouse' && e.button !== 0) return
-    if (quickAddActive && (actionPending || quickAddSuccess)) return
+    if (quickAddActive && actionPending) return
     longPressConsumedClickRef.current = false
     clearLongPressTimer()
     longPressTimerRef.current = setTimeout(() => {
@@ -128,107 +200,104 @@ export function DeedCard({
     }
   }
 
+  const markedToday = !countersLoading && today > 0
+
   const deedOpenLabel = countersLoading
     ? `Открыть дело «${deed.name}»${deed.category ? `. ${deed.category}` : ''}. Статистика загружается`
-    : `Открыть дело «${deed.name}»${deed.category ? `. ${deed.category}` : ''}. ${today} сегодня, ${total} всего`
+    : `Открыть дело «${deed.name}»${deed.category ? `. ${deed.category}` : ''}. ${today} сегодня`
 
-  const showSuccess = quickAddActive && quickAddSuccess
   const showSpinner = quickAddActive && actionPending && spinnerVisible
-  const actionIdle = !showSuccess && !(quickAddActive && actionPending)
+  const actionIdle = !actionPending
 
-  const actionLabel = showSuccess
-    ? 'Запись добавлена'
-    : quickAddActive && actionPending
-      ? 'Добавление записи'
-      : 'Добавить запись'
+  // Пока спиннер на кнопке, число не меняем — барабан крутится, когда цифра снова видна.
+  useEffect(() => {
+    if (layout !== 'stack') return
+    if (showSpinner) return
+    const next = markedToday ? today : 0
+    const id = requestAnimationFrame(() => setStackCount(next))
+    return () => cancelAnimationFrame(id)
+  }, [layout, showSpinner, markedToday, today])
+
+  const actionLabel = actionPending
+    ? 'Добавление записи'
+    : countersLoading
+      ? 'Добавить запись'
+      : layout === 'stack' && !markedToday
+        ? 'Отметить'
+        : markedToday
+          ? `Добавить запись, ${today} сегодня`
+          : 'Добавить запись'
 
   const actionTitle = actionIdle
     ? quickAddActive
       ? 'Нажать — запись с дефолтами. Удерживать — форма с датой и временем'
       : 'Нажать — форма записи. Удерживать — та же форма после короткой паузы'
-    : showSuccess
-      ? 'Запись добавлена'
-      : 'Добавление записи…'
+    : 'Добавление записи…'
 
-  const actionIcon = showSuccess ? (
-    <CheckIcon />
-  ) : showSpinner ? (
-    <UpdateIcon className={deedCardStyles.iconSpin} />
-  ) : (
-    <PlusIcon />
-  )
+  const pointerHandlers = actionIdle
+    ? {
+        onPointerDown: handlePlusPointerDown,
+        onPointerUp: handlePlusPointerEnd,
+        onPointerCancel: handlePlusPointerEnd,
+        onPointerLeave: handlePlusPointerEnd,
+        onClick: handlePlusClick,
+      }
+    : {
+        onClick: (e: React.MouseEvent) => {
+          e.preventDefault()
+          e.stopPropagation()
+        },
+      }
 
-  /** Одни и те же состояния «+»; в сетке кнопка на всю ширину, в списке — IconButton. */
+  /** Плитка: кружок и «Отметить», либо галочка и число. Список: кружок или галочка. */
   const actionButton = layout === 'stack' ? (
     <Button
       type="button"
       size="3"
       variant="soft"
-      radius="full"
-      color={showSuccess ? 'green' : undefined}
+      color="gray"
+      // highContrast={true}
       className={`${deedCardStyles.cardActionButton} ${deedCardStyles.pillActionButton}`}
       title={actionTitle}
       aria-label={actionLabel}
-      disabled={!actionIdle && !showSuccess}
-      onPointerDown={actionIdle ? handlePlusPointerDown : undefined}
-      onPointerUp={actionIdle ? handlePlusPointerEnd : undefined}
-      onPointerCancel={actionIdle ? handlePlusPointerEnd : undefined}
-      onPointerLeave={actionIdle ? handlePlusPointerEnd : undefined}
-      onClick={
-        actionIdle
-          ? handlePlusClick
-          : (e) => {
-              e.preventDefault()
-              e.stopPropagation()
-            }
-      }
+      disabled={!actionIdle}
+      {...pointerHandlers}
     >
-      {actionIcon}
+      {showSpinner ? (
+        <UpdateIcon className={deedCardStyles.iconSpin} />
+      ) : markedToday ? (
+        <CheckCircledIcon />
+      ) : (
+        <CircleIcon />
+      )}
+      {/* Барабан остаётся в дереве на время спиннера, чтобы не начинать прокрутку с нуля заново */}
+      {stackCount > 0 || markedToday ? (
+        <span className={showSpinner || !markedToday ? deedCardStyles.slotHidden : undefined} aria-hidden="true">
+          <SlotCount value={stackCount} />
+        </span>
+      ) : null}
+      {!showSpinner && !countersLoading && !markedToday ? 'Отметить' : null}
     </Button>
   ) : (
     <IconButton
       type="button"
       size="4"
       variant="soft"
-      color={showSuccess ? 'green' : undefined}
+      color="gray"
       className={deedCardStyles.cardActionButton}
       title={actionTitle}
       aria-label={actionLabel}
-      disabled={!actionIdle && !showSuccess}
-      onPointerDown={actionIdle ? handlePlusPointerDown : undefined}
-      onPointerUp={actionIdle ? handlePlusPointerEnd : undefined}
-      onPointerCancel={actionIdle ? handlePlusPointerEnd : undefined}
-      onPointerLeave={actionIdle ? handlePlusPointerEnd : undefined}
-      onClick={
-        actionIdle
-          ? handlePlusClick
-          : (e) => {
-              e.preventDefault()
-              e.stopPropagation()
-            }
-      }
+      disabled={!actionIdle}
+      {...pointerHandlers}
     >
-      {actionIcon}
-    </IconButton>
-  )
-
-  const counters = (
-    <Text as="p" size="2" color="gray">
-      {countersLoading ? (
-        <>
-          <Skeleton loading width="1rem" height="1em" style={{ display: 'inline-block', verticalAlign: 'text-bottom' }}>
-            <Text as="span" size="2">{today}</Text>
-          </Skeleton>
-          {' '}сегодня ·{' '}
-          <Skeleton loading width="1rem" height="1em" style={{ display: 'inline-block', verticalAlign: 'text-bottom' }}>
-            <Text as="span" size="2">{total}</Text>
-          </Skeleton>
-          {' '}всего
-        </>
+      {showSpinner ? (
+        <UpdateIcon className={deedCardStyles.iconSpin} />
+      ) : markedToday ? (
+        <CheckCircledIcon />
       ) : (
-        `${today} сегодня · ${total} всего`
+        <CircleIcon />
       )}
-    </Text>
+    </IconButton>
   )
 
   const quickAddErrorNode = quickAddError ? (
@@ -258,8 +327,7 @@ export function DeedCard({
               ) : null}
               <Text weight="medium" truncate className={deedCardStyles.stackTitle}>{deed.name}</Text>
             </Flex>
-            <Box aria-hidden="true">{counters}</Box>
-            {/* Кнопка у нижнего края, чтобы в ряду разной высоты «+» стояли на одной линии */}
+            {/* Кнопка у нижнего края, чтобы в ряду разной высоты число стояло на одной линии */}
             <Box mt="auto" width="100%">
               {actionButton}
             </Box>
@@ -268,11 +336,15 @@ export function DeedCard({
         ) : (
           <Flex direction="column" gap="1" className={deedCardStyles.cardContent}>
             <Flex direction="row" justify="between" align="center" gap="3" p="3" pb={quickAddError ? '0' : '3'}>
-              <Flex align="start" gap="2" flexGrow="1" minWidth="0" aria-hidden="true">
+              <Flex align="center" gap="2" flexGrow="1" minWidth="0" aria-hidden="true">
                 {deed.emoji && <Text size="2">{deed.emoji}</Text>}
                 <Flex direction="column" gap="1">
                   <Text weight="medium">{deed.name}</Text>
-                  {counters}
+                  {markedToday ? (
+                    <Text as="p" size="2" color="gray">
+                      <SlotCount value={today} />
+                    </Text>
+                  ) : null}
                 </Flex>
               </Flex>
               {actionButton}
