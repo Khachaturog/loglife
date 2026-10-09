@@ -33,6 +33,23 @@ export function WidgetsPage() {
         </Card>
 
         <Card asChild>
+          <Link to="/widgets/pomodoro">
+              <Flex align="start" gap="2">
+                <Avatar
+                size="4"
+                radius="large"
+                color="gray"
+                variant="soft"
+                fallback="🍅" />
+                <Flex direction="column" gap="0">
+                  <Text weight="medium">Помодоро</Text>
+                  <Text as="p" size="2" color="gray">Фокус по проектам с записью сеансов</Text>
+                </Flex>
+              </Flex>
+          </Link>
+        </Card>
+
+        <Card asChild>
           <Link to="/widgets/calendar">
               <Flex align="start" gap="2">
                 <Avatar

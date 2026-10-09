@@ -26,6 +26,12 @@
 | api.deeds | `createRecord()` | deeds, records, record_answers | FillFormPage, DeedCard, DeedViewPage (быстрое добавление из дефолтов) |
 | api.records | `get(id)` | records, record_answers, deeds | RecordViewPage |
 | api.records | `update()` | records, record_answers, deeds | RecordViewPage |
+| api.pomodoro | `getSettings()` | pomodoro_settings | PomodoroPage |
+| api.pomodoro | `updateSettings()` | pomodoro_settings | PomodoroPage (длительность «Без проекта») |
+| api.pomodoro | `listProjects()` | pomodoro_projects | PomodoroPage |
+| api.pomodoro | `createProject()` / `updateProject()` / `deleteProject()` | pomodoro_projects | PomodoroPage |
+| api.pomodoro | `createSession()` | pomodoro_sessions | PomodoroPage (конец или остановка сеанса) |
+| api.pomodoro | `focusTotals()` | pomodoro_sessions | PomodoroPage |
 
 ---
 
@@ -327,7 +333,57 @@ ORDER BY record_date DESC, record_time DESC
 
 ---
 
-## 5. Оптимизированные запросы
+## 5. Pomodoro API
+
+Таблицы не связаны с `deeds`. Доступ только к своим строкам через RLS.
+
+### `api.pomodoro.getSettings()`
+
+```sql
+SELECT * FROM pomodoro_settings WHERE user_id = :uid
+```
+
+Если строки нет — `INSERT` с `focus_seconds = 1500`.
+
+### `api.pomodoro.updateSettings(focusSeconds)`
+
+```sql
+UPDATE pomodoro_settings
+SET focus_seconds = :seconds, updated_at = now()
+WHERE user_id = :uid
+```
+
+Секунды округляются до минут и зажимаются в 60…10800.
+
+### `api.pomodoro.listProjects()`
+
+```sql
+SELECT * FROM pomodoro_projects
+WHERE user_id = :uid
+ORDER BY created_at DESC
+```
+
+### `api.pomodoro.createProject()` / `updateProject()` / `deleteProject()`
+
+Создание и правка пишут `name`, `emoji`, `accent_color`, `focus_seconds`. Цвет должен быть hex из пресетов карточки дела. Удаление проекта не удаляет сеансы: `project_id` становится `NULL`.
+
+### `api.pomodoro.createSession()`
+
+```sql
+INSERT INTO pomodoro_sessions (
+  user_id, project_id, planned_seconds, actual_seconds, status, started_at, ended_at
+) VALUES (...)
+```
+
+Вызов ничего не пишет, если план короче 300 секунд или факт равен 0. Если проект уже удалён (FK), повторная вставка идёт с `project_id = null`.
+
+### `api.pomodoro.focusTotals(projectId)`
+
+Читает `actual_seconds` и `started_at` сеансов пользователя. `projectId = null` — только строки без проекта. «Сегодня» считается по местной полуночи в клиенте.
+
+---
+
+## 6. Оптимизированные запросы
 
 | Страница | Количество запросов | Комментарий |
 |----------|---------------------|-------------|

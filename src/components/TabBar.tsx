@@ -3,14 +3,14 @@ import { Clock, House, User, LayoutGrid } from 'lucide-react'
 import { triggerHaptic } from '@/lib/haptics'
 import styles from './TabBar.module.css'
 
-/** Панель скрыта на: логин, юридические страницы, виджеты кликер и календарь, создание дела, редактирование дела, форма записи, просмотр/редактирование записи */
+/** Панель скрыта на: логин, юридические страницы, виджеты кликер, календарь и помодоро, создание дела, редактирование дела, форма записи, просмотр/редактирование записи */
 export function useTabBarVisible(): boolean {
   const path = useLocation().pathname
   if (path === '/login') return false
   if (path === '/privacy' || path === '/terms') return false
   if (path === '/deeds/new') return false
   if (path.match(/\/deeds\/[^/]+\/(edit|fill)/)) return false
-  if (path === '/widgets/clicker' || path === '/widgets/calendar') return false
+  if (path === '/widgets/clicker' || path === '/widgets/calendar' || path === '/widgets/pomodoro') return false
   if (/^\/records\/[^/]+$/.test(path)) return false
   return true
 }

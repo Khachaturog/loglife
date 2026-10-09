@@ -1,0 +1,157 @@
+.pageRoot {
+  flex: 1;
+  /* Как у кликера: страница не выше экрана и не скроллится. */
+  min-height: 100vh;
+  min-height: 100svh;
+  max-height: 100svh;
+  overflow: hidden;
+  position: relative;
+  /* Долгое нажатие останавливает сеанс, а не выделяет часы и имя. */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.clockBlock {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.clock {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  font-family: ui-rounded, "SF Pro Rounded", sans-serif;
+  font-size: clamp(4.5rem, 18vw, 7rem);
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Барабан цифры, как у числа на карточке дела. */
+.slot {
+  --slot-step: 1em;
+  display: inline-flex;
+  height: var(--slot-step);
+  overflow: hidden;
+  line-height: 1;
+}
+
+.slotDigit {
+  width: 1ch;
+  height: var(--slot-step);
+  overflow: hidden;
+}
+
+.slotStrip {
+  display: flex;
+  flex-direction: column;
+  transition: transform 600ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.slotCell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--slot-step);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slotStrip {
+    transition: none;
+  }
+}
+
+.projectButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.projectButton:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.sessionTrack {
+  width: min(220px, 70%);
+  height: 4px;
+  border-radius: 999px;
+  background: var(--gray-a5);
+  overflow: hidden;
+}
+
+.sessionFill {
+  display: block;
+  height: 100%;
+  background: var(--gray-12);
+}
+
+.barObstacle,
+.clockBlock,
+.bottomAction {
+  position: relative;
+  z-index: 1;
+}
+
+.obstacle {
+  display: inline-flex;
+}
+
+.bottomAction {
+  display: flex;
+  justify-content: center;
+  padding-bottom: max(12vh, 48px);
+}
+
+.startButton {
+  min-width: 168px;
+  border-radius: 999px;
+}
+
+.holdHint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: max(16px, env(safe-area-inset-bottom, 0px));
+  z-index: 2;
+}
+
+.holdTrack {
+  width: 140px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--gray-a5);
+  overflow: hidden;
+}
+
+.holdLabel {
+  color: var(--gray-a6);
+  font-size: var(--font-size-1);
+  line-height: 1.2;
+}
+
+.holdFill {
+  display: block;
+  height: 100%;
+  background: var(--gray-12);
+}

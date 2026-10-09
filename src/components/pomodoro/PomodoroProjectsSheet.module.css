@@ -1,0 +1,129 @@
+/* Лист прижат к низу, как справка онбординга. */
+:global(.rt-DialogScrollPadding:has(.pomodoroSheetContent)) {
+  margin-top: auto !important;
+  margin-bottom: 0;
+  padding-left: var(--space-2);
+  padding-right: var(--space-2);
+  padding-bottom: max(var(--space-2), env(safe-area-inset-bottom, 0px));
+  align-items: stretch;
+}
+
+.sheetContent.pomodoroSheetContent {
+  width: 100%;
+  max-width: 100%;
+  max-height: min(88vh, 720px);
+  margin-bottom: 0 !important;
+  margin-top: 0;
+  border-radius: var(--radius-5) var(--radius-5) 0 0;
+  box-sizing: border-box;
+  overflow: auto;
+}
+
+.headerSlot {
+  width: 40px;
+  flex: 0 0 40px;
+}
+
+.row,
+.rowSelectedNeutral {
+  border-radius: var(--radius-4);
+  background: var(--gray-a3);
+  padding: 4px 6px 4px 10px;
+}
+
+.rowSelectedNeutral {
+  background: var(--gray-a5);
+}
+
+.rowMain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  padding: 8px 4px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.rowEmoji {
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.rowText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.colorSelectWrap {
+  flex: 1;
+  min-width: 0;
+  max-width: 220px;
+}
+
+.optionSwatch {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  border: 1px solid var(--gray-a6);
+}
+
+.colorInputWrap {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: var(--radius-3);
+  border: 1px solid var(--gray-a6);
+  overflow: hidden;
+}
+
+.colorInputNative {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: none;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.durationRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  border: 0;
+  border-radius: var(--radius-4);
+  background: var(--gray-a3);
+  padding: 12px 14px;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.rulerValue {
+  font-size: clamp(3rem, 12vw, 4.5rem);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

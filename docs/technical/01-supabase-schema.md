@@ -259,6 +259,49 @@ auth.users (Supabase Auth)
 
 ---
 
+### `pomodoro_settings` — минуты режима «Без проекта»
+
+Одна строка на пользователя. Не связана с делами.
+
+| Колонка | Тип | Ограничения | Описание |
+|---------|-----|-------------|---------|
+| `user_id` | uuid | PK, FK → auth.users(id) ON DELETE CASCADE | Владелец |
+| `focus_seconds` | int | NOT NULL, DEFAULT 1500, CHECK 60…10800 | Длительность следующего фокуса без проекта |
+| `updated_at` | timestamptz | NOT NULL, DEFAULT now() | |
+
+### `pomodoro_projects` — проекты помодоро
+
+| Колонка | Тип | Ограничения | Описание |
+|---------|-----|-------------|---------|
+| `id` | uuid | PK, DEFAULT gen_random_uuid() | |
+| `user_id` | uuid | NOT NULL, FK → auth.users(id) ON DELETE CASCADE | Владелец |
+| `name` | text | NOT NULL, 1…80 символов | |
+| `emoji` | text | NOT NULL | Эмодзи проекта и поля на таймере |
+| `accent_color` | text | NOT NULL, `#RRGGBB` | Цвет из тех же пресетов, что `deeds.card_color` |
+| `focus_seconds` | int | NOT NULL, CHECK 60…10800 | Дефолт будущих сеансов этого проекта |
+| `created_at` | timestamptz | NOT NULL, DEFAULT now() | |
+| `updated_at` | timestamptz | NOT NULL, DEFAULT now() | |
+
+Новый проект копирует текущие `pomodoro_settings.focus_seconds`. Дальше значения живут отдельно.
+
+### `pomodoro_sessions` — сеансы фокуса
+
+| Колонка | Тип | Ограничения | Описание |
+|---------|-----|-------------|---------|
+| `id` | uuid | PK, DEFAULT gen_random_uuid() | |
+| `user_id` | uuid | NOT NULL, FK → auth.users(id) ON DELETE CASCADE | Владелец |
+| `project_id` | uuid | FK → pomodoro_projects(id) ON DELETE SET NULL | Пусто для режима «Без проекта» и после удаления проекта |
+| `planned_seconds` | int | NOT NULL, CHECK ≥ 300 | Снимок плана. Короче 5 минут строка не создаётся |
+| `actual_seconds` | int | NOT NULL, CHECK > 0 и ≤ planned_seconds | Сколько реально прошло |
+| `status` | text | NOT NULL, `completed` или `stopped` | Дошёл до конца или остановлен раньше |
+| `started_at` | timestamptz | NOT NULL | |
+| `ended_at` | timestamptz | NOT NULL, ≥ started_at | |
+| `created_at` | timestamptz | NOT NULL, DEFAULT now() | |
+
+Часы проекта — сумма `actual_seconds` его сеансов. Смена `focus_seconds` старые строки не меняет.
+
+---
+
 ## Индексы
 
 | Индекс | Таблица | Колонки |
@@ -272,6 +315,9 @@ auth.users (Supabase Auth)
 | `idx_block_config_versions_block_id` | block_config_versions | block_id |
 | `idx_block_config_scale_versions_block_id` | block_config_scale_versions | block_id |
 | `idx_block_config_select_option_versions_config_version_id` | block_config_select_option_versions | config_version_id |
+| `idx_pomodoro_projects_user_id` | pomodoro_projects | user_id, created_at DESC |
+| `idx_pomodoro_sessions_user_started` | pomodoro_sessions | user_id, started_at DESC |
+| `idx_pomodoro_sessions_project_id` | pomodoro_sessions | project_id |
 
 ---
 
@@ -288,6 +334,9 @@ auth.users (Supabase Auth)
 | `block_config_versions` | через `blocks → deeds.user_id` |
 | `block_config_scale_versions` | через `blocks → deeds.user_id` |
 | `block_config_select_option_versions` | через `block_config_versions → blocks → deeds.user_id` |
+| `pomodoro_settings` | `user_id = (select auth.uid())` |
+| `pomodoro_projects` | `user_id = (select auth.uid())` |
+| `pomodoro_sessions` | `user_id = (select auth.uid())`; INSERT/UPDATE ещё проверяют, что `project_id` пустой или принадлежит тому же пользователю |
 
 > Используется `(select auth.uid())` вместо `auth.uid()` — вычисляется один раз на запрос (initplan), а не на каждую строку.
 
@@ -315,3 +364,4 @@ auth.users (Supabase Auth)
 | `20260409` | В `blocks.config` для `single_select` бэкфилл `singleSelectUi: "select"` |
 | `20261008` | Добавлен тип блока `url` |
 | `20261008` | Добавлена `deeds.record_header_pinned` (text[], закреплённые действия шапки записи) |
+| `20261009` | Таблицы `pomodoro_settings`, `pomodoro_projects`, `pomodoro_sessions` + RLS |

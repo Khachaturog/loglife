@@ -8,7 +8,14 @@ import type {
   RecordWithAnswers,
   RecordAnswerRow,
   ValueJson,
+  PomodoroProjectRow,
+  PomodoroSettingsRow,
+  PomodoroSessionStatus,
 } from '@/types/database'
+import {
+  clampFocusSeconds,
+  POMODORO_MIN_RECORDED_SECONDS,
+} from '@/lib/pomodoro'
 import type { DeedAnalyticsConfigV1 } from '@/types/deed-analytics-config'
 import type { RecordHeaderActionId } from '@/lib/record-header-actions'
 import { omitOptionalEmptyTextFromRecordAnswers } from '@/lib/block-default-value'
@@ -770,4 +777,206 @@ export const api = {
       }
     },
   },
+
+  pomodoro: {
+    /** Строка настроек есть всегда: при первом заходе создаётся с 25 минутами. */
+    async getSettings(): Promise<PomodoroSettingsRow> {
+      const uid = await getUserIdOrThrow()
+      const existing = await supabase.from('pomodoro_settings').select('*').eq('user_id', uid).maybeSingle()
+      if (existing.error) {
+        console.error(existing.error.message ?? 'Ошибка загрузки настроек помодоро')
+        throw existing.error
+      }
+      if (existing.data) return existing.data as PomodoroSettingsRow
+
+      const inserted = await supabase.from('pomodoro_settings').insert({ user_id: uid }).select('*').single()
+      if (!inserted.error && inserted.data) return inserted.data as PomodoroSettingsRow
+
+      // Параллельный первый заход мог уже вставить строку.
+      const again = await supabase.from('pomodoro_settings').select('*').eq('user_id', uid).maybeSingle()
+      if (again.data) return again.data as PomodoroSettingsRow
+      console.error(inserted.error?.message ?? 'Ошибка создания настроек помодоро')
+      throw inserted.error ?? new Error('Ошибка создания настроек помодоро')
+    },
+
+    async updateSettings(focusSeconds: number): Promise<PomodoroSettingsRow> {
+      const uid = await getUserIdOrThrow()
+      await api.pomodoro.getSettings()
+      const { data, error } = await supabase
+        .from('pomodoro_settings')
+        .update({
+          focus_seconds: clampFocusSeconds(focusSeconds),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('user_id', uid)
+        .select('*')
+        .single()
+      if (error) {
+        console.error(error.message ?? 'Ошибка сохранения длительности')
+        throw error
+      }
+      return data as PomodoroSettingsRow
+    },
+
+    async listProjects(): Promise<PomodoroProjectRow[]> {
+      const uid = await getUserIdOrThrow()
+      const { data, error } = await supabase
+        .from('pomodoro_projects')
+        .select('*')
+        .eq('user_id', uid)
+        .order('created_at', { ascending: false })
+      if (error) {
+        console.error(error.message ?? 'Ошибка загрузки проектов помодоро')
+        throw error
+      }
+      return (data ?? []) as PomodoroProjectRow[]
+    },
+
+    async createProject(input: {
+      name: string
+      emoji: string
+      accentColor: string
+      focusSeconds: number
+    }): Promise<PomodoroProjectRow> {
+      const uid = await getUserIdOrThrow()
+      const payload = normalizeProjectInput(input)
+      const { data, error } = await supabase
+        .from('pomodoro_projects')
+        .insert({
+          user_id: uid,
+          name: payload.name,
+          emoji: payload.emoji,
+          accent_color: payload.accentColor,
+          focus_seconds: payload.focusSeconds,
+        })
+        .select('*')
+        .single()
+      if (error) {
+        console.error(error.message ?? 'Ошибка создания проекта')
+        throw error
+      }
+      return data as PomodoroProjectRow
+    },
+
+    async updateProject(
+      id: string,
+      input: { name: string; emoji: string; accentColor: string; focusSeconds: number },
+    ): Promise<PomodoroProjectRow> {
+      const uid = await getUserIdOrThrow()
+      const payload = normalizeProjectInput(input)
+      const { data, error } = await supabase
+        .from('pomodoro_projects')
+        .update({
+          name: payload.name,
+          emoji: payload.emoji,
+          accent_color: payload.accentColor,
+          focus_seconds: payload.focusSeconds,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id)
+        .eq('user_id', uid)
+        .select('*')
+        .single()
+      if (error) {
+        console.error(error.message ?? 'Ошибка сохранения проекта')
+        throw error
+      }
+      return data as PomodoroProjectRow
+    },
+
+    async deleteProject(id: string): Promise<void> {
+      const uid = await getUserIdOrThrow()
+      const { error } = await supabase.from('pomodoro_projects').delete().eq('id', id).eq('user_id', uid)
+      if (error) {
+        console.error(error.message ?? 'Ошибка удаления проекта')
+        throw error
+      }
+    },
+
+    /**
+     * Пишет сеанс, только если план не короче 5 минут и факт больше нуля.
+     * Если проект уже удалён, сеанс сохраняется без проекта.
+     */
+    async createSession(input: {
+      projectId: string | null
+      plannedSeconds: number
+      actualSeconds: number
+      status: PomodoroSessionStatus
+      startedAt: string
+      endedAt: string
+    }): Promise<void> {
+      const planned = Math.round(input.plannedSeconds)
+      const actual = Math.min(planned, Math.max(0, Math.round(input.actualSeconds)))
+      if (planned < POMODORO_MIN_RECORDED_SECONDS || actual <= 0) return
+
+      const uid = await getUserIdOrThrow()
+      const row = {
+        user_id: uid,
+        project_id: input.projectId,
+        planned_seconds: planned,
+        actual_seconds: actual,
+        status: input.status,
+        started_at: input.startedAt,
+        ended_at: input.endedAt,
+      }
+      const { error } = await supabase.from('pomodoro_sessions').insert(row)
+      if (!error) return
+      // Проект удалили, пока таймер ещё шёл.
+      if (error.code === '23503' && input.projectId) {
+        const retry = await supabase.from('pomodoro_sessions').insert({ ...row, project_id: null })
+        if (!retry.error) return
+        console.error(retry.error.message ?? 'Ошибка записи сеанса')
+        throw retry.error
+      }
+      console.error(error.message ?? 'Ошибка записи сеанса')
+      throw error
+    },
+
+    /** Сумма фактических секунд фокуса: за местные сутки и всего. */
+    async focusTotals(projectId: string | null): Promise<{ todaySeconds: number; totalSeconds: number }> {
+      const uid = await getUserIdOrThrow()
+      let query = supabase
+        .from('pomodoro_sessions')
+        .select('actual_seconds, started_at')
+        .eq('user_id', uid)
+      query = projectId ? query.eq('project_id', projectId) : query.is('project_id', null)
+      const { data, error } = await query
+      if (error) {
+        console.error(error.message ?? 'Ошибка загрузки статистики помодоро')
+        throw error
+      }
+      const start = new Date()
+      start.setHours(0, 0, 0, 0)
+      const startMs = start.getTime()
+      let todaySeconds = 0
+      let totalSeconds = 0
+      for (const row of data ?? []) {
+        const seconds = Number((row as { actual_seconds: number }).actual_seconds) || 0
+        totalSeconds += seconds
+        const started = new Date((row as { started_at: string }).started_at).getTime()
+        if (started >= startMs) todaySeconds += seconds
+      }
+      return { todaySeconds, totalSeconds }
+    },
+  },
+}
+
+function normalizeProjectInput(input: {
+  name: string
+  emoji: string
+  accentColor: string
+  focusSeconds: number
+}): { name: string; emoji: string; accentColor: string; focusSeconds: number } {
+  const name = input.name.trim()
+  const emoji = input.emoji.trim()
+  const accentColor = input.accentColor.trim()
+  if (!name || name.length > 80) throw new Error('Введите название проекта')
+  if (!emoji || emoji.length > 16) throw new Error('Выберите эмодзи')
+  if (!/^#[0-9A-Fa-f]{6}$/.test(accentColor)) throw new Error('Выберите цвет')
+  return {
+    name,
+    emoji,
+    accentColor: accentColor.toLowerCase(),
+    focusSeconds: clampFocusSeconds(input.focusSeconds),
+  }
 }

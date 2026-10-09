@@ -139,6 +139,40 @@ export interface RecordAnswerRow {
   updated_at: string
 }
 
+/** Дефолт минут режима «Без проекта». Одна строка на пользователя. */
+export interface PomodoroSettingsRow {
+  user_id: string
+  focus_seconds: number
+  updated_at: string
+}
+
+/** Проект помодоро: внешний вид и длительность будущих сеансов. */
+export interface PomodoroProjectRow {
+  id: string
+  user_id: string
+  name: string
+  emoji: string
+  accent_color: string
+  focus_seconds: number
+  created_at: string
+  updated_at: string
+}
+
+export type PomodoroSessionStatus = 'completed' | 'stopped'
+
+/** Законченный фокус-сеанс. `planned_seconds` — снимок минут на момент старта. */
+export interface PomodoroSessionRow {
+  id: string
+  user_id: string
+  project_id: string | null
+  planned_seconds: number
+  actual_seconds: number
+  status: PomodoroSessionStatus
+  started_at: string
+  ended_at: string
+  created_at: string
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -176,6 +210,21 @@ export interface Database {
         Row: RecordAnswerRow
         Insert: Omit<RecordAnswerRow, 'created_at' | 'updated_at'>
         Update: Partial<Omit<RecordAnswerRow, 'id' | 'record_id' | 'created_at' | 'updated_at'>>
+      }
+      pomodoro_settings: {
+        Row: PomodoroSettingsRow
+        Insert: Omit<PomodoroSettingsRow, 'updated_at'>
+        Update: Partial<Omit<PomodoroSettingsRow, 'user_id'>>
+      }
+      pomodoro_projects: {
+        Row: PomodoroProjectRow
+        Insert: Omit<PomodoroProjectRow, 'id' | 'created_at' | 'updated_at'>
+        Update: Partial<Omit<PomodoroProjectRow, 'id' | 'user_id' | 'created_at' | 'updated_at'>>
+      }
+      pomodoro_sessions: {
+        Row: PomodoroSessionRow
+        Insert: Omit<PomodoroSessionRow, 'id' | 'created_at'>
+        Update: Partial<Omit<PomodoroSessionRow, 'id' | 'user_id' | 'created_at'>>
       }
     }
   }

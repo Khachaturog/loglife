@@ -26,6 +26,7 @@
 | `help_record` | `/records/:id` |
 | `help_history` | `/history` |
 | `help_widgets` | `/widgets` |
+| `help_pomodoro` | `/widgets/pomodoro` |
 | `help_clicker` | `/widgets/clicker` (в UI не вызывается) |
 | `help_profile` | `/profile` |
 
