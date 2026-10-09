@@ -92,7 +92,7 @@ function heatmapAccentStyle(
   return { ['--heatmap-accent' as string]: c }
 }
 
-const WEEKDAY_LABELS = ['Пн', '', 'Ср', '', 'Пт', '', 'Вс']
+const WEEKDAY_LABELS = ['пн', '', 'ср', '', 'пт', '', 'вс']
 
 /** Классы уровней 1–4; индекс 0 → level 1. */
 const LEVEL_CLASSES = [
@@ -185,7 +185,7 @@ export function DeedActivityHeatmap({
             Активность
           </Text>
 
-          <Flex align="start" gap="2">
+          <Flex align="start" gap="1">
             {showWeekdayLabels ? (
               <Box className={weekdayColClass} aria-hidden="true">
                 {WEEKDAY_LABELS.map((label, index) => (
