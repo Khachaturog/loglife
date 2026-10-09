@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Badge, Box, Button, Flex, Heading, Text } from '@radix-ui/themes'
-import { HomeIcon } from '@radix-ui/react-icons'
+import { House } from 'lucide-react'
 import { AppBar } from '@/components/AppBar'
 import { OnboardingHelpButton } from '@/components/onboarding/OnboardingHelpButton'
 import { PageLoading } from '@/components/PageLoading'
@@ -190,7 +190,7 @@ export function HistoryPage() {
           aria-label="Перейти к списку дел"
           asChild>
             <Link to="/">
-              <HomeIcon />
+              <House size={16} />
               Перейти к делам
             </Link>
           </Button>

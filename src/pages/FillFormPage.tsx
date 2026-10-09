@@ -28,7 +28,7 @@ import { AppBar } from '@/components/AppBar'
 import { SingleSelectAnswerField } from '@/components/SingleSelectAnswerField'
 import { FillFormNumberStepper } from '@/components/FillFormNumberStepper'
 import { PageLoading } from '@/components/PageLoading'
-import { CheckIcon, PlusIcon, ResetIcon, TrashIcon } from '@radix-ui/react-icons'
+import { Check, Plus, RotateCcw, Trash2 } from 'lucide-react'
 import { getSingleSelectUi } from '@/lib/block-config'
 import { initialAnswersFromBlockDefaults } from '@/lib/block-default-value'
 import { api } from '@/lib/api'
@@ -283,7 +283,7 @@ function FillFormEntry({
               onRemove(draftKey)
             }}
           >
-            <TrashIcon />
+            <Trash2 size={16} />
           </IconButton>
         </Flex>
       )}
@@ -354,7 +354,7 @@ function FillFormEntry({
                       clearAnswer(block.id)
                     }}
                   >
-                    <ResetIcon />
+                    <RotateCcw size={16} />
                   </IconButton>
                 )}
               </Flex>
@@ -894,7 +894,7 @@ export function FillFormPage() {
                   saving ? 'Сохранение…' : multiple ? 'Добавить записи' : 'Добавить запись'
                 }
               >
-                <CheckIcon />
+                <Check size={16} />
               </IconButton>
             }
           />
@@ -939,7 +939,7 @@ export function FillFormPage() {
               disabled={saving}
               onClick={addDraft}
             >
-              <PlusIcon />
+              <Plus size={16} />
               Ещё запись
             </Button>
 

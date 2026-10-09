@@ -21,7 +21,7 @@
 | api.deeds | `deleteBlock()` | deeds, blocks | DeedFormPage |
 | api.deeds | `records(deedId)` | deeds, records, record_answers | DeedViewPage, DeedFormPage (модалка смены типа), export-csv |
 | api.deeds | `recentRecords(deedId, limit?)` | deeds, records, record_answers | FillFormPage |
-| api.deeds | `recordsByDeedIds(ids)` | deeds, records, record_answers | DeedsListPage |
+| api.deeds | `recordsByDeedIds(ids, { recordDate? })` | records, record_answers | DeedsListPage (на главной `record_date` = сегодня) |
 | api.deeds | `listAllRecordsWithDeedInfo()` | records, record_answers, deeds | HistoryPage |
 | api.deeds | `createRecord()` | deeds, records, record_answers | FillFormPage, DeedCard, DeedViewPage (быстрое добавление из дефолтов) |
 | api.records | `get(id)` | records, record_answers, deeds | RecordViewPage |
@@ -170,9 +170,8 @@ ORDER BY record_date DESC, record_time DESC
 ```
 
 **Используется:**
-- DeedsListPage — **N раз** (по одному на каждое дело)
-- HistoryPage — **N раз**
 - DeedViewPage — 1 раз
+- DeedFormPage — модалка смены типа блока
 - export-csv — N раз
 
 ---
@@ -192,6 +191,24 @@ LIMIT :limit
 ```
 
 **Используется:** FillFormPage (чипы «недавние значения» для числа и одиночного выбора)
+
+---
+
+### `api.deeds.recordsByDeedIds(ids, opts?)`
+
+**Запросы:**
+1. Без `skipDeedCheck`: `SELECT deeds` — оставить только id текущего пользователя
+2. `SELECT records, record_answers` — записи по этим делам. Если передан `recordDate` (YYYY-MM-DD) — только эта дата
+
+```sql
+SELECT *, record_answers(*)
+FROM records
+WHERE deed_id IN (:ids)
+  AND record_date = :recordDate -- только если recordDate задан
+ORDER BY record_date DESC, record_time DESC
+```
+
+**Используется:** DeedsListPage — второй запрос после списка дел и обновление одной карточки после быстрого «+»; оба раза с `recordDate` = локальное «сегодня» и `skipDeedCheck: true` (проверка deeds не нужна, RLS на records остаётся).
 
 ---
 
@@ -237,7 +254,7 @@ LIMIT :limit
 | # | Запрос | Таблицы |
 |---|--------|---------|
 | 1 | listWithBlocks | deeds, blocks |
-| 2 | recordsByDeedIds | deeds, records, record_answers |
+| 2 | recordsByDeedIds (`record_date` = сегодня) | records, record_answers |
 
 **Итого:** 2 запроса
 
@@ -314,6 +331,6 @@ LIMIT :limit
 
 | Страница | Количество запросов | Комментарий |
 |----------|---------------------|-------------|
-| DeedsListPage | 2 | listWithBlocks + recordsByDeedIds |
+| DeedsListPage | 2 | listWithBlocks + recordsByDeedIds за сегодня |
 | HistoryPage | 1 | listAllRecordsWithDeedInfo (join) |
 | export-csv | 1 + 2N | list + get×N + records×N (потенциал для оптимизации) |

@@ -36,7 +36,7 @@ import { PageLoading } from "@/components/PageLoading";
 import { DurationInput } from "@/components/DurationInput";
 import { EmojiPickerButton } from "@/components/EmojiPickerButton";
 import scaleSegmentedStyles from "@/components/ScaleSegmentedControl.module.css";
-import { ArrowBottomRightIcon, ArrowDownIcon, ArrowUpIcon, CheckIcon, ChevronDownIcon, CopyIcon, Cross2Icon, Pencil1Icon, PlusIcon, QuestionMarkCircledIcon, QuestionMarkIcon, TrashIcon } from "@radix-ui/react-icons";
+import { ArrowDownRight, ArrowDown, ArrowUp, Check, ChevronDown, Copy, X, Pencil, Plus, CircleQuestionMark, Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
 import {
   RADIX_COLOR_9_PRESETS,
@@ -688,7 +688,7 @@ function ScaleBlockConfig({
       <Flex direction="row" align="center" gap="3">
 
       <Text as="span" size="2" color="gray" weight="medium" mt="1">
-         <ArrowBottomRightIcon /> 1
+         <ArrowDownRight size={16} /> 1
       </Text>
       <TextField.Root
         className={styles.scaleTextField}
@@ -718,7 +718,7 @@ function ScaleBlockConfig({
                 (i) => (
                   <Flex key={i} direction="row" align="center" gap="3">
                     <Text as="span" size="2" color="gray" weight="medium">
-                    <ArrowBottomRightIcon /> {i + 1}
+                    <ArrowDownRight size={16} /> {i + 1}
                     </Text>
                     <TextField.Root
                       className={styles.scaleTextField}
@@ -735,7 +735,7 @@ function ScaleBlockConfig({
           )}
           <Flex direction="row" align="center" gap="3">
           <Text as="span" size="2" color="gray" weight="medium">
-          <ArrowBottomRightIcon /> {divisions}
+          <ArrowDownRight size={16} /> {divisions}
           </Text>
           <TextField.Root
             className={styles.scaleTextField}
@@ -757,15 +757,15 @@ type DeedEditorTab = "deed" | "quickAccess" | "analytics";
 function recordHeaderActionIcon(id: RecordHeaderActionId) {
   switch (id) {
     case "edit":
-      return <Pencil1Icon />;
+      return <Pencil size={16} />;
     case "new":
-      return <PlusIcon />;
+      return <Plus size={16} />;
     case "duplicate":
-      return <CopyIcon />;
+      return <Copy size={16} />;
     case "delete":
-      return <TrashIcon />;
+      return <Trash2 size={16} />;
     case "help":
-      return <QuestionMarkCircledIcon />;
+      return <CircleQuestionMark size={16} />;
   }
 }
 
@@ -1350,7 +1350,7 @@ export function DeedFormPage() {
               onClick={() => formRef.current?.requestSubmit()}
               aria-label={saving ? "Сохранение…" : "Сохранить дело"}
             >
-              <CheckIcon />
+              <Check size={16} />
             </IconButton>
           </Flex>
         }
@@ -1502,7 +1502,7 @@ export function DeedFormPage() {
                       onClick={() => moveBlock(index, "up")}
                       aria-label="Переместить блок вверх"
                     >
-                      <ArrowUpIcon />
+                      <ArrowUp size={16} />
                     </IconButton>
 
                     <IconButton
@@ -1514,7 +1514,7 @@ export function DeedFormPage() {
                       onClick={() => moveBlock(index, "down")}
                       aria-label="Переместить блок вниз"
                     >
-                      <ArrowDownIcon />
+                      <ArrowDown size={16} />
                     </IconButton>
                     
                     <IconButton
@@ -1525,7 +1525,7 @@ export function DeedFormPage() {
                       onClick={() => removeBlock(index)}
                       aria-label="Удалить блок"
                     >
-                      <TrashIcon />
+                      <Trash2 size={16} />
                     </IconButton>
                   </Flex>
                 </Flex>
@@ -1736,7 +1736,7 @@ export function DeedFormPage() {
                             })
                           }
                         >
-                          <ArrowUpIcon />
+                          <ArrowUp size={16} />
                         </IconButton>
                         <IconButton
                         type="button"
@@ -1774,7 +1774,7 @@ export function DeedFormPage() {
                             })
                           }
                         >
-                          <ArrowDownIcon />
+                          <ArrowDown size={16} />
                         </IconButton>
                         <IconButton
                         type="button"
@@ -1794,7 +1794,7 @@ export function DeedFormPage() {
                             }))
                           }
                         >
-                          <Cross2Icon />
+                          <X size={16} />
                         </IconButton>
                       </Flex>
                       );
@@ -1828,7 +1828,7 @@ export function DeedFormPage() {
                         });
                       }}
                     >
-                      <PlusIcon /> 
+                      <Plus size={16} /> 
                       Добавить вариант
                     </Button>
                   </Flex>
@@ -1843,9 +1843,10 @@ export function DeedFormPage() {
                     <Text size="3" weight="medium" as="span">
                       Дополнительные настройки
                     </Text>
-                    <ChevronDownIcon
+                    <ChevronDown
                       className={styles.blockAdditionalAccordionChevron}
                       aria-hidden
+                      size={16}
                     />
                   </Collapsible.Trigger>
                   <Collapsible.Content>
@@ -1991,7 +1992,7 @@ export function DeedFormPage() {
           size="4" 
           onClick={addBlock} 
           aria-label="Добавить блок">
-            <PlusIcon /> 
+            <Plus size={16} /> 
             Добавить блок
           </Button>
 
@@ -2021,7 +2022,7 @@ export function DeedFormPage() {
                     aria-label="Справка о быстром добавлении"
                     onClick={() => openFlow("help_quick_add_defaults")}
                   >
-                    <QuestionMarkIcon />
+                    <CircleQuestionMark size={16} />
                   </IconButton>
                 </Flex>
               </Flex>
@@ -2059,7 +2060,7 @@ export function DeedFormPage() {
                               onClick={() => moveRecordHeaderPinned(row.id, "up")}
                               aria-label={`Переместить «${RECORD_HEADER_ACTION_LABEL[row.id]}» выше`}
                             >
-                              <ArrowUpIcon />
+                              <ArrowUp size={16} />
                             </IconButton>
                             <IconButton
                               type="button"
@@ -2070,7 +2071,7 @@ export function DeedFormPage() {
                               onClick={() => moveRecordHeaderPinned(row.id, "down")}
                               aria-label={`Переместить «${RECORD_HEADER_ACTION_LABEL[row.id]}» ниже`}
                             >
-                              <ArrowDownIcon />
+                              <ArrowDown size={16} />
                             </IconButton>
                           </Flex>
                         ) : null}

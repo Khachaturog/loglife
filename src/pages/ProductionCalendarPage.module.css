@@ -1,0 +1,108 @@
+/* Вся высота экрана под шапкой: крутится только лента месяцев. */
+.pageRoot {
+  flex: 1;
+  min-height: 100svh;
+  max-height: 100svh;
+  padding-bottom: 0;
+  overflow: hidden;
+}
+
+.legend {
+  margin-bottom: var(--space-2);
+}
+
+.legendBar {
+  width: 22px;
+}
+
+.scroller {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+.track {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-7);
+}
+
+.month {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1.75rem repeat(7, 1fr);
+  row-gap: var(--space-3);
+}
+
+.weekday {
+  text-align: center;
+  align-self: center;
+}
+
+/* Номер недели на одной линии с числом, не с полоской под ним. */
+.weekNum {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  align-self: start;
+}
+
+.statsDialog {
+  display: flex;
+  flex-direction: column;
+  max-width: 600px;
+  max-height: 800px;
+}
+
+.statsTable {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+}
+
+.dayNum {
+  width: 32px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+}
+
+.today {
+  background: var(--red-9);
+}
+
+.bar {
+  width: 22px;
+  height: 4px;
+  border-radius: 999px;
+}
+
+.barWork {
+  background: var(--gray-8);
+}
+
+.barShort {
+  background: var(--amber-9);
+}
+
+.barOff {
+  background: var(--red-9);
+}

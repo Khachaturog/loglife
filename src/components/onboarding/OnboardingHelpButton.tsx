@@ -1,5 +1,5 @@
 import { IconButton } from '@radix-ui/themes'
-import { QuestionMarkIcon } from '@radix-ui/react-icons'
+import { CircleQuestionMark } from 'lucide-react'
 import type { OnboardingFlowId } from '@/onboarding/flows'
 import { useOnboarding } from '@/lib/onboarding-context'
 
@@ -23,7 +23,7 @@ export function OnboardingHelpButton({ flowId }: Props) {
       aria-label="Справка"
       onClick={() => openFlow(flowId)}
     >
-      <QuestionMarkIcon />
+      <CircleQuestionMark size={16} />
     </IconButton>
   )
 }

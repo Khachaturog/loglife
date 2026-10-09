@@ -8,7 +8,7 @@ import { useOnboarding } from '@/lib/onboarding-context'
 import { SingleSelectAnswerField } from '@/components/SingleSelectAnswerField'
 import { FillFormNumberStepper } from '@/components/FillFormNumberStepper'
 import { PageLoading } from '@/components/PageLoading'
-import { BackpackIcon, CheckIcon, CopyIcon, DotsHorizontalIcon, GearIcon, Pencil1Icon, PlusIcon, QuestionMarkCircledIcon, ResetIcon, TrashIcon } from '@radix-ui/react-icons'
+import { BriefcaseBusiness, Check, Copy, Ellipsis, Settings, Pencil, Plus, CircleQuestionMark, RotateCcw, Trash2 } from 'lucide-react'
 import { getSingleSelectUi } from '@/lib/block-config'
 import { api } from '@/lib/api'
 import { answersFromRecord } from '@/lib/answers-from-record'
@@ -29,15 +29,15 @@ import layoutStyles from '@/styles/layout.module.css'
 function recordHeaderActionIcon(id: RecordHeaderActionId) {
   switch (id) {
     case 'edit':
-      return <Pencil1Icon />
+      return <Pencil size={16} />
     case 'new':
-      return <PlusIcon />
+      return <Plus size={16} />
     case 'duplicate':
-      return <CopyIcon />
+      return <Copy size={16} />
     case 'delete':
-      return <TrashIcon />
+      return <Trash2 size={16} />
     case 'help':
-      return <QuestionMarkCircledIcon />
+      return <CircleQuestionMark size={16} />
   }
 }
 
@@ -508,7 +508,7 @@ export function RecordViewPage() {
               onClick={handleSave}
               aria-label={saving ? 'Сохранение…' : 'Сохранить'}
             >
-              <CheckIcon />
+              <Check size={16} />
             </IconButton>
           ) : (
             <Flex align="center" gap="2" wrap="wrap" justify="end">
@@ -537,7 +537,7 @@ export function RecordViewPage() {
                   onClick={() => navigate(`/deeds/${record.deed_id}`)}
                   aria-label="Перейти к делу"
                 >
-                  <BackpackIcon />
+                  <BriefcaseBusiness size={16} />
                 </IconButton>
               )}
               {(pinnedHeaderActions.length > 0 || fromHistory) && (
@@ -553,12 +553,12 @@ export function RecordViewPage() {
                     radius="full"
                     aria-label="Действия с записью"
                   >
-                    <DotsHorizontalIcon />
+                    <Ellipsis size={16} />
                   </IconButton>
                 </DropdownMenu.Trigger>
                 <DropdownMenu.Content variant="solid" size="2" align="end" sideOffset={8}>
                   <DropdownMenu.Item asChild>
-                    <Link to={`/deeds/${record.deed_id}`}> <BackpackIcon /> Перейти к делу</Link>
+                    <Link to={`/deeds/${record.deed_id}`}> <BriefcaseBusiness size={16} /> Перейти к делу</Link>
                   </DropdownMenu.Item>
                   <DropdownMenu.Separator />
                   {headerMenuItem('new')}
@@ -581,7 +581,7 @@ export function RecordViewPage() {
                       })
                     }
                   >
-                    <GearIcon /> Настроить действия
+                    <Settings size={16} /> Настроить действия
                   </DropdownMenu.Item>
                 </DropdownMenu.Content>
               </DropdownMenu.Root>
@@ -599,7 +599,7 @@ export function RecordViewPage() {
                     onClick={handleUpdateAllOutdated}
                     aria-label={savingOutdated ? 'Сохранение…' : 'Актуализировать'}
                   >
-                    <CheckIcon />
+                    <Check size={16} />
                   </IconButton>
                 </>
               )}
@@ -650,7 +650,7 @@ export function RecordViewPage() {
                   radius="large"
                     onClick={() => resetEditBlock(block.id)}
                   >
-                    <ResetIcon />
+                    <RotateCcw size={16} />
                   </IconButton>
                 )}
               </Flex>

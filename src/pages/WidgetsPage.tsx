@@ -32,6 +32,23 @@ export function WidgetsPage() {
           </Link>
         </Card>
 
+        <Card asChild>
+          <Link to="/widgets/calendar">
+              <Flex align="start" gap="2">
+                <Avatar
+                size="4"
+                radius="large"
+                color="gray"
+                variant="soft"
+                fallback="📅" />
+                <Flex direction="column" gap="0">
+                  <Text weight="medium">Календарь</Text>
+                  <Text as="p" size="2" color="gray">Производственный календарь на 2027 год</Text>
+                </Flex>
+              </Flex>
+          </Link>
+        </Card>
+
       </Flex>
     </Box>
   )

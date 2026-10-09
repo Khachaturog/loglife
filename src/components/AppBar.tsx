@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Box, Flex, IconButton, Text } from '@radix-ui/themes'
-import { ArrowLeftIcon, Cross2Icon } from '@radix-ui/react-icons'
+import { ArrowLeft, X } from 'lucide-react'
 import styles from './AppBar.module.css'
 
 /** При скролле страницы — true (для обводки и тени AppBar) */
@@ -55,9 +55,9 @@ export function AppBar({
   const backAriaLabel = backButtonIcon === 'close' ? 'Закрыть' : 'Назад'
   const BackGlyph =
     backButtonIcon === 'close' ? (
-      <Cross2Icon />
+      <X size={16} />
     ) : (
-      <ArrowLeftIcon />  
+      <ArrowLeft size={16} />  
     )
   const scrolled = useScrolled()
   const hasTitle = Boolean(title)
@@ -126,7 +126,7 @@ export function AppBar({
                       aria-hidden
                       tabIndex={-1}
                     >
-                      <ArrowLeftIcon />
+                      <ArrowLeft size={16} />
                     </IconButton>
                   ))}
             </Flex>

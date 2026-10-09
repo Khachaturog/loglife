@@ -3,7 +3,7 @@ import { Link as RouterLink, useNavigate } from 'react-router-dom'
 import { Box, Button, DropdownMenu, Flex, Heading, IconButton, Link, RadioGroup, Text, TextField } from '@radix-ui/themes'
 import { AppBar } from '@/components/AppBar'
 import { useOnboarding } from '@/lib/onboarding-context'
-import { DotsHorizontalIcon, ExitIcon, QuestionMarkCircledIcon } from '@radix-ui/react-icons'
+import { Ellipsis, LogOut, CircleQuestionMark } from 'lucide-react'
 import { DatePicker } from '@/components/DatePicker'
 import { useAuth } from '@/lib/auth-context'
 import { supabase } from '@/lib/supabase'
@@ -117,16 +117,16 @@ export function ProfilePage() {
                 radius="full"
                 aria-label="Меню профиля"
               >
-                <DotsHorizontalIcon />
+                <Ellipsis size={16} />
               </IconButton>
             </DropdownMenu.Trigger>
             <DropdownMenu.Content variant="solid" size="2" align="end" sideOffset={8}>
               <DropdownMenu.Item color="red" onSelect={() => void handleSignOut()}>
-                <ExitIcon /> Выйти
+                <LogOut size={16} /> Выйти
               </DropdownMenu.Item>
               <DropdownMenu.Separator />
               <DropdownMenu.Item color="gray" onSelect={() => openFlow('help_profile')}>
-                <QuestionMarkCircledIcon /> Справка
+                <CircleQuestionMark size={16} /> Справка
               </DropdownMenu.Item>
             </DropdownMenu.Content>
           </DropdownMenu.Root>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { MinusIcon, PlusIcon } from '@radix-ui/react-icons'
+import { Minus, Plus } from 'lucide-react'
 import { Avatar, Box, Button, Card, Flex, Heading, IconButton, Select, Text } from '@radix-ui/themes'
 import { AppBar } from '@/components/AppBar'
 import { PageLoading } from '@/components/PageLoading'
@@ -145,7 +145,7 @@ export function ClickerPage() {
           </Flex>
           <Button size="3" variant="classic" radius="full" aria-label="Создать дело" asChild>
             <Link to="/deeds/new">
-              <PlusIcon />
+              <Plus size={16} />
               Создать дело
             </Link>
           </Button>
@@ -218,7 +218,7 @@ export function ClickerPage() {
               disabled={count === 0}
               aria-label="Уменьшить"
             >
-              <MinusIcon width={24} height={24} />
+              <Minus width={24} height={24} />
             </IconButton>
             <IconButton
               className={styles.counterButton}
@@ -230,7 +230,7 @@ export function ClickerPage() {
               onPointerCancel={holdPlus.handlePointerUp}
               aria-label="Увеличить"
             >
-              <PlusIcon width={24} height={24} />
+              <Plus width={24} height={24} />
             </IconButton>
           </Flex>
           <Button 

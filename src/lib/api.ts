@@ -515,14 +515,16 @@ export const api = {
       return data ?? []
     },
 
-    /** Записи по нескольким делам одним запросом (для главной и истории).
-     * @param opts.skipDeedCheck — если true, не проверять deeds (id уже от listWithBlocks); RLS на records всё равно ограничит доступ */
+    /** Записи по нескольким делам одним запросом (главная — только за сегодня).
+     * @param opts.skipDeedCheck — если true, не проверять deeds (id уже от listWithBlocks); RLS на records всё равно ограничит доступ
+     * @param opts.recordDate — если задан (YYYY-MM-DD), только записи этой даты; без него — вся история */
     async recordsByDeedIds(
       deedIds: string[],
-      opts?: { skipDeedCheck?: boolean }
+      opts?: { skipDeedCheck?: boolean; recordDate?: string }
     ): Promise<Record<string, (RecordRow & { record_answers?: RecordAnswerRow[] })[]>> {
       if (deedIds.length === 0) return {}
-      const cacheKey = deedIds.slice().sort().join(',')
+      // Дата в ключе: выборка за сегодня не должна слиться с полной историей тех же дел.
+      const cacheKey = `${opts?.recordDate ?? ''}|${deedIds.slice().sort().join(',')}`
       const inFlight = inFlightRecordsByDeedIds.get(cacheKey)
       if (inFlight) return inFlight
 
@@ -538,10 +540,14 @@ export const api = {
         }
         if (idsToFetch.length === 0) return Object.fromEntries(deedIds.map((id) => [id, []]))
 
-        const { data, error } = await supabase
+        let query = supabase
           .from('records')
           .select('*, record_answers(*)')
           .in('deed_id', idsToFetch)
+        if (opts?.recordDate) {
+          query = query.eq('record_date', opts.recordDate)
+        }
+        const { data, error } = await query
           .order('record_date', { ascending: false })
           .order('record_time', { ascending: false })
         if (error) {

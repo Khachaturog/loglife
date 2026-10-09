@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Text } from "@radix-ui/themes";
-import { Link2Icon } from "@radix-ui/react-icons";
+import { Link2 } from "lucide-react";
 import { parseDescriptionToSegments } from "@/lib/deed-description-segments";
 import styles from "./DeedDescriptionText.module.css";
 import { Link } from "react-router-dom";
@@ -27,7 +27,7 @@ export function DeedDescriptionText({ text }: DeedDescriptionTextProps) {
             rel="noopener noreferrer"
             className={styles.link}
           >
-            <Link2Icon width={14} height={14} className={styles.linkIcon} aria-hidden />
+            <Link2 width={14} height={14} className={styles.linkIcon} aria-hidden />
             <span className={styles.linkLabel}>Ссылка</span>
           </Link>
         ),

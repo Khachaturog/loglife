@@ -8,7 +8,7 @@ import { triggerHaptic } from '@/lib/haptics'
 import { persistHistoryListScrollY } from '@/lib/history-scroll-storage'
 import { useRef, useState } from 'react'
 import styles from './RecordCard.module.css'
-import { BackpackIcon, CopyIcon, Pencil1Icon, PlusIcon, TrashIcon } from '@radix-ui/react-icons'
+import { BriefcaseBusiness, Copy, Pencil, Plus, Trash2 } from 'lucide-react'
 
 type RecordAnswer = { block_id: string; value_json: unknown }
 
@@ -167,7 +167,7 @@ export function RecordCard({
               handleGoToDeed()
             }}
           >
-            <BackpackIcon />
+            <BriefcaseBusiness size={16} />
             Перейти к делу
           </ContextMenu.Item>
           <ContextMenu.Separator />
@@ -176,7 +176,7 @@ export function RecordCard({
               handleNewRecord()
             }}
           >
-            <PlusIcon />
+            <Plus size={16} />
             Новая запись
           </ContextMenu.Item>
           <ContextMenu.Item
@@ -184,7 +184,7 @@ export function RecordCard({
               handleDuplicate()
             }}
           >
-            <CopyIcon />
+            <Copy size={16} />
             Дублировать
           </ContextMenu.Item>
           <ContextMenu.Separator />
@@ -193,7 +193,7 @@ export function RecordCard({
               handleEdit()
             }}
           >
-            <Pencil1Icon />
+            <Pencil size={16} />
             Редактировать
           </ContextMenu.Item>
           <ContextMenu.Separator />
@@ -204,7 +204,7 @@ export function RecordCard({
               setDeleteOpen(true)
             }}
           >
-            <TrashIcon />
+            <Trash2 size={16} />
             Удалить
           </ContextMenu.Item>
         </ContextMenu.Content>

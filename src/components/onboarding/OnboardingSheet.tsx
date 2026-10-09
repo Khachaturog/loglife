@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Box, Button, Dialog, Flex, Text } from '@radix-ui/themes'
-import { CheckIcon, ArrowLeftIcon, ArrowRightIcon } from '@radix-ui/react-icons'
+import { Check, ArrowLeft, ArrowRight } from 'lucide-react'
 import type { OnboardingStep } from '@/onboarding/types'
 import type { OnboardingFlowId } from '@/onboarding/flows'
 import styles from './OnboardingSheet.module.css'
@@ -57,7 +57,7 @@ export function OnboardingSheet({ open, onOpenChange, flowId, steps }: Props) {
                 radius="full"
                 aria-label="Закрыть"
               >
-                <Cross2Icon />
+                <X size={16} />
               </IconButton>
             </Dialog.Close> */}
           </div>
@@ -97,7 +97,7 @@ export function OnboardingSheet({ open, onOpenChange, flowId, steps }: Props) {
                   style={{ flex: '1 1 0', minWidth: 0 }}
                   onClick={() => setStepIndex((i) => Math.max(0, i - 1))}
                 >
-                  <ArrowLeftIcon aria-hidden />
+                  <ArrowLeft aria-hidden size={16} />
                   Назад
                 </Button>
                 <Dialog.Close>
@@ -109,7 +109,7 @@ export function OnboardingSheet({ open, onOpenChange, flowId, steps }: Props) {
                     style={{ flex: '1 1 0', minWidth: 0 }}
                   >
                     Готово
-                    <CheckIcon aria-hidden />
+                    <Check aria-hidden size={16} />
                   </Button>
                 </Dialog.Close>
               </Flex>
@@ -122,7 +122,7 @@ export function OnboardingSheet({ open, onOpenChange, flowId, steps }: Props) {
                   variant="surface"
                   style={{ width: '100%' }}
                 >
-                  <CheckIcon aria-hidden />
+                  <Check aria-hidden size={16} />
                   Готово
                 </Button>
               </Dialog.Close>
@@ -137,7 +137,7 @@ export function OnboardingSheet({ open, onOpenChange, flowId, steps }: Props) {
               onClick={() => setStepIndex((i) => Math.min(lastIndex, i + 1))}
             >
               Далее
-              <ArrowRightIcon aria-hidden />
+              <ArrowRight aria-hidden size={16} />
             </Button>
           ) : (
             <Flex width="100%" gap="2">
@@ -149,7 +149,7 @@ export function OnboardingSheet({ open, onOpenChange, flowId, steps }: Props) {
                 style={{ flex: '1 1 0', minWidth: 0 }}
                 onClick={() => setStepIndex((i) => Math.max(0, i - 1))}
               >
-                <ArrowLeftIcon aria-hidden />
+                <ArrowLeft aria-hidden size={16} />
                 Назад
               </Button>
               <Button
@@ -161,7 +161,7 @@ export function OnboardingSheet({ open, onOpenChange, flowId, steps }: Props) {
                 onClick={() => setStepIndex((i) => Math.min(lastIndex, i + 1))}
               >
                 Далее
-                <ArrowRightIcon aria-hidden />
+                <ArrowRight aria-hidden size={16} />
               </Button>
             </Flex>
           )}

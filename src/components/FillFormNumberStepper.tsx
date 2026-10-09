@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import { flushSync } from 'react-dom'
 import { IconButton } from '@radix-ui/themes'
-import { MinusIcon, PlusIcon } from '@radix-ui/react-icons'
+import { Minus, Plus } from 'lucide-react'
 import type { ValueJson } from '@/types/database'
 import { useHoldRepeat } from '@/lib/useHoldRepeat'
 
@@ -89,7 +89,7 @@ export function FillFormNumberStepper({
         onPointerLeave={minusHold.handlePointerUp}
         onPointerCancel={minusHold.handlePointerUp}
       >
-        <MinusIcon />
+        <Minus size={16} />
       </IconButton>
       <IconButton
         size="3"
@@ -103,7 +103,7 @@ export function FillFormNumberStepper({
         onPointerLeave={plusHold.handlePointerUp}
         onPointerCancel={plusHold.handlePointerUp}
       >
-        <PlusIcon />
+        <Plus size={16} />
       </IconButton>
     </>
   )

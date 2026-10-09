@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Box, Button, Card, Flex, IconButton, Text } from '@radix-ui/themes'
-import { CheckCircledIcon, CircleIcon, UpdateIcon } from '@radix-ui/react-icons'
+import { CircleCheck, Circle, RefreshCw } from 'lucide-react'
 import type { DeedWithBlocks } from '@/types/database'
 import type { RecordRow, RecordAnswerRow } from '@/types/database'
 import { getDeedDisplayNumbers } from '@/lib/deed-utils'
@@ -264,11 +264,11 @@ export function DeedCard({
       {...pointerHandlers}
     >
       {showSpinner ? (
-        <UpdateIcon className={deedCardStyles.iconSpin} />
+        <RefreshCw className={deedCardStyles.iconSpin} size={16} />
       ) : markedToday ? (
-        <CheckCircledIcon />
+        <CircleCheck size={16} />
       ) : (
-        <CircleIcon />
+        <Circle size={16} />
       )}
       {/* Барабан остаётся в дереве на время спиннера, чтобы не начинать прокрутку с нуля заново */}
       {stackCount > 0 || markedToday ? (
@@ -291,11 +291,11 @@ export function DeedCard({
       {...pointerHandlers}
     >
       {showSpinner ? (
-        <UpdateIcon className={deedCardStyles.iconSpin} />
+        <RefreshCw className={deedCardStyles.iconSpin} size={16} />
       ) : markedToday ? (
-        <CheckCircledIcon />
+        <CircleCheck size={16} />
       ) : (
-        <CircleIcon />
+        <Circle size={16} />
       )}
     </IconButton>
   )

@@ -13,6 +13,7 @@
 | `/records/:id` | [`src/pages/RecordViewPage.tsx`](src/pages/RecordViewPage.tsx) | Просмотр/редактирование одной записи |
 | `/widgets` | [`src/pages/WidgetsPage.tsx`](src/pages/WidgetsPage.tsx) | Список доступных виджетов |
 | `/widgets/clicker` | [`src/pages/ClickerPage.tsx`](src/pages/ClickerPage.tsx) | Виджет «Кликер» (счётчик нажатий) |
+| `/widgets/calendar` | [`src/pages/ProductionCalendarPage.tsx`](src/pages/ProductionCalendarPage.tsx) | Виджет «Производственный календарь 2027» |
 | `/history` | [`src/pages/HistoryPage.tsx`](src/pages/HistoryPage.tsx) | История записей (по делам) |
 | `/profile` | [`src/pages/ProfilePage.tsx`](src/pages/ProfilePage.tsx) | Профиль и настройки |
 | `/privacy` | [`src/pages/PrivacyPolicyPage.tsx`](src/pages/PrivacyPolicyPage.tsx) | Политика конфиденциальности (публичная) |

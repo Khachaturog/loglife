@@ -6,7 +6,7 @@ import { DeedDescriptionText } from '@/components/DeedDescriptionText'
 import { AppBar } from '@/components/AppBar'
 import { useOnboarding } from '@/lib/onboarding-context'
 import { PageLoading } from '@/components/PageLoading'
-import { CheckIcon, DotsHorizontalIcon, PlusIcon, Pencil1Icon, TrashIcon, QuestionMarkCircledIcon, UpdateIcon } from '@radix-ui/react-icons'
+import { Check, Ellipsis, Plus, Pencil, Trash2, CircleQuestionMark, RefreshCw } from 'lucide-react'
 import { api } from '@/lib/api'
 import { RecordCard } from '@/components/RecordCard'
 import type { DeedWithBlocks } from '@/types/database'
@@ -298,7 +298,7 @@ export function DeedViewPage() {
                 aria-label="Запись добавлена"
                 onClick={(e) => e.preventDefault()}
               >
-                <CheckIcon />
+                <Check size={16} />
               </IconButton>
             ) : quickAddFromDefaults && addingRecord ? (
               <IconButton
@@ -309,7 +309,7 @@ export function DeedViewPage() {
                 aria-label="Добавление записи"
                 disabled
               >
-                <UpdateIcon />
+                <RefreshCw size={16} />
               </IconButton>
             ) : (
               <IconButton
@@ -329,7 +329,7 @@ export function DeedViewPage() {
                 onPointerLeave={handlePlusPointerEnd}
                 onClick={handlePlusClick}
               >
-                <PlusIcon />
+                <Plus size={16} />
               </IconButton>
             )}
             <Separator orientation="vertical" />
@@ -343,20 +343,20 @@ export function DeedViewPage() {
                   radius="full"
                   aria-label="Действия с делом"
                 >
-                  <DotsHorizontalIcon />
+                  <Ellipsis size={16} />
                 </IconButton>
               </DropdownMenu.Trigger>
               <DropdownMenu.Content variant="solid" size="2" align="end" sideOffset={8}>
                 <DropdownMenu.Item asChild>
-                  <Link to={`/deeds/${id}/edit`}> <Pencil1Icon /> Редактировать</Link>
+                  <Link to={`/deeds/${id}/edit`}> <Pencil size={16} /> Редактировать</Link>
                 </DropdownMenu.Item>
                 <DropdownMenu.Separator />
                 <DropdownMenu.Item color="red" onSelect={() => setDeleteOpen(true)}>
-                  <TrashIcon /> Удалить
+                  <Trash2 size={16} /> Удалить
                 </DropdownMenu.Item>
                 <DropdownMenu.Separator />
                 <DropdownMenu.Item color="gray" onSelect={() => openFlow('help_deed_view')}>
-                  <QuestionMarkCircledIcon /> Справка
+                  <CircleQuestionMark size={16} /> Справка
                 </DropdownMenu.Item>
               </DropdownMenu.Content>
             </DropdownMenu.Root>

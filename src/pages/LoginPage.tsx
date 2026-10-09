@@ -1,6 +1,6 @@
 import { type FormEvent, useEffect, useState } from 'react'
 import { useNavigate, useSearchParams, Link as RouterLink } from 'react-router-dom'
-import { EyeClosedIcon, EyeOpenIcon } from '@radix-ui/react-icons'
+import { EyeOff, Eye } from 'lucide-react'
 import {
   Box,
   Button,
@@ -87,7 +87,7 @@ function PasswordTextField({
           }}
           disabled={disabled}
         >
-          {visible ? <EyeClosedIcon /> : <EyeOpenIcon />}
+          {visible ? <EyeOff size={16} /> : <Eye size={16} />}
         </IconButton>
       </TextField.Slot>
     </TextField.Root>
