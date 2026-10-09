@@ -22,7 +22,9 @@
 | api.deeds | `records(deedId)` | deeds, records, record_answers | DeedViewPage, DeedFormPage (модалка смены типа), export-csv |
 | api.deeds | `recentRecords(deedId, limit?)` | deeds, records, record_answers | FillFormPage |
 | api.deeds | `recordsByDeedIds(ids, { recordDate? })` | records, record_answers | DeedsListPage (на главной `record_date` = сегодня) |
-| api.deeds | `listAllRecordsWithDeedInfo()` | records, record_answers, deeds | HistoryPage |
+| api.deeds | `listAllRecordsWithDeedInfo({ fromDate?, toDate? })` | records, record_answers, deeds | HistoryPage (диапазон `record_date`, оба края включительно) |
+| api.deeds | `oldestRecordDateBefore(beforeDate)` | records, deeds | HistoryPage (есть ли записи старше границы) |
+| api.deeds | `countAllRecords()` | records, deeds | HistoryPage (бейдж, без тел ответов) |
 | api.deeds | `createRecord()` | deeds, records, record_answers | FillFormPage, DeedCard, DeedViewPage (быстрое добавление из дефолтов) |
 | api.records | `get(id)` | records, record_answers, deeds | RecordViewPage |
 | api.records | `update()` | records, record_answers, deeds | RecordViewPage |
@@ -200,6 +202,42 @@ LIMIT :limit
 
 ---
 
+### `api.deeds.listAllRecordsWithDeedInfo(range?)`
+
+**Запросы:**
+1. `SELECT records, record_answers, deeds, blocks` — записи пользователя. `fromDate` / `toDate` (YYYY-MM-DD), если заданы, ограничивают `record_date` включительно
+
+```sql
+SELECT *, record_answers(*), deeds!inner(emoji, name, blocks(*))
+FROM records
+WHERE deeds.user_id = auth.uid()
+  AND record_date >= :fromDate -- только если fromDate задан
+  AND record_date <= :toDate   -- только если toDate задан
+ORDER BY record_date DESC, record_time DESC
+```
+
+**Используется:** HistoryPage — окно последних 7 дней, хвост при возврате на экран, порция 30 дней, обновление после удаления
+
+---
+
+### `api.deeds.oldestRecordDateBefore(beforeDate)`
+
+**Запросы:**
+1. `SELECT record_date` — одна строка с максимальной `record_date` строго меньше `beforeDate`. Пусто — старше границы записей нет
+
+**Используется:** HistoryPage — нужно ли показывать «Показать раньше» и с какой даты начинать следующую порцию
+
+---
+
+### `api.deeds.countAllRecords()`
+
+**Запросы:**
+1. `HEAD` / `count=exact` по `records` пользователя, без строк ответов
+
+**Используется:** HistoryPage — бейдж с общим числом записей
+
+---
+
 ### `api.deeds.recordsByDeedIds(ids, opts?)`
 
 **Запросы:**
@@ -270,9 +308,14 @@ ORDER BY record_date DESC, record_time DESC
 
 | # | Запрос | Таблицы |
 |---|--------|---------|
-| 1 | listAllRecordsWithDeedInfo | records, record_answers, deeds |
+| 1 | listAllRecordsWithDeedInfo (`record_date` ≥ сегодня − 6 дней) | records, record_answers, deeds |
+| 2 | oldestRecordDateBefore (нижняя граница окна) | records, deeds |
+| 3 | countAllRecords | records, deeds |
+| 4 | listAllRecordsWithDeedInfo хвоста | records, record_answers, deeds |
 
-**Итого:** 1 запрос
+Запросы 1–3 идут параллельно при открытии. Запрос 4 — только если в этой вкладке уже догружали период старше 7 дней (возврат со скроллом). «Показать раньше» или доскролл низа: снова `oldestRecordDateBefore`, затем `listAllRecordsWithDeedInfo` на 30 дней до этой даты, затем ещё одна проба.
+
+**Итого:** 3 запроса на первый заход, дальше по мере догрузки
 
 ---
 
@@ -388,5 +431,5 @@ INSERT INTO pomodoro_sessions (
 | Страница | Количество запросов | Комментарий |
 |----------|---------------------|-------------|
 | DeedsListPage | 2 | listWithBlocks + recordsByDeedIds за сегодня |
-| HistoryPage | 1 | listAllRecordsWithDeedInfo (join) |
+| HistoryPage | 3 | 7 дней + проба более старой даты + count; хвост и порции по 30 дней отдельно |
 | export-csv | 1 + 2N | list + get×N + records×N (потенциал для оптимизации) |

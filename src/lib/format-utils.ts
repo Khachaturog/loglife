@@ -10,6 +10,17 @@ export function todayLocalISO(): string {
   return `${y}-${m}-${day}`
 }
 
+/** Сдвиг календарной даты YYYY-MM-DD на deltaDays в локальном календаре (без сдвига UTC). */
+export function addDaysLocalISO(isoDate: string, deltaDays: number): string {
+  const [y, m, d] = isoDate.split('-').map(Number)
+  const dt = new Date(y, (m ?? 1) - 1, d ?? 1)
+  dt.setDate(dt.getDate() + deltaDays)
+  const year = dt.getFullYear()
+  const month = String(dt.getMonth() + 1).padStart(2, '0')
+  const day = String(dt.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 /** Текущее время в локальном часовом поясе в формате HH:MM (для input type="time" и record_time). */
 export function nowTimeLocal(): string {
   const d = new Date()

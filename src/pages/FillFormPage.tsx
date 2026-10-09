@@ -38,7 +38,7 @@ import {
   type RecordWithAnswersForSuggestions,
 } from '@/lib/fill-form-recent-suggestions'
 import { DatePicker } from '@/components/DatePicker'
-import { DurationInput } from '@/components/DurationInput'
+import { DurationStopwatchField } from '@/components/DurationStopwatchField'
 import { ScaleAnswerField } from '@/components/ScaleAnswerField'
 import { todayLocalISO, nowTimeLocal } from '@/lib/format-utils'
 import { blurActiveInputInForm, blurInputOnEnter } from '@/lib/ios-input-blur'
@@ -527,11 +527,12 @@ function FillFormEntry({
                 />
               )}
               {block.block_type === 'duration' && (
-                <DurationInput
+                <DurationStopwatchField
                   value={
                     (answers[block.id] as { durationHms?: string } | undefined)?.durationHms ?? ''
                   }
                   onChange={(hms) => setAnswer(block.id, { durationHms: hms })}
+                  questionTitle={block.title}
                   placeholder="00:00:00"
                 />
               )}

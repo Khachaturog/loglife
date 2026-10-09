@@ -22,7 +22,7 @@
 | 13 | [13-rules-editing-deed-data.md](13-rules-editing-deed-data.md) | Поведение данных при редактировании дела (название, блоки, тип блока) |
 | 14 | [14-screen-deed-view.md](14-screen-deed-view.md) | Экран: просмотр дела (инфо, история записей, действия: добавить запись, редактировать, удалить) |
 | 15 | [15-layout-navigation.md](15-layout-navigation.md) | Общий layout: шапка и нижняя панель вкладок (tab bar) на мобильных |
-| 16 | [16-widget-pomodoro.md](16-widget-pomodoro.md) | Виджет помодоро: проекты, сеансы фокуса, поле эмодзи |
+| 16 | [16-widget-pomodoro.md](16-widget-pomodoro.md) | Виджет помодоро: проекты и сеансы фокуса |
 | — | [business-logic.md](business-logic.md) | Сводка бизнес-логики по требованиям (доменная модель, правила, экраны) |
 
 Рекомендуется читать документы по порядку (00 → 16) для целостного понимания продукта. Для быстрого входа — [business-logic.md](business-logic.md).

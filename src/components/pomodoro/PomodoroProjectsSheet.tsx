@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { AlertDialog, Box, Button, Dialog, Flex, IconButton, Select, Slider, Text, TextField } from '@radix-ui/themes'
-import { ArrowLeft, Pencil, Trash2, X } from 'lucide-react'
+import { ArrowLeft, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { EmojiPickerButton } from '@/components/EmojiPickerButton'
 import { api } from '@/lib/api'
 import {
@@ -16,6 +16,8 @@ import type { PomodoroProjectRow } from '@/types/database'
 import styles from './PomodoroProjectsSheet.module.css'
 
 type FormDraft = {
+  /** settings — только минуты «Без проекта», без имени и цвета. */
+  kind: 'project' | 'settings'
   id: string | null
   name: string
   emoji: string
@@ -23,7 +25,7 @@ type FormDraft = {
   focusSeconds: number
 }
 
-type SheetView = 'list' | 'form' | 'ruler'
+type SheetView = 'list' | 'form'
 
 type PomodoroProjectsSheetProps = {
   open: boolean
@@ -36,6 +38,13 @@ type PomodoroProjectsSheetProps = {
 }
 
 const DEFAULT_ACCENT = RADIX_COLOR_9_PRESETS.find((preset) => preset.id === 'orange')?.hex ?? RADIX_COLOR_9_PRESETS[0].hex
+
+/** Ползунок живёт от 5 минут. Более короткое значение из базы показываем как 5, пока его не сохранят. */
+function clampFocusMinutes(seconds: number): number {
+  const minMinutes = POMODORO_MIN_RECORDED_SECONDS / 60
+  const maxMinutes = POMODORO_MAX_FOCUS_SECONDS / 60
+  return Math.min(maxMinutes, Math.max(minMinutes, Math.round(seconds / 60)))
+}
 
 /**
  * Лист проектов поверх таймера: выбор, создание, правка минут, цвета и эмодзи.
@@ -52,8 +61,6 @@ export function PomodoroProjectsSheet({
 }: PomodoroProjectsSheetProps) {
   const [view, setView] = useState<SheetView>('list')
   const [draft, setDraft] = useState<FormDraft | null>(null)
-  const [rulerMinutes, setRulerMinutes] = useState(25)
-  const [rulerTarget, setRulerTarget] = useState<'form' | 'settings'>('form')
   const [deleteTarget, setDeleteTarget] = useState<PomodoroProjectRow | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -68,11 +75,12 @@ export function PomodoroProjectsSheet({
   function openCreate() {
     setError(null)
     setDraft({
+      kind: 'project',
       id: null,
       name: '',
       emoji: '🎯',
       accentColor: DEFAULT_ACCENT,
-      focusSeconds: settingsFocusSeconds,
+      focusSeconds: clampFocusMinutes(settingsFocusSeconds) * 60,
     })
     setView('form')
   }
@@ -80,43 +88,27 @@ export function PomodoroProjectsSheet({
   function openEdit(project: PomodoroProjectRow) {
     setError(null)
     setDraft({
+      kind: 'project',
       id: project.id,
       name: project.name,
       emoji: project.emoji,
       accentColor: project.accent_color,
-      focusSeconds: project.focus_seconds,
+      focusSeconds: clampFocusMinutes(project.focus_seconds) * 60,
     })
     setView('form')
   }
 
-  function openRuler(seconds: number, target: 'form' | 'settings') {
-    const minMinutes = POMODORO_MIN_RECORDED_SECONDS / 60
-    const maxMinutes = POMODORO_MAX_FOCUS_SECONDS / 60
-    setRulerTarget(target)
-    // Старые значения короче 5 минут на ползунке не показываем, в базу не пишем до «Готово».
-    setRulerMinutes(Math.min(maxMinutes, Math.max(minMinutes, Math.round(seconds / 60))))
-    setView('ruler')
-  }
-
-  async function applyRuler() {
-    const seconds = rulerMinutes * 60
-    if (rulerTarget === 'form' && draft) {
-      setDraft({ ...draft, focusSeconds: seconds })
-      setView('form')
-    } else {
-      setBusy(true)
-      setError(null)
-      try {
-        await api.pomodoro.updateSettings(seconds)
-        await onChanged()
-        setView('list')
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Не удалось сохранить длительность')
-        return
-      } finally {
-        setBusy(false)
-      }
-    }
+  function openSettings() {
+    setError(null)
+    setDraft({
+      kind: 'settings',
+      id: null,
+      name: POMODORO_FREE_LABEL,
+      emoji: POMODORO_FALLBACK_EMOJI,
+      accentColor: DEFAULT_ACCENT,
+      focusSeconds: clampFocusMinutes(settingsFocusSeconds) * 60,
+    })
+    setView('form')
   }
 
   async function saveDraft() {
@@ -124,7 +116,9 @@ export function PomodoroProjectsSheet({
     setBusy(true)
     setError(null)
     try {
-      if (draft.id) {
+      if (draft.kind === 'settings') {
+        await api.pomodoro.updateSettings(draft.focusSeconds)
+      } else if (draft.id) {
         await api.pomodoro.updateProject(draft.id, draft)
       } else {
         const created = await api.pomodoro.createProject(draft)
@@ -155,7 +149,9 @@ export function PomodoroProjectsSheet({
     }
   }
 
-  const title = view === 'ruler' ? 'Длительность' : view === 'form' ? (draft?.id ? 'Проект' : 'Новый проект') : 'Проекты'
+  const title = view === 'form'
+    ? (draft?.kind === 'settings' ? POMODORO_FREE_LABEL : draft?.id ? 'Проект' : 'Новый проект')
+    : 'Проекты'
 
   return (
     <>
@@ -170,9 +166,10 @@ export function PomodoroProjectsSheet({
                   type="button"
                   size="3"
                   color="gray"
-                  variant="surface"
+                  variant="soft"
+                  radius="full"
                   aria-label="Назад"
-                  onClick={() => setView(view === 'ruler' && rulerTarget === 'form' ? 'form' : 'list')}
+                  onClick={() => setView('list')}
                 >
                   <ArrowLeft size={16} />
                 </IconButton>
@@ -182,17 +179,16 @@ export function PomodoroProjectsSheet({
                 type="button"
                 size="3"
                 color="gray"
-                variant="surface"
+                variant="soft"
+                radius="full"
                 aria-label="Закрыть"
                 onClick={() => onOpenChange(false)}
               >
                 <X size={16} />
               </IconButton>
             </Flex>
-            {view === 'form' && (
-              <Dialog.Description size="2" color="gray">
-                Эмодзи и цвет видны на таймере и в списке.
-              </Dialog.Description>
+            {view === 'form' && draft?.kind === 'project' && (
+              <Dialog.Description></Dialog.Description>
             )}
 
             {error && (
@@ -211,7 +207,7 @@ export function PomodoroProjectsSheet({
                     onSelect(null)
                     onOpenChange(false)
                   }}
-                  onEdit={() => openRuler(settingsFocusSeconds, 'settings')}
+                  onEdit={openSettings}
                 />
                 {projects.map((project) => (
                   <ProjectRow
@@ -228,7 +224,13 @@ export function PomodoroProjectsSheet({
                     onEdit={() => openEdit(project)}
                   />
                 ))}
-                <Button type="button" size="3" variant="surface" color="gray" onClick={openCreate}>
+                <Button 
+                type="button" 
+                size="3" 
+                variant="soft" 
+                color="gray" 
+                onClick={openCreate}>
+                  <Plus size={16} />
                   Новый проект
                 </Button>
               </Flex>
@@ -236,34 +238,34 @@ export function PomodoroProjectsSheet({
 
             {view === 'form' && draft && (
               <Flex direction="column" gap="3">
-                <Flex align="center" gap="3">
-                  <EmojiPickerButton value={draft.emoji} onChange={(emoji) => setDraft({ ...draft, emoji })} />
-                  <Box flexGrow="1">
-                    <TextField.Root
-                      size="3"
-                      placeholder="Название"
-                      value={draft.name}
-                      onChange={(event) => setDraft({ ...draft, name: event.target.value })}
-                    />
-                  </Box>
-                </Flex>
+                {draft.kind === 'project' && (
+                  <>
+                    <Flex align="center" gap="3">
+                      <EmojiPickerButton value={draft.emoji} onChange={(emoji) => setDraft({ ...draft, emoji })} />
+                      <Box flexGrow="1">
+                        <TextField.Root
+                          size="3"
+                          placeholder="Название"
+                          value={draft.name}
+                          onChange={(event) => setDraft({ ...draft, name: event.target.value })}
+                        />
+                      </Box>
+                    </Flex>
 
-                <ProjectColorField
-                  value={draft.accentColor}
-                  onChange={(accentColor) => setDraft({ ...draft, accentColor })}
+                    <ProjectColorField
+                      value={draft.accentColor}
+                      onChange={(accentColor) => setDraft({ ...draft, accentColor })}
+                    />
+                  </>
+                )}
+
+                <DurationField
+                  seconds={draft.focusSeconds}
+                  onMinutesChange={(minutes) => setDraft({ ...draft, focusSeconds: minutes * 60 })}
                 />
 
-                <button
-                  type="button"
-                  className={styles.durationRow}
-                  onClick={() => openRuler(draft.focusSeconds, 'form')}
-                >
-                  <Text weight="medium">Длительность</Text>
-                  <Text color="gray">{formatFocusClock(draft.focusSeconds)}</Text>
-                </button>
-
                 <Flex gap="2">
-                  {draft.id && (
+                  {draft.kind === 'project' && draft.id && (
                     <IconButton
                       type="button"
                       size="3"
@@ -283,36 +285,12 @@ export function PomodoroProjectsSheet({
                     size="3"
                     variant="solid"
                     style={{ flex: 1 }}
-                    disabled={busy || !draft.name.trim()}
+                    disabled={busy || (draft.kind === 'project' && !draft.name.trim())}
                     onClick={() => void saveDraft()}
                   >
                     Сохранить
                   </Button>
                 </Flex>
-              </Flex>
-            )}
-
-            {view === 'ruler' && (
-              <Flex direction="column" gap="4" align="center">
-                <Text className={styles.rulerValue} weight="bold">{formatFocusClock(rulerMinutes * 60)}</Text>
-                <Box width="100%">
-                  <Slider
-                    size="3"
-                    min={POMODORO_MIN_RECORDED_SECONDS / 60}
-                    max={POMODORO_MAX_FOCUS_SECONDS / 60}
-                    step={1}
-                    value={[rulerMinutes]}
-                    onValueChange={(next) => setRulerMinutes(next[0] ?? rulerMinutes)}
-                    aria-label="Минуты фокуса"
-                  />
-                </Box>
-                <Flex justify="between" width="100%">
-                  <Text size="2" color="gray">{POMODORO_MIN_RECORDED_SECONDS / 60}</Text>
-                  <Text size="2" color="gray">180 минут</Text>
-                </Flex>
-                <Button type="button" size="3" radius="full" variant="solid" disabled={busy} onClick={() => void applyRuler()}>
-                  Готово
-                </Button>
               </Flex>
             )}
           </Flex>
@@ -338,6 +316,32 @@ export function PomodoroProjectsSheet({
         </AlertDialog.Content>
       </AlertDialog.Root>
     </>
+  )
+}
+
+/** Длительность — поле той же формы, что имя, эмодзи и цвет, а не отдельный экран. */
+function DurationField({ seconds, onMinutesChange }: { seconds: number; onMinutesChange: (minutes: number) => void }) {
+  const minutes = clampFocusMinutes(seconds)
+  return (
+    <Flex direction="column" gap="2">
+      <Flex justify="between" align="baseline">
+        <Text as="p" size="3" weight="medium">Длительность</Text>
+        <Text as="p" size="3" color="gray">{formatFocusClock(minutes * 60)}</Text>
+      </Flex>
+      <Slider
+        size="3"
+        min={POMODORO_MIN_RECORDED_SECONDS / 60}
+        max={POMODORO_MAX_FOCUS_SECONDS / 60}
+        step={1}
+        value={[minutes]}
+        onValueChange={(next) => onMinutesChange(next[0] ?? minutes)}
+        aria-label="Минуты фокуса"
+      />
+      <Flex justify="between">
+        <Text as="p" size="2" color="gray">{POMODORO_MIN_RECORDED_SECONDS / 60}</Text>
+        <Text as="p" size="2" color="gray">180 минут</Text>
+      </Flex>
+    </Flex>
   )
 }
 
@@ -413,10 +417,10 @@ function ProjectRow({ emoji, name, focusSeconds, accentColor, selected, onSelect
       style={fill ? { backgroundColor: fill, color: ink } : undefined}
     >
       <button type="button" className={styles.rowMain} onClick={onSelect}>
-        <span className={styles.rowEmoji} aria-hidden>{emoji}</span>
+        <span aria-hidden>{emoji}</span>
         <span className={styles.rowText}>
-          <Text weight="medium" style={ink ? { color: ink } : undefined}>{name}</Text>
-          <Text size="2" style={ink ? { color: ink, opacity: 0.8 } : undefined} color={ink ? undefined : 'gray'}>
+          <Text weight="medium">{name}</Text>
+          <Text size="2" color="gray">
             {formatFocusClock(focusSeconds)}
           </Text>
         </span>
@@ -424,7 +428,8 @@ function ProjectRow({ emoji, name, focusSeconds, accentColor, selected, onSelect
       <IconButton
         type="button"
         size="3"
-        variant="surface"
+        variant="soft"
+        radius="full"
         color="gray"
         aria-label={`Изменить ${name}`}
         onClick={onEdit}

@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Box, Button, Flex, Text } from '@radix-ui/themes'
 import { ChevronRight } from 'lucide-react'
 import { AppBar } from '@/components/AppBar'
 import { PageLoading } from '@/components/PageLoading'
-import { PomodoroEmojiField } from '@/components/pomodoro/PomodoroEmojiField'
 import { PomodoroProjectsSheet } from '@/components/pomodoro/PomodoroProjectsSheet'
 import { OnboardingHelpButton } from '@/components/onboarding/OnboardingHelpButton'
 import { api } from '@/lib/api'
@@ -25,7 +24,7 @@ import type { PomodoroProjectRow, PomodoroSessionStatus, PomodoroSettingsRow } f
 import layoutStyles from '@/styles/layout.module.css'
 import styles from './PomodoroPage.module.css'
 
-const HOLD_MS = 700
+const HOLD_MS = 1000
 const SLOT_GLYPHS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] as const
 
 function prefersReducedMotion(): boolean {
@@ -91,6 +90,53 @@ function SlotRun({ value }: { value: string }) {
         )
       })}
     </span>
+  )
+}
+
+/** Схлопывает блок по высоте. Соседний flex-центр из-за этого плавно переезжает, а не прыгает. */
+function CollapseSlot({
+  open,
+  className,
+  children,
+}: {
+  open: boolean
+  className?: string
+  children: React.ReactNode
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+  const seen = useRef(false)
+
+  useLayoutEffect(() => {
+    const node = ref.current
+    const inner = node?.firstElementChild as HTMLElement | null
+    if (!node || !inner) return
+    if (open) node.removeAttribute('inert')
+    else node.setAttribute('inert', '')
+
+    const lock = (height: string) => {
+      node.style.maxHeight = height
+    }
+    // Первый кадр без анимации: сеанс после обновления страницы уже в центре.
+    if (!seen.current) {
+      seen.current = true
+      lock(open ? `${inner.scrollHeight}px` : '0px')
+      return
+    }
+    if (!open) {
+      lock(`${inner.scrollHeight}px`)
+      void node.offsetHeight
+    }
+    lock(open ? `${inner.scrollHeight}px` : '0px')
+  }, [open])
+
+  return (
+    <div
+      ref={ref}
+      className={[styles.collapseSlot, open ? '' : styles.collapseSlotClosed, className].filter(Boolean).join(' ')}
+      aria-hidden={open ? undefined : true}
+    >
+      <div className={styles.collapseInner}>{children}</div>
+    </div>
   )
 }
 
@@ -187,6 +233,47 @@ export function PomodoroPage() {
     const timer = window.setInterval(() => setNow(Date.now()), 200)
     return () => window.clearInterval(timer)
   }, [active])
+
+  // Документ не скроллится, а края экрана и панели браузера красятся в цвет проекта.
+  useEffect(() => {
+    const html = document.documentElement
+    const body = document.body
+    const prev = {
+      htmlOverflow: html.style.overflow,
+      bodyOverflow: body.style.overflow,
+      htmlOverscroll: html.style.overscrollBehavior,
+      bodyOverscroll: body.style.overscrollBehavior,
+      htmlBg: html.style.backgroundColor,
+      bodyBg: body.style.backgroundColor,
+    }
+    html.style.overflow = 'hidden'
+    body.style.overflow = 'hidden'
+    html.style.overscrollBehavior = 'none'
+    body.style.overscrollBehavior = 'none'
+    let meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
+    const createdMeta = !meta
+    if (!meta) {
+      meta = document.createElement('meta')
+      meta.name = 'theme-color'
+      document.head.appendChild(meta)
+    }
+    const prevTheme = meta.content
+    if (accent) {
+      html.style.backgroundColor = accent
+      body.style.backgroundColor = accent
+      meta.content = accent
+    }
+    return () => {
+      html.style.overflow = prev.htmlOverflow
+      body.style.overflow = prev.bodyOverflow
+      html.style.overscrollBehavior = prev.htmlOverscroll
+      body.style.overscrollBehavior = prev.bodyOverscroll
+      html.style.backgroundColor = prev.htmlBg
+      body.style.backgroundColor = prev.bodyBg
+      if (createdMeta) meta.remove()
+      else meta.content = prevTheme
+    }
+  }, [accent])
 
   const finish = useCallback(async (status: PomodoroSessionStatus) => {
     const session = readActiveSession()
@@ -299,76 +386,73 @@ export function PomodoroPage() {
     <Flex
       direction="column"
       className={`${layoutStyles.pageContainer} ${styles.pageRoot}`}
-      style={accent ? { backgroundColor: `color-mix(in srgb, ${accent} 50%, transparent)` } : undefined}
+      style={accent ? { backgroundColor: accent, color: startInk } : undefined}
       onPointerDown={onPagePointerDown}
       onPointerUp={clearHold}
       onPointerCancel={clearHold}
       onContextMenu={(event) => { if (active) event.preventDefault() }}
     >
-      <PomodoroEmojiField emoji={emoji} />
-      {/* Во время сеанса шапки нет: ни заголовка, ни «Назад», ни справки. */}
-      {!active && (
-        <div data-pomodoro-obstacle className={styles.barObstacle}>
-          <AppBar
-            backHref="/widgets"
-            title="Помодоро"
-            actions={<OnboardingHelpButton flowId="help_pomodoro" />}
-          />
-        </div>
-      )}
+      {/* Во время сеанса шапка схлопывается, а не пропадает: часы доезжают в центр. */}
+      <CollapseSlot open={active == null} className={styles.barObstacle}>
+        <AppBar
+          backHref="/widgets"
+          title="Помодоро"
+          actions={<OnboardingHelpButton flowId="help_pomodoro" />}
+        />
+      </CollapseSlot>
 
       <Box className={styles.stage}>
         <Flex direction="column" align="center" justify="center" gap="3" className={styles.clockBlock}>
-          <span data-pomodoro-obstacle className={styles.obstacle}>
+          <span>
             {active ? (
-              <Text className={styles.clock} as="p">
+              <Text className={styles.clock} as="p" style={startInk ? { color: startInk } : undefined}>
                 {formatFocusClock(Math.ceil(remaining))}
               </Text>
             ) : (
               <PomodoroSlotClock seconds={idleSeconds} />
             )}
           </span>
-          <button
-            type="button"
-            data-pomodoro-obstacle
-            className={styles.projectButton}
-            disabled={active != null}
-            onClick={() => setSheetOpen(true)}
-          >
-            <span>{name}</span>
-            {!active && <ChevronRight size={16} />}
-          </button>
-          {active && (
-            <span className={styles.sessionTrack} aria-hidden>
-              <span className={styles.sessionFill} style={{ width: `${progress * 100}%` }} />
-            </span>
-          )}
-          {!active && (
-            <Text size="2" color="gray" align="center">
-              сегодня {formatFocusSum(totals.todaySeconds)} · всего {formatFocusSum(totals.totalSeconds)}
-            </Text>
-          )}
+          <Flex direction="column" align="center">
+            <Button
+              type="button"
+              size="4"
+              color="gray"
+              variant="ghost"
+              radius="full"
+              disabled={active != null}
+              onClick={() => setSheetOpen(true)}
+            >
+              <span aria-hidden>{emoji}</span>
+              {name}
+              {!active && <ChevronRight size={16} />}
+            </Button>
+            <CollapseSlot open={active != null} className={styles.followSlot}>
+              <span className={styles.sessionTrack} aria-hidden>
+                <span className={styles.sessionFill} style={{ width: `${progress * 100}%` }} />
+              </span>
+            </CollapseSlot>
+            <CollapseSlot open={active == null} className={styles.followSlot}>
+              <Text size="2" color="gray" align="center">
+                сегодня {formatFocusSum(totals.todaySeconds)} · всего {formatFocusSum(totals.totalSeconds)}
+              </Text>
+            </CollapseSlot>
+          </Flex>
           {error && <Text size="2" color="red" align="center">{error}</Text>}
         </Flex>
 
-        {!active && (
-          <div className={styles.bottomAction}>
-            <span data-pomodoro-obstacle>
-              <Button
-                type="button"
-                size="4"
-                variant={accent ? 'solid' : 'surface'}
-                color="gray"
-                className={styles.startButton}
-                style={accent ? { backgroundColor: accent, color: startInk } : undefined}
-                disabled={!settings}
-                onClick={startFocus}
-              >
-                Начать
-              </Button>
-            </span>
-          </div>
-        )}
+        <CollapseSlot open={active == null} className={styles.bottomAction}>
+          <Button
+            type="button"
+            size="4"
+            radius="full"
+            variant="classic"
+            highContrast={true}
+            disabled={!settings || active != null}
+            onClick={startFocus}
+          >
+            Начать
+          </Button>
+        </CollapseSlot>
 
         {active && (
           <Flex direction="column" align="center" gap="2" className={styles.holdHint}>
@@ -377,7 +461,7 @@ export function PomodoroPage() {
                 <span className={styles.holdFill} style={{ width: `${holdProgress * 100}%` }} />
               </span>
             )}
-            <Text className={styles.holdLabel}>Зажмите, чтобы выйти</Text>
+            <Text size="2" color="gray"> Зажмите, чтобы выйти</Text>
           </Flex>
         )}
       </Box>

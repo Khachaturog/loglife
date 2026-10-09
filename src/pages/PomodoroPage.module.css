@@ -1,15 +1,21 @@
 .pageRoot {
-  flex: 1;
-  /* Как у кликера: страница не выше экрана и не скроллится. */
-  min-height: 100vh;
-  min-height: 100svh;
-  max-height: 100svh;
+  /* Фиксируем к экрану: 100vh на телефоне выше видимой области и даёт скролл. */
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100dvh;
+  max-height: 100dvh;
   overflow: hidden;
-  position: relative;
+  overscroll-behavior: none;
   /* Долгое нажатие останавливает сеанс, а не выделяет часы и имя. */
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
+}
+
+/* Шапка без своей заливки, чтобы сквозь неё был цвет проекта, а не чёрный фон темы. */
+.pageRoot header {
+  background: transparent;
 }
 
 .stage {
@@ -69,31 +75,19 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .slotStrip {
+  .slotStrip,
+  .collapseSlot {
     transition: none;
+  }
+
+  .holdHint {
+    animation: none;
   }
 }
 
-.projectButton {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
-  padding: 4px 8px;
-}
-
-.projectButton:disabled {
-  cursor: default;
-  opacity: 0.7;
-}
-
 .sessionTrack {
-  width: min(220px, 70%);
+  display: block;
+  width: min(220px, 70vw);
   height: 4px;
   border-radius: 999px;
   background: var(--gray-a5);
@@ -113,19 +107,38 @@
   z-index: 1;
 }
 
-.obstacle {
-  display: inline-flex;
+/* Высота шапки и кнопки «Начать» сжимается, и flex-центр часов доезжает до середины экрана. */
+.collapseSlot {
+  overflow: hidden;
+  opacity: 1;
+  transition:
+    max-height 700ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 280ms ease,
+    margin-top 700ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.bottomAction {
+.collapseSlotClosed {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.collapseInner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+.followSlot {
+  margin-top: var(--space-3);
+}
+
+.collapseSlotClosed.followSlot {
+  margin-top: 0;
+}
+
+.bottomAction .collapseInner {
   display: flex;
   justify-content: center;
   padding-bottom: max(12vh, 48px);
-}
-
-.startButton {
-  min-width: 168px;
-  border-radius: 999px;
 }
 
 .holdHint {
@@ -134,20 +147,20 @@
   right: 0;
   bottom: max(16px, env(safe-area-inset-bottom, 0px));
   z-index: 2;
+  animation: holdHintIn 400ms ease 180ms both;
+}
+
+@keyframes holdHintIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .holdTrack {
-  width: 140px;
+  width: 150px;
   height: 4px;
   border-radius: 999px;
   background: var(--gray-a5);
   overflow: hidden;
-}
-
-.holdLabel {
-  color: var(--gray-a6);
-  font-size: var(--font-size-1);
-  line-height: 1.2;
 }
 
 .holdFill {

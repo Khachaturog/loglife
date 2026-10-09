@@ -582,13 +582,22 @@ export const api = {
       return promise
     },
 
-    /** Все записи по всем делам пользователя с информацией о деле (для истории). */
-    async listAllRecordsWithDeedInfo(): Promise<(RecordRow & { record_answers?: RecordAnswerRow[]; deeds?: { emoji: string; name: string; blocks?: BlockRow[] } | null })[]> {
+    /**
+     * Записи по всем делам пользователя с делом и ответами (вкладка «История»).
+     * `fromDate` / `toDate` — границы `record_date` включительно (YYYY-MM-DD). Без них — весь период.
+     */
+    async listAllRecordsWithDeedInfo(range?: {
+      fromDate?: string
+      toDate?: string
+    }): Promise<(RecordRow & { record_answers?: RecordAnswerRow[]; deeds?: { emoji: string; name: string; blocks?: BlockRow[] } | null })[]> {
       const uid = await getUserIdOrThrow()
-      const { data, error } = await supabase
+      let query = supabase
         .from('records')
         .select('*, record_answers(*), deeds!inner(emoji, name, blocks(*))')
         .eq('deeds.user_id', uid)
+      if (range?.fromDate) query = query.gte('record_date', range.fromDate)
+      if (range?.toDate) query = query.lte('record_date', range.toDate)
+      const { data, error } = await query
         .order('record_date', { ascending: false })
         .order('record_time', { ascending: false })
       if (error) {
@@ -596,6 +605,38 @@ export const api = {
         throw error
       }
       return (data ?? []) as (RecordRow & { record_answers?: RecordAnswerRow[]; deeds?: { emoji: string; name: string; blocks?: BlockRow[] } | null })[]
+    },
+
+    /** Ближайшая record_date строго раньше beforeDate. null — более старых записей нет. */
+    async oldestRecordDateBefore(beforeDate: string): Promise<string | null> {
+      const uid = await getUserIdOrThrow()
+      const { data, error } = await supabase
+        .from('records')
+        .select('record_date, deeds!inner(user_id)')
+        .eq('deeds.user_id', uid)
+        .lt('record_date', beforeDate)
+        .order('record_date', { ascending: false })
+        .limit(1)
+      if (error) {
+        console.error(error.message ?? 'Ошибка проверки более старой истории')
+        throw error
+      }
+      const row = data?.[0] as { record_date?: string } | undefined
+      return row?.record_date ?? null
+    },
+
+    /** Число записей пользователя по всем делам — для бейджа истории, без тел ответов. */
+    async countAllRecords(): Promise<number> {
+      const uid = await getUserIdOrThrow()
+      const { count, error } = await supabase
+        .from('records')
+        .select('id, deeds!inner(user_id)', { count: 'exact', head: true })
+        .eq('deeds.user_id', uid)
+      if (error) {
+        console.error(error.message ?? 'Ошибка подсчёта записей')
+        throw error
+      }
+      return count ?? 0
     },
 
     async createRecord(

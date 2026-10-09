@@ -14,7 +14,7 @@ import { api } from '@/lib/api'
 import { answersFromRecord } from '@/lib/answers-from-record'
 import type { BlockConfig, BlockRow, DeedWithBlocks, RecordAnswerRow, RecordWithAnswers, ValueJson } from '@/types/database'
 import { DatePicker } from '@/components/DatePicker'
-import { DurationInput } from '@/components/DurationInput'
+import { DurationStopwatchField } from '@/components/DurationStopwatchField'
 import { ScaleAnswerField } from '@/components/ScaleAnswerField'
 import { valueJsonMatchesBlockType } from '@/lib/block-value-type-conversion'
 import { formatAnswer, formatRecordDateTimeDisplay, safeUrlHref } from '@/lib/format-utils'
@@ -766,9 +766,10 @@ export function RecordViewPage() {
                 />
               )}
               {block.block_type === 'duration' && (
-                <DurationInput
+                <DurationStopwatchField
                   value={(answers[block.id] as { durationHms?: string } | undefined)?.durationHms ?? ''}
                   onChange={(hms) => setAnswer(block.id, { durationHms: hms })}
+                  questionTitle={block.title}
                   placeholder="00:00:00"
                 />
               )}
@@ -1003,9 +1004,10 @@ export function RecordViewPage() {
                     />
                   )}
                   {block.block_type === 'duration' && (
-                    <DurationInput
+                    <DurationStopwatchField
                       value={(draft as { durationHms?: string } | undefined)?.durationHms ?? ''}
                       onChange={(hms) => setUpdateDraftValue(block.id, { durationHms: hms })}
+                      questionTitle={block.title}
                       placeholder="00:00:00"
                     />
                   )}
