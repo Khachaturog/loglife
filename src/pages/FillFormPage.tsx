@@ -19,7 +19,6 @@ import {
   Flex,
   Heading,
   IconButton,
-  Separator,
   Text,
   TextField,
 } from '@radix-ui/themes'
