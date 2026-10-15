@@ -12,22 +12,59 @@
   padding: 0;
   border: 0;
   background: none;
-  cursor: pointer;
+  cursor: zoom-in;
   border-radius: var(--radius-2);
   line-height: 0;
 }
 
-/* Квадрат: 90% меньшей стороны экрана. Фото заполняет его целиком. */
+/* Квадрат: 90% меньшей стороны экрана, не больше 500px. Фото заполняет его целиком. */
 :global(.rt-BaseDialogScrollPadding):has(.viewer) {
   padding: 0;
-  cursor: pointer;
+  cursor: zoom-out;
 }
 
 :global(.rt-BaseDialogContent).viewer {
   display: block;
   padding: 0;
   overflow: hidden;
-  cursor: pointer;
+  cursor: zoom-out;
+}
+
+/* Зум вместо стандартного сдвига диалога Radix. На закрытии opacity: 0,
+   чтобы кадр не мигал, пока Presence ждёт конец анимации. */
+@media (prefers-reduced-motion: no-preference) {
+  :global(.rt-BaseDialogContent).viewer[data-state='open'] {
+    animation: viewerZoomIn 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  :global(.rt-BaseDialogContent).viewer[data-state='closed'] {
+    opacity: 0;
+    animation: viewerZoomOut 160ms cubic-bezier(0.4, 0, 1, 1) both;
+  }
+}
+
+@keyframes viewerZoomIn {
+  from {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes viewerZoomOut {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(0.9);
+  }
 }
 
 .viewerImage {

@@ -11,7 +11,9 @@ import styles from './RecordImage.module.css'
 /**
  * Квадрат 100×100 по пути в Storage. Пока URL не готов — серая плашка того же размера.
  * expandable — на просмотре записи: нажатие открывает ту же квадратную картинку
- * в квадратной модалке. Сторона — 90% меньшей стороны экрана, без пустых полос.
+ * в квадратной модалке. Сторона — 90% меньшей стороны экрана, но не больше 500px.
+ * Курсор на превью — zoom-in, на развёрнутой картинке — zoom-out.
+ * Открытие и закрытие — масштаб с появлением и исчезновением.
  * Закрытие — любое нажатие: по фото, по затемнению вокруг, Escape.
  */
 export function RecordImage({
@@ -62,10 +64,10 @@ export function RecordImage({
       <Dialog.Root open={open} onOpenChange={setOpen}>
         <Dialog.Content
           className={styles.viewer}
-          width="min(90vw, 90vh)"
-          maxWidth="min(90vw, 90vh)"
-          height="min(90vw, 90vh)"
-          maxHeight="min(90vw, 90vh)"
+          width="min(90vw, 90vh, 500px)"
+          maxWidth="min(90vw, 90vh, 500px)"
+          height="min(90vw, 90vh, 500px)"
+          maxHeight="min(90vw, 90vh, 500px)"
           aria-label="Закрыть картинку"
           onClick={() => setOpen(false)}
         >
