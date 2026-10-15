@@ -18,6 +18,8 @@ import { DurationStopwatchField } from '@/components/DurationStopwatchField'
 import { ScaleAnswerField } from '@/components/ScaleAnswerField'
 import { valueJsonMatchesBlockType } from '@/lib/block-value-type-conversion'
 import { formatAnswer, formatRecordDateTimeDisplay, safeUrlHref } from '@/lib/format-utils'
+import { imagePathFromValue, type PendingRecordImage } from '@/lib/record-image'
+import { RecordImage, RecordImageField } from '@/components/RecordImage'
 import { readMeasurementUnit } from '@/lib/measurement-unit'
 import { blurInputOnEnter } from '@/lib/ios-input-blur'
 import {
@@ -196,6 +198,8 @@ export function RecordViewPage() {
   const [recordDate, setRecordDate] = useState('')
   const [recordTime, setRecordTime] = useState('')
   const [answers, setAnswers] = useState<Record<string, ValueJson>>({})
+  /** Сжатый файл картинки до сохранения. Сброс правки его отпускает, не трогая Storage. */
+  const [pendingImages, setPendingImages] = useState<Record<string, PendingRecordImage>>({})
   /**
    * Снимок ответов на момент входа в правку — для «Сбросить» по блоку и для dirty.
    * Дата/время при «Назад» без сохранения берём из `record` (последний fetch/save), а не из снимка.
@@ -293,7 +297,12 @@ export function RecordViewPage() {
     if (!recordId || !record) return
     setSaving(true)
     try {
-      await api.records.update(recordId, { record_date: recordDate, record_time: recordTime, answers })
+      await api.records.update(recordId, {
+        record_date: recordDate,
+        record_time: recordTime,
+        answers,
+        imageFiles: pendingImageFiles(),
+      })
       const updated = await api.records.get(recordId)
       if (updated) {
         setRecord(updated)
@@ -305,6 +314,7 @@ export function RecordViewPage() {
         setConfigByVersion(configMap)
       }
       setEditAnswersBaseline(null)
+      clearAllPendingImages()
       setEditing(false)
     } catch (err: unknown) {
       console.error(err instanceof Error ? err.message : 'Ошибка сохранения')
@@ -315,12 +325,14 @@ export function RecordViewPage() {
 
   /** Текущее значение блока отличается от снимка при открытии формы правки. */
   function isEditBlockDirty(blockId: string): boolean {
+    if (pendingImages[blockId]) return true
     if (!editAnswersBaseline) return false
     return !valueJsonEqual(answers[blockId], editAnswersBaseline[blockId])
   }
 
   /** Вернуть один блок к значению из снимка (или убрать ключ, если ответа не было). */
   function resetEditBlock(blockId: string) {
+    dropPendingImage(blockId)
     if (!editAnswersBaseline) return
     setAnswers((prev) => {
       const next = { ...prev }
@@ -333,6 +345,58 @@ export function RecordViewPage() {
 
   function setAnswer(blockId: string, value: ValueJson) {
     setAnswers((prev) => ({ ...prev, [blockId]: value }))
+  }
+
+  function pendingImageFiles(blockIds?: string[]): Record<string, Blob> | undefined {
+    const ids = blockIds ?? Object.keys(pendingImages)
+    const files: Record<string, Blob> = {}
+    for (const id of ids) {
+      const image = pendingImages[id]
+      if (image) files[id] = image.blob
+    }
+    return Object.keys(files).length > 0 ? files : undefined
+  }
+
+  function dropPendingImage(blockId: string) {
+    setPendingImages((prev) => {
+      const previous = prev[blockId]
+      if (!previous) return prev
+      URL.revokeObjectURL(previous.previewUrl)
+      const next = { ...prev }
+      delete next[blockId]
+      return next
+    })
+  }
+
+  function clearAllPendingImages() {
+    setPendingImages((prev) => {
+      for (const image of Object.values(prev)) URL.revokeObjectURL(image.previewUrl)
+      return {}
+    })
+  }
+
+  function rememberPendingImage(blockId: string, pending: PendingRecordImage) {
+    setPendingImages((prev) => {
+      const previous = prev[blockId]
+      if (previous) URL.revokeObjectURL(previous.previewUrl)
+      return { ...prev, [blockId]: pending }
+    })
+  }
+
+  /** Убрать картинку из ответа. Файл в Storage удалится при сохранении. */
+  function clearImageAnswer(blockId: string) {
+    dropPendingImage(blockId)
+    setAnswers((prev) => {
+      const next = { ...prev }
+      delete next[blockId]
+      return next
+    })
+    setUpdateDraft((prev) => {
+      if (!(blockId in prev)) return prev
+      const next = { ...prev }
+      delete next[blockId]
+      return next
+    })
   }
 
   function openDeleteDialog() {
@@ -406,6 +470,8 @@ export function RecordViewPage() {
         const u = (draft as { url?: string }).url
         return typeof u === 'string' && u.trim().length > 0
       }
+      case 'image':
+        return !!pendingImages[block.id] || imagePathFromValue(draft) != null
       default:
         return false
     }
@@ -439,23 +505,33 @@ export function RecordViewPage() {
     for (const a of record.record_answers ?? []) currentAnswers[a.block_id] = a.value_json
     const merged = { ...currentAnswers }
     const toSave: string[] = []
+    const imageFiles: Record<string, Blob> = {}
+    const takePendingImage = (block: BlockRow) => {
+      const pending = pendingImages[block.id]
+      if (block.block_type !== 'image' || !pending) return false
+      imageFiles[block.id] = pending.blob
+      return true
+    }
     for (const block of outdatedBlocksList) {
       const value = answersByBlockId[block.id]?.value_json as ValueJson | undefined
       const effectiveDraft = updateDraft[block.id] ?? getMigratedValue(block, value)
       if (!isDraftValidForBlock(block, effectiveDraft)) continue
-      merged[block.id] = effectiveDraft
+      if (!takePendingImage(block) && effectiveDraft) merged[block.id] = effectiveDraft
       toSave.push(block.id)
     }
     for (const block of unfilledBlocksList) {
       const draft = updateDraft[block.id]
       if (!isDraftValidForBlock(block, draft)) continue
-      merged[block.id] = draft!
+      if (!takePendingImage(block) && draft) merged[block.id] = draft
       toSave.push(block.id)
     }
     if (toSave.length === 0) return
     setSavingOutdated(true)
     try {
-      await api.records.update(recordId, { answers: merged })
+      await api.records.update(recordId, {
+        answers: merged,
+        imageFiles: Object.keys(imageFiles).length > 0 ? imageFiles : undefined,
+      })
       const updated = await api.records.get(recordId)
       if (updated) {
         setRecord(updated)
@@ -471,6 +547,7 @@ export function RecordViewPage() {
         for (const id of toSave) delete next[id]
         return next
       })
+      for (const id of toSave) dropPendingImage(id)
     } catch (err: unknown) {
       console.error(err instanceof Error ? err.message : 'Ошибка актуализации')
     } finally {
@@ -559,6 +636,7 @@ export function RecordViewPage() {
                 setRecordDate(record.record_date)
                 setRecordTime(record.record_time?.slice(0, 5) ?? '')
                 setEditAnswersBaseline(null)
+                clearAllPendingImages()
                 setEditing(false)
               }
             : undefined
@@ -853,6 +931,16 @@ export function RecordViewPage() {
                   </Flex>
                 </Text>
               )}
+              {block.block_type === 'image' && (
+                <RecordImageField
+                  alt={block.title || 'Картинка'}
+                  storedPath={imagePathFromValue(answers[block.id])}
+                  pending={pendingImages[block.id] ?? null}
+                  disabled={saving}
+                  onPending={(next) => rememberPendingImage(block.id, next)}
+                  onClear={() => clearImageAnswer(block.id)}
+                />
+              )}
             </Flex>
             </Card>
           ))}
@@ -904,6 +992,17 @@ export function RecordViewPage() {
                     <Flex align="center" gap="2" mt="1">
                       <Checkbox size="3" disabled checked={done} />
                       <Text size="3">{done ? 'Выполнено' : 'Не выполнено'}</Text>
+                    </Flex>
+                  </Card>
+                )
+              }
+              if (block.block_type === 'image') {
+                const path = imagePathFromValue(value)
+                return (
+                  <Card key={block.id}>
+                    <Flex direction="column" gap="2">
+                      <Text size="3" color="gray" weight="medium">{block.title}</Text>
+                      {path ? <RecordImage path={path} alt={block.title || 'Картинка'} expandable /> : <Text as="p" size="3">—</Text>}
                     </Flex>
                   </Card>
                 )
@@ -969,7 +1068,9 @@ export function RecordViewPage() {
                     </Flex>
                   </Flex>
                 {/* У незаполненного блока прочерк не нужен: бейдж и поле ввода уже показывают пустоту. */}
-                {!unfilled && (value && block.block_type === 'yes_no' ? (
+                {!unfilled && (imagePathFromValue(value) ? (
+                  <RecordImage path={imagePathFromValue(value)!} alt={block.title || 'Картинка'} expandable />
+                ) : value && block.block_type === 'yes_no' ? (
                   <Flex align="center" gap="2" mt="1">
                     <Checkbox
                       size="3"
@@ -1119,6 +1220,19 @@ export function RecordViewPage() {
                       </Flex>
                     </Text>
                   )}
+                  {block.block_type === 'image' && (
+                    <RecordImageField
+                      alt={block.title || 'Картинка'}
+                      storedPath={imagePathFromValue(draft)}
+                      pending={pendingImages[block.id] ?? null}
+                      disabled={savingOutdated}
+                      onPending={(next) => rememberPendingImage(block.id, next)}
+                      onClear={() => {
+                        dropPendingImage(block.id)
+                        clearUpdateDraft(block.id)
+                      }}
+                    />
+                  )}
                 </Flex>
                 </Flex>
               </Card>
@@ -1152,6 +1266,9 @@ export function RecordViewPage() {
                           </Flex>
                         </Flex>
                         <Flex direction="row" align="center" gap="2" wrap="wrap">
+                          {imagePathFromValue(ans.value_json) ? (
+                            <RecordImage path={imagePathFromValue(ans.value_json)!} alt={title} expandable />
+                          ) : (
                           <Text
                             as="p"
                             size="3"
@@ -1159,6 +1276,7 @@ export function RecordViewPage() {
                           >
                             {copyText ?? '—'}
                           </Text>
+                          )}
                           <Text size="3" color="gray">·</Text>
                           {configStr && <Text as="p" size="3">Раньше было от 1 до {configStr}</Text>}
                         </Flex>

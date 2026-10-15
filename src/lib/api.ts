@@ -19,6 +19,14 @@ import {
 import type { DeedAnalyticsConfigV1 } from '@/types/deed-analytics-config'
 import type { RecordHeaderActionId } from '@/lib/record-header-actions'
 import { omitOptionalEmptyTextFromRecordAnswers } from '@/lib/block-default-value'
+import {
+  copyRecordImage,
+  deleteRecordImages,
+  imagePathFromValue,
+  isOwnRecordImagePath,
+  recordImageObjectPath,
+  uploadRecordImage,
+} from '@/lib/record-image'
 
 function getBlockOptions(block: BlockRow): { id: string; label: string; sort_order: number }[] {
   const fromConfig = (block.config as BlockConfig | null)?.options
@@ -146,6 +154,99 @@ async function getUserIdOrThrow(): Promise<string> {
   return uid
 }
 
+function ownImagePaths(uid: string, rows: { value_json: unknown }[] | null): string[] {
+  const paths: string[] = []
+  for (const row of rows ?? []) {
+    const path = imagePathFromValue(row.value_json)
+    if (path && isOwnRecordImagePath(path, uid)) paths.push(path)
+  }
+  return paths
+}
+
+async function deleteImageFilesForRecords(uid: string, recordIds: string[]): Promise<void> {
+  if (recordIds.length === 0) return
+  const { data, error } = await supabase.from('record_answers').select('value_json').in('record_id', recordIds)
+  if (error) throw error
+  await deleteRecordImages(ownImagePaths(uid, data))
+}
+
+async function deleteImageFilesForBlock(uid: string, blockId: string): Promise<void> {
+  const { data, error } = await supabase.from('record_answers').select('value_json').eq('block_id', blockId)
+  if (error) throw error
+  await deleteRecordImages(ownImagePaths(uid, data))
+}
+
+/**
+ * Кладёт файлы картинок в Storage и подменяет ответ на путь новой записи.
+ * Уже лежащий путь другого записи (дублирование) копируется, чтобы удаление оригинала его не задело.
+ */
+async function attachRecordImages(
+  uid: string,
+  recordId: string,
+  blocks: BlockRow[],
+  answers: Record<string, ValueJson>,
+  imageFiles: Record<string, Blob>,
+  uploaded: string[],
+): Promise<void> {
+  const imageBlockIds = new Set(
+    blocks.filter((b) => b.block_type === 'image' && !b.deleted_at).map((b) => b.id),
+  )
+  for (const [blockId, blob] of Object.entries(imageFiles)) {
+    if (!imageBlockIds.has(blockId)) continue
+    const path = recordImageObjectPath(uid, recordId, blockId)
+    await uploadRecordImage(path, blob)
+    uploaded.push(path)
+    answers[blockId] = { imagePath: path }
+  }
+  for (const [blockId, value] of Object.entries(answers)) {
+    if (!imageBlockIds.has(blockId)) continue
+    const src = imagePathFromValue(value)
+    if (!src) {
+      delete answers[blockId]
+      continue
+    }
+    const dest = recordImageObjectPath(uid, recordId, blockId)
+    if (src === dest) continue
+    if (!isOwnRecordImagePath(src, uid)) throw new Error('Нет доступа к картинке')
+    await copyRecordImage(src, dest)
+    uploaded.push(dest)
+    answers[blockId] = { imagePath: dest }
+  }
+}
+
+/** У блока «Картинка» нет ключа в новом наборе ответов — снимаем строку и файл. */
+async function removeClearedRecordImages(
+  uid: string,
+  recordId: string,
+  blocks: BlockRow[],
+  nextAnswers: Record<string, ValueJson>,
+): Promise<void> {
+  const imageBlocks = blocks.filter((b) => b.block_type === 'image' && !b.deleted_at)
+  if (imageBlocks.length === 0) return
+  const { data: existing, error } = await supabase
+    .from('record_answers')
+    .select('block_id, value_json')
+    .eq('record_id', recordId)
+  if (error) throw error
+  const toDelete: string[] = []
+  for (const block of imageBlocks) {
+    if (imagePathFromValue(nextAnswers[block.id])) continue
+    const old = existing?.find((row) => row.block_id === block.id)
+    const oldPath = imagePathFromValue(old?.value_json)
+    if (old) {
+      const { error: delErr } = await supabase
+        .from('record_answers')
+        .delete()
+        .eq('record_id', recordId)
+        .eq('block_id', block.id)
+      if (delErr) throw delErr
+    }
+    if (oldPath && isOwnRecordImagePath(oldPath, uid)) toDelete.push(oldPath)
+    delete nextAnswers[block.id]
+  }
+  await deleteRecordImages(toDelete)
+}
+
 export const api = {
   deeds: {
     async list(): Promise<DeedRow[]> {
@@ -256,6 +357,7 @@ export const api = {
               default_value: null,
               default_value_enabled: false,
               recent_suggestions_enabled: true,
+              show_in_preview: true,
               config: null,
             },
           ]
@@ -270,6 +372,7 @@ export const api = {
           default_value: b.default_value ?? null,
           default_value_enabled: b.default_value_enabled ?? false,
           recent_suggestions_enabled: b.recent_suggestions_enabled ?? true,
+          show_in_preview: b.show_in_preview !== false,
           config: b.config ?? null,
         })
       }
@@ -330,6 +433,7 @@ export const api = {
               default_value: b.default_value ?? null,
               default_value_enabled: b.default_value_enabled ?? false,
               recent_suggestions_enabled: b.recent_suggestions_enabled ?? true,
+              show_in_preview: b.show_in_preview !== false,
               config: b.config,
             }).eq('id', b.id)
           } else {
@@ -342,6 +446,7 @@ export const api = {
               default_value: b.default_value ?? null,
               default_value_enabled: b.default_value_enabled ?? false,
               recent_suggestions_enabled: b.recent_suggestions_enabled ?? true,
+              show_in_preview: b.show_in_preview !== false,
               config: b.config ?? null,
             }).select('id').single()
             if (inserted?.id) existingIds.add(inserted.id)
@@ -390,6 +495,7 @@ export const api = {
           default_value: blockRow.default_value ?? null,
           default_value_enabled: blockRow.default_value_enabled ?? false,
           recent_suggestions_enabled: blockRow.recent_suggestions_enabled ?? true,
+          show_in_preview: blockRow.show_in_preview !== false,
           config: blockRow.config,
           updated_at: new Date().toISOString(),
         })
@@ -430,6 +536,7 @@ export const api = {
       const { data: records } = await supabase.from('records').select('id').eq('deed_id', id)
       const recordIds = (records ?? []).map((r) => r.id)
       if (recordIds.length > 0) {
+        await deleteImageFilesForRecords(uid, recordIds)
         const { error: answersErr } = await supabase.from('record_answers').delete().in('record_id', recordIds)
         if (answersErr) {
           console.error(answersErr.message ?? 'Ошибка удаления ответов записей')
@@ -475,6 +582,7 @@ export const api = {
       const uid = await getUserIdOrThrow()
       const { data: deed } = await supabase.from('deeds').select('id').eq('id', deedId).eq('user_id', uid).single()
       if (!deed) throw new Error('Дело не найдено')
+      await deleteImageFilesForBlock(uid, blockId)
       const now = new Date().toISOString()
       const { error } = await supabase.from('blocks').update({ deleted_at: now }).eq('id', blockId).eq('deed_id', deedId)
       if (error) {
@@ -641,7 +749,13 @@ export const api = {
 
     async createRecord(
       deedId: string,
-      payload: { record_date: string; record_time: string; answers?: Record<string, ValueJson> }
+      payload: {
+        record_date: string
+        record_time: string
+        answers?: Record<string, ValueJson>
+        /** Сжатые файлы картинок: ключ — id блока. Путь в ответе проставится после загрузки. */
+        imageFiles?: Record<string, Blob>
+      }
     ): Promise<RecordRow> {
       const uid = await getUserIdOrThrow()
       const { data: deed } = await supabase.from('deeds').select('id').eq('id', deedId).eq('user_id', uid).single()
@@ -659,7 +773,9 @@ export const api = {
         console.error(recordError.message ?? 'Ошибка создания записи')
         throw recordError
       }
-      if (payload.answers && Object.keys(payload.answers).length > 0) {
+      const imageFiles = payload.imageFiles ?? {}
+      const hasImages = Object.keys(imageFiles).length > 0
+      if ((payload.answers && Object.keys(payload.answers).length > 0) || hasImages) {
         const { data: deedWithBlocks } = await supabase
           .from('deeds')
           .select('*, blocks(*)')
@@ -667,22 +783,32 @@ export const api = {
           .eq('user_id', uid)
           .single()
         const blocks = deedWithBlocks?.blocks ?? []
-        const answersForInsert = omitOptionalEmptyTextFromRecordAnswers(blocks, payload.answers)
-        if (Object.keys(answersForInsert).length === 0) {
-          return record
+        const answersForInsert = omitOptionalEmptyTextFromRecordAnswers(blocks, payload.answers ?? {})
+        const uploaded: string[] = []
+        try {
+          await attachRecordImages(uid, record.id, blocks, answersForInsert, imageFiles, uploaded)
+          if (Object.keys(answersForInsert).length === 0) {
+            return record
+          }
+          const inserts: { record_id: string; block_id: string; value_json: ValueJson; config_version_id: string | null }[] = []
+          for (const [block_id, value_json] of Object.entries(answersForInsert)) {
+            const block = blocks.find((b: BlockRow) => b.id === block_id)
+            const config_version_id = block ? await findOrCreateConfigVersion(block) : null
+            inserts.push({
+              record_id: record.id,
+              block_id,
+              value_json,
+              config_version_id,
+            })
+          }
+          const { error: insertErr } = await supabase.from('record_answers').insert(inserts)
+          if (insertErr) throw insertErr
+        } catch (e) {
+          await deleteRecordImages(uploaded).catch(() => undefined)
+          await supabase.from('record_answers').delete().eq('record_id', record.id)
+          await supabase.from('records').delete().eq('id', record.id)
+          throw e
         }
-        const inserts: { record_id: string; block_id: string; value_json: ValueJson; config_version_id: string | null }[] = []
-        for (const [block_id, value_json] of Object.entries(answersForInsert)) {
-          const block = blocks.find((b: BlockRow) => b.id === block_id)
-          const config_version_id = block ? await findOrCreateConfigVersion(block) : null
-          inserts.push({
-            record_id: record.id,
-            block_id,
-            value_json,
-            config_version_id,
-          })
-        }
-        await supabase.from('record_answers').insert(inserts)
       }
       return record
     },
@@ -709,7 +835,13 @@ export const api = {
 
     async update(
       id: string,
-      payload: { record_date?: string; record_time?: string; answers?: Record<string, ValueJson> }
+      payload: {
+        record_date?: string
+        record_time?: string
+        answers?: Record<string, ValueJson>
+        /** Новые сжатые файлы. Ключ без файла и без пути в answers — картинка снимается. */
+        imageFiles?: Record<string, Blob>
+      }
     ): Promise<void> {
       const { data: record } = await supabase.from('records').select('deed_id').eq('id', id).single()
       if (!record) throw new Error('Запись не найдена')
@@ -755,6 +887,15 @@ export const api = {
           }
         }
         const answersCleaned = omitOptionalEmptyTextFromRecordAnswers(blocks, raw)
+        const imageFiles = payload.imageFiles ?? {}
+        for (const [blockId, blob] of Object.entries(imageFiles)) {
+          const block = blocks.find((b: BlockRow) => b.id === blockId && b.block_type === 'image' && !b.deleted_at)
+          if (!block) continue
+          const path = recordImageObjectPath(uid, id, blockId)
+          await uploadRecordImage(path, blob)
+          answersCleaned[blockId] = { imagePath: path }
+        }
+        await removeClearedRecordImages(uid, id, blocks, answersCleaned)
         for (const [block_id, value_json] of Object.entries(answersCleaned)) {
           const block = blocks.find((b: BlockRow) => b.id === block_id)
           const config_version_id = block ? await findOrCreateConfigVersion(block) : null
@@ -806,6 +947,7 @@ export const api = {
       const uid = await getUserIdOrThrow()
       const { data: deed } = await supabase.from('deeds').select('id').eq('id', record.deed_id).eq('user_id', uid).single()
       if (!deed) throw new Error('Доступ запрещён')
+      await deleteImageFilesForRecords(uid, [id])
       const { error: answersError } = await supabase.from('record_answers').delete().eq('record_id', id)
       if (answersError) {
         console.error(answersError.message ?? 'Ошибка удаления ответов записи')

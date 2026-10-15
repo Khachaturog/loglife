@@ -33,10 +33,11 @@ auth.users (Supabase Auth)
 │  default_value  │                  ▼
 │  default_enab.  │   ┌─────────────────────────────────┐
 │  recent_suggest.│   │ record_answers                  │
-│  config (jsonb) │   │  id · record_id · block_id      │
-│  deleted_at     │   │  value_json · config_version_id │
-└────┬────────────┘   │  created_at · updated_at        │
-     │ block_id        └─────────────────────────────────┘
+│  show_in_preview│   │  id · record_id · block_id      │
+│  config (jsonb) │   │  value_json · config_version_id │
+│  deleted_at     │   │  created_at · updated_at        │
+└────┬────────────┘   └─────────────────────────────────┘
+     │ block_id
      ▼                 
 ┌──────────────────────┴──────────────────────────┐
 │ block_config_versions                           │
@@ -104,7 +105,7 @@ auth.users (Supabase Auth)
 }
 ```
 
-- `summary.block_id` / `heatmap.block_id` — uuid блока с типом `number`, `scale` или `duration`; `null` — поведение «по умолчанию» (первый такой блок по `sort_order`; для heatmap без блока — число записей в день).
+- `summary.block_id` / `heatmap.block_id` — uuid блока с типом `number`, `scale` или `duration`. Выбор независимый: сводка не влияет на теплокарту. `null` и неизвестный id — количество записей (сводка: сегодня / месяц / всего и число на списке дел; теплокарта: записей в день), без подстановки первого числового блока.
 - `summary.show_*` — видимость карточек «Сегодня» / «За месяц» / «Всего»; при отсутствии в JSON подставляются `true`.
 - `activity.enabled` — мастер-переключатель блока «активность по записям» на карточке дела; без него игнорируются флаги ниже.
 - `activity.max_streak_enabled` — строка «Максимум» в карточке стрика; только при `streak_enabled`.
@@ -127,6 +128,7 @@ auth.users (Supabase Auth)
 | `default_value` | jsonb | | Черновик значения; формат как `record_answers.value_json`; NULL = нет |
 | `default_value_enabled` | boolean | NOT NULL, DEFAULT false | Подставлять `default_value` при открытии формы новой записи |
 | `recent_suggestions_enabled` | boolean | NOT NULL, DEFAULT true | Чипы недавних значений на форме записи (типы `number`, `single_select`) |
+| `show_in_preview` | boolean | NOT NULL, DEFAULT true | Показывать ответ блока в превью записи (страница дела и вкладка «История») |
 | `config` | jsonb | | Конфиг блока (см. ниже) |
 | `deleted_at` | timestamptz | | null = активен; soft delete |
 | `created_at` | timestamptz | NOT NULL, DEFAULT now() | |
@@ -144,6 +146,7 @@ auth.users (Supabase Auth)
 | `yes_no` | Да/Нет |
 | `duration` | Продолжительность (HH:MM:SS) |
 | `url` | Ссылка URL |
+| `image` | Квадратная картинка. В `value_json` только путь в бакете `record-images` |
 
 **Структура `config` jsonb по типам:**
 
@@ -161,7 +164,7 @@ auth.users (Supabase Auth)
 // single_select — те же options плюс режим ввода (после миграции всегда задано для строк с этим типом)
 { "options": [...], "singleSelectUi": "select" }  // формы всегда показывают выпадающий список; старый "checkbox" при сохранении дела заменяется на "select"
 
-// duration, yes_no, text_paragraph, url — config не используется
+// duration, yes_no, text_paragraph, url, image — config не используется
 ```
 
 Пункты выбора единицы (то же в [03-entity-blocks.md](../requirements/03-entity-blocks.md)). У «Нет единицы» ключа `unit` нет. Свой вариант хранится как `{ "kind": "custom", "label": "…", "short": "…" }`, без `code`. Пустой `short` не пишется.
@@ -256,6 +259,9 @@ auth.users (Supabase Auth)
 
 // url
 { "url": "https://example.com" }
+
+// image — путь в приватном бакете record-images, не байты
+{ "imagePath": "<user_id>/<record_id>/<block_id>.webp" }
 ```
 
 ---
@@ -394,7 +400,8 @@ auth.users (Supabase Auth)
 2. `block_config_select_option_versions`, `block_config_scale_versions`, `block_config_versions`
 3. `records`, `blocks`, `deeds`
 4. `pomodoro_sessions`, `pomodoro_projects`, `pomodoro_settings`
-5. `auth.users`
+5. объекты в бакете `record-images`, чья первая папка равна `user_id`
+6. `auth.users`
 
 ---
 
@@ -421,3 +428,4 @@ auth.users (Supabase Auth)
 | `20261009` | Таблицы `pomodoro_settings`, `pomodoro_projects`, `pomodoro_sessions` + RLS |
 | `20261015` | `pomodoro_sessions.actual_seconds` не короче 300; более короткие строки удалены |
 | `20261015` | Функция `delete_own_account`: удаление данных текущего пользователя и строки `auth.users` |
+| `20261015` | Тип блока `image`; приватный бакет `record-images` (WebP до 24 КБ) и политики Storage по папке пользователя |

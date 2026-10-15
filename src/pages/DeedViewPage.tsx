@@ -133,17 +133,12 @@ export function DeedViewPage() {
     }
   }, [records])
 
-  const summaryBlock = useMemo(() => {
-    const blocks = deed?.blocks ?? []
-    return resolveNumericBlockByConfigId(blocks, analyticsConfig.summary.block_id)
-  }, [deed?.blocks, analyticsConfig.summary.block_id])
-
   const heatmapBlock = useMemo(() => {
     const blocks = deed?.blocks ?? []
     return resolveNumericBlockByConfigId(blocks, analyticsConfig.heatmap.block_id)
   }, [deed?.blocks, analyticsConfig.heatmap.block_id])
 
-  // Heatmap: по умолчанию — число записей в день; иначе сумма значений выбранного числового блока по дням.
+  // Heatmap: свой block_id. null — число записей в день, явный блок — сумма его значений.
   const heatmapActivity = useMemo(() => {
     if (!heatmapBlock) {
       return records.map((r) => ({ record_date: r.record_date, value: 1 }))
@@ -154,33 +149,11 @@ export function DeedViewPage() {
     }))
   }, [records, heatmapBlock])
 
-  // Количества «сегодня / этот месяц / всего»: при числовом источнике в сводке — сумма по блоку; иначе те же правила, что на карточке в списке (число записей).
-  const displayNumbers = useMemo(() => {
-    if (!summaryBlock) {
-      return getDeedDisplayNumbers(deed?.blocks ?? [], records)
-    }
-
-    const todayISO = todayLocalISO()
-    const getRecordValue = (r: (typeof records)[number]): number =>
-      getRecordAnswerNumericValue(r, summaryBlock)
-
-    const total = records.reduce((sum, r) => sum + getRecordValue(r), 0)
-
-    const now = new Date()
-    const year = now.getFullYear()
-    const month = now.getMonth()
-
-    const monthStart = `${year}-${String(month + 1).padStart(2, '0')}-01`
-    const monthEndDate = new Date(year, month + 1, 0).getDate()
-    const monthEnd = `${year}-${String(month + 1).padStart(2, '0')}-${String(monthEndDate).padStart(2, '0')}`
-
-    const today = records.filter((r) => r.record_date === todayISO).reduce((sum, r) => sum + getRecordValue(r), 0)
-    const monthTotal = records
-      .filter((r) => r.record_date >= monthStart && r.record_date <= monthEnd)
-      .reduce((sum, r) => sum + getRecordValue(r), 0)
-
-    return { today, month: monthTotal, total }
-  }, [summaryBlock, records, deed?.blocks])
+  // Виджеты сводки: тот же источник, что число «сегодня» на списке дел.
+  const displayNumbers = useMemo(
+    () => getDeedDisplayNumbers(deed?.blocks ?? [], records, analyticsConfig.summary.block_id),
+    [records, deed?.blocks, analyticsConfig.summary.block_id],
+  )
 
   const heatmapCardColor = heatmapDisplayColor(
     deed?.card_color,
@@ -465,7 +438,7 @@ export function DeedViewPage() {
             <Flex direction="row" gap="2">
               <DeedActivityHeatmap
                 activity={heatmapActivity}
-                valueLabel={heatmapBlock?.title}
+                valueLabel={heatmapBlock?.title?.trim() ? heatmapBlock.title : 'записей'}
                 cardColor={heatmapCardColor}
                 showWeekdayLabels={analyticsConfig.heatmap.show_weekday_labels}
                 showMonthLabels={analyticsConfig.heatmap.show_month_labels}

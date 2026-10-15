@@ -69,14 +69,10 @@ export function listNumericBlocks(blocks: BlockRow[]): BlockRow[] {
     .sort((a, b) => a.sort_order - b.sort_order)
 }
 
-/** Выбор блока для сводки/heatmap: явный id или первый подходящий. */
+/** Явный числовой блок сводки или heatmap. null и неизвестный id — количество записей, без подстановки первого блока. */
 export function resolveNumericBlockByConfigId(blocks: BlockRow[], blockId: string | null): BlockRow | null {
-  const list = listNumericBlocks(blocks)
-  if (blockId) {
-    const found = list.find((b) => b.id === blockId)
-    if (found) return found
-  }
-  return list[0] ?? null
+  if (!blockId) return null
+  return listNumericBlocks(blocks).find((b) => b.id === blockId) ?? null
 }
 
 /** Значение из value_json для числовых типов (как на экране дела). */

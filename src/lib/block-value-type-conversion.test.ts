@@ -111,4 +111,22 @@ describe('valueJsonMatchesBlockType', () => {
     const b = stubBlock({ block_type: 'url' })
     expect(valueJsonMatchesBlockType(b, { url: 'https://example.com' })).toBe(true)
   })
+  it('image shape matches only an image block', () => {
+    const image = stubBlock({ block_type: 'image' })
+    expect(valueJsonMatchesBlockType(image, { imagePath: 'u/r/b.webp' })).toBe(true)
+    expect(valueJsonMatchesBlockType(image, { text: 'фото' })).toBe(false)
+    const text = stubBlock({ block_type: 'text_paragraph' })
+    expect(valueJsonMatchesBlockType(text, { imagePath: 'u/r/b.webp' })).toBe(false)
+  })
+  it('does not migrate image answers', () => {
+    const b = stubBlock({ block_type: 'image' })
+    expect(
+      migrateValueMvp({
+        value: { imagePath: 'u/r/b.webp' },
+        fromType: 'image',
+        toType: 'text_paragraph',
+        sourceBlock: b,
+      }).newValue,
+    ).toBeNull()
+  })
 })

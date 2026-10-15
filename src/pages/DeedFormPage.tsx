@@ -12,6 +12,7 @@ import {
   Box,
   Button,
   Card,
+  CheckboxCards,
   CheckboxGroup,
   Flex,
   Heading,
@@ -74,6 +75,7 @@ import {
 } from "@/lib/measurement-unit";
 import {
   DEFAULT_RECORD_HEADER_PINNED,
+  RECORD_HEADER_ACTION_IDS,
   RECORD_HEADER_ACTION_LABEL,
   normalizeRecordHeaderPinned,
   recordHeaderActionRows,
@@ -93,6 +95,8 @@ type UiBlock = {
   /** Подставлять `default_value` при новой записи; сам JSON не стираем при выкл. */
   default_value_enabled: boolean;
   default_value: ValueJson | null;
+  /** Ответ в превью истории. Новый блок по умолчанию виден. */
+  show_in_preview: boolean;
   config: BlockConfig | null;
 };
 
@@ -106,6 +110,7 @@ const BLOCK_TYPE_LABEL: Record<BlockType, string> = {
   yes_no: "Да/Нет",
   duration: "Время",
   url: "Ссылка URL",
+  image: "Картинка",
 };
 
 /** Создаёт пустой блок с дефолтными значениями (текст вопроса — только placeholder, без автозаполнения) */
@@ -117,6 +122,7 @@ function createDefaultBlock(): UiBlock {
     recent_suggestions_enabled: true,
     default_value_enabled: false,
     default_value: null,
+    show_in_preview: true,
     config: null,
   };
 }
@@ -756,7 +762,7 @@ function ScaleBlockConfig({
   );
 }
 
-type DeedEditorTab = "deed" | "quickAccess" | "analytics";
+type DeedEditorTab = "deed" | "preview" | "quickAccess" | "analytics";
 
 function recordHeaderActionIcon(id: RecordHeaderActionId) {
   switch (id) {
@@ -964,6 +970,7 @@ export function DeedFormPage() {
             block_type: b.block_type,
             is_required: b.is_required,
             recent_suggestions_enabled: b.recent_suggestions_enabled ?? true,
+            show_in_preview: b.show_in_preview !== false,
             default_value_enabled: b.default_value_enabled ?? false,
             default_value:
               normalizeDefaultValueForBlock(
@@ -1118,17 +1125,6 @@ export function DeedFormPage() {
     }
   }
 
-  /** Включить или снять кнопку шапки. Больше двух закреплять нельзя. */
-  function toggleRecordHeaderPinned(actionId: RecordHeaderActionId, on: boolean) {
-    setRecordHeaderPinned((prev) => {
-      if (on) {
-        if (prev.includes(actionId) || prev.length >= 2) return prev;
-        return [...prev, actionId];
-      }
-      return prev.filter((id) => id !== actionId);
-    });
-  }
-
   /** Порядок закреплённых — порядок кнопок в шапке записи. */
   function moveRecordHeaderPinned(actionId: RecordHeaderActionId, direction: "up" | "down") {
     setRecordHeaderPinned((prev) => {
@@ -1198,6 +1194,7 @@ export function DeedFormPage() {
           block_type: b.block_type,
           is_required: b.is_required,
           recent_suggestions_enabled: b.recent_suggestions_enabled,
+          show_in_preview: b.show_in_preview !== false,
           default_value_enabled: b.default_value_enabled,
           default_value: normalizedDefault,
           config,
@@ -1375,6 +1372,7 @@ export function DeedFormPage() {
         <Tabs.Root value={editorTab} onValueChange={(v) => setEditorTab(v as DeedEditorTab)}>
           <Tabs.List>
             <Tabs.Trigger value="deed">Дело</Tabs.Trigger>
+            <Tabs.Trigger value="preview">Превью</Tabs.Trigger>
             <Tabs.Trigger value="quickAccess">Быстрый доступ</Tabs.Trigger>
             <Tabs.Trigger value="analytics">Аналитика</Tabs.Trigger>
           </Tabs.List>
@@ -1906,6 +1904,8 @@ export function DeedFormPage() {
                           />
                         </Flex>
                       )}
+                      {/* У картинки нечего подставлять в новую запись — переключатель дефолта скрыт. */}
+                      {block.block_type !== "image" && (
                       <Flex direction="column" gap="2">
                         <Flex align="center" justify="between" gap="3" wrap="wrap">
                           <Text size="3">Значение по умолчанию</Text>
@@ -1976,6 +1976,7 @@ export function DeedFormPage() {
                           />
                         ) : null}
                       </Flex>
+                      )}
                     </Flex>
                   </Collapsible.Content>
                 </Collapsible.Root>
@@ -2028,63 +2029,113 @@ export function DeedFormPage() {
         </Flex>
           </Tabs.Content>
 
+          <Tabs.Content value="preview">
+            <Flex direction="column" gap="4" mt="4">
+              <Flex direction="column" gap="1">
+                <Heading as="h2" size="3">Превью в истории</Heading>
+                <Text as="p" size="2" color="gray">
+                  Какие ответы показывать в строке записи на странице дела и во вкладке «История».
+                </Text>
+              </Flex>
+              <CheckboxCards.Root
+                size="2"
+                columns="1"
+                gap="2"
+                value={blocks.flatMap((block, index) =>
+                  block.show_in_preview ? [String(index)] : [],
+                )}
+                onValueChange={(next) => {
+                  const on = new Set(next);
+                  setBlocks((prev) =>
+                    prev.map((block, index) => {
+                      const show = on.has(String(index));
+                      return block.show_in_preview === show
+                        ? block
+                        : { ...block, show_in_preview: show };
+                    }),
+                  );
+                }}
+              >
+                {blocks.map((block, index) => (
+                  <CheckboxCards.Item key={block.id ?? `preview-${index}`} value={String(index)}>
+                    {/* Без обрезки: длинный вопрос переносится внутри карточки. */}
+                    <Text as="span" style={{ minWidth: 0, flex: 1, overflowWrap: "anywhere" }}>
+                      {block.title.trim() || "Блок"}
+                    </Text>
+                  </CheckboxCards.Item>
+                ))}
+              </CheckboxCards.Root>
+            </Flex>
+          </Tabs.Content>
+
           <Tabs.Content value="quickAccess">
             <Flex direction="column" gap="4" mt="4">
-              <Card>
-                <Flex direction="column" gap="3">
-                  <Flex direction="column" gap="1">
-                    <Heading as="h2" size="3">Действия в шапке записи</Heading>
-                    <Text as="p" size="2" color="gray">
-                      До двух кнопок справа в шапке. В меню «⋯» по-прежнему все действия.
-                    </Text>
-                  </Flex>
-                  {recordHeaderActionRows(recordHeaderPinned).map((row) => {
-                    const pinIndex = recordHeaderPinned.indexOf(row.id);
-                    return (
-                      <Flex key={row.id} align="center" gap="3">
-                        <Flex align="center" gap="2" style={{ flex: 1, minWidth: 0 }}>
-                          {recordHeaderActionIcon(row.id)}
-                          <Text size="3" truncate>{RECORD_HEADER_ACTION_LABEL[row.id]}</Text>
+              <Flex direction="column" gap="1">
+                <Heading as="h2" size="3">Действия в шапке записи</Heading>
+                <Text as="p" size="2" color="gray">
+                  До 2 кнопок справа в шапке. В меню «⋯» по-прежнему все действия.
+                </Text>
+              </Flex>
+              {/* Группа дописывает новый id в конец и сохраняет порядок уже выбранных. */}
+              <CheckboxCards.Root
+                size="2"
+                columns="1"
+                gap="2"
+                value={recordHeaderPinned}
+                onValueChange={(next) => {
+                  if (next.length > 2) return;
+                  const allowed = next.filter((id): id is RecordHeaderActionId =>
+                    (RECORD_HEADER_ACTION_IDS as readonly string[]).includes(id),
+                  );
+                  setRecordHeaderPinned(allowed);
+                }}
+              >
+                {recordHeaderActionRows(recordHeaderPinned).map((row) => {
+                  const pinIndex = recordHeaderPinned.indexOf(row.id);
+                  const atLimit = !row.pinned && recordHeaderPinned.length >= 2;
+                  return (
+                    <Flex key={row.id} align="center" gap="2">
+                      <CheckboxCards.Item
+                        value={row.id}
+                        disabled={atLimit}
+                        style={{ flex: 1, minWidth: 0 }}
+                      >
+                        {recordHeaderActionIcon(row.id)}
+                        <Text as="span" style={{ minWidth: 0, flex: 1, overflowWrap: "anywhere" }}>
+                          {RECORD_HEADER_ACTION_LABEL[row.id]}
+                        </Text>
+                      </CheckboxCards.Item>
+                      {/* Стрелки снаружи карточки: у её детей pointer-events: none. */}
+                      {row.pinned ? (
+                        <Flex gap="1" style={{ flexShrink: 0 }}>
+                          <IconButton
+                            type="button"
+                            size="4"
+                            color="gray"
+                            variant="surface"
+                            disabled={pinIndex <= 0}
+                            onClick={() => moveRecordHeaderPinned(row.id, "up")}
+                            aria-label={`Переместить «${RECORD_HEADER_ACTION_LABEL[row.id]}» выше`}
+                          >
+                            <ArrowUp size={16} />
+                          </IconButton>
+                          <IconButton
+                            type="button"
+                            size="4"
+                            color="gray"
+                            variant="surface"
+                            disabled={pinIndex < 0 || pinIndex >= recordHeaderPinned.length - 1}
+                            onClick={() => moveRecordHeaderPinned(row.id, "down")}
+                            aria-label={`Переместить «${RECORD_HEADER_ACTION_LABEL[row.id]}» ниже`}
+                          >
+                            <ArrowDown size={16} />
+                          </IconButton>
                         </Flex>
-                        {row.pinned ? (
-                          <Flex gap="1">
-                            <IconButton
-                              type="button"
-                              size="1"
-                              color="gray"
-                              variant="surface"
-                              disabled={pinIndex <= 0}
-                              onClick={() => moveRecordHeaderPinned(row.id, "up")}
-                              aria-label={`Переместить «${RECORD_HEADER_ACTION_LABEL[row.id]}» выше`}
-                            >
-                              <ArrowUp size={16} />
-                            </IconButton>
-                            <IconButton
-                              type="button"
-                              size="1"
-                              color="gray"
-                              variant="surface"
-                              disabled={pinIndex < 0 || pinIndex >= recordHeaderPinned.length - 1}
-                              onClick={() => moveRecordHeaderPinned(row.id, "down")}
-                              aria-label={`Переместить «${RECORD_HEADER_ACTION_LABEL[row.id]}» ниже`}
-                            >
-                              <ArrowDown size={16} />
-                            </IconButton>
-                          </Flex>
-                        ) : null}
-                        <Switch
-                          size="3"
-                          color="gray"
-                          checked={row.pinned}
-                          disabled={!row.pinned && recordHeaderPinned.length >= 2}
-                          onCheckedChange={(checked) => toggleRecordHeaderPinned(row.id, checked)}
-                          aria-label={`${RECORD_HEADER_ACTION_LABEL[row.id]} в шапке`}
-                        />
-                      </Flex>
-                    );
-                  })}
-                </Flex>
-              </Card>
+                      ) : null}
+                    </Flex>
+                  );
+                })}
+              </CheckboxCards.Root>
             </Flex>
           </Tabs.Content>
 
@@ -2136,7 +2187,7 @@ export function DeedFormPage() {
                   <>
                   <Flex direction="column" gap="1">
                     <Text as="label" size="2" weight="medium" htmlFor="analytics-summary-block" className={styles.formFieldLabel}>
-                      Блок для суммы
+                      Что считать
                     </Text>
                     <Select.Root
                       size="3"
@@ -2166,7 +2217,7 @@ export function DeedFormPage() {
                         className={styles.selectContentConstrained}
                       >
                         <Select.Item value="__default__">
-                          Первый числовой блок (по умолчанию)
+                          Количество записей (по умолчанию)
                         </Select.Item>
                         {numericBlocksUi
                           .filter((b): b is UiBlock & { id: string } => !!b.id)
@@ -2387,7 +2438,7 @@ export function DeedFormPage() {
                   <Flex direction="column" gap="1">
 
                     <Text as="label" size="2" weight="medium" htmlFor="analytics-heatmap-block" className={styles.formFieldLabel}>
-                      Расчёт по блоку
+                      Что считать
                     </Text>
 
                     <Select.Root

@@ -1,14 +1,20 @@
 import { Link, useNavigate } from 'react-router-dom'
-import { AlertDialog, Button, Card, ContextMenu, Flex, Text } from '@radix-ui/themes'
+import { AlertDialog, Box, Button, Card, ContextMenu, Flex, Text } from '@radix-ui/themes'
 import type { BlockRow, RecordRow, RecordWithAnswers, ValueJson } from '@/types/database'
 import { answersFromRecord } from '@/lib/answers-from-record'
 import { api } from '@/lib/api'
-import { formatAnswerPreviewSegment, formatYesNoOnlyRecordListPreview } from '@/lib/format-utils'
+import {
+  blocksIncludedInRecordPreview,
+  formatAnswerPreviewSegment,
+  formatYesNoOnlyRecordListPreview,
+} from '@/lib/format-utils'
 import { triggerHaptic } from '@/lib/haptics'
 import { persistHistoryListScrollY } from '@/lib/history-scroll-storage'
 import { useRef, useState } from 'react'
 import styles from './RecordCard.module.css'
 import { BriefcaseBusiness, Copy, Pencil, Plus, Trash2 } from 'lucide-react'
+import { RecordImage } from '@/components/RecordImage'
+import { firstRecordImagePath } from '@/lib/record-image'
 
 type RecordAnswer = { block_id: string; value_json: unknown }
 
@@ -51,13 +57,21 @@ export function RecordCard({
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
 
-  const sortedAnswers = [...(record.record_answers ?? [])].sort((a, b) => {
-    const blockA = blocks.find((x) => x.id === a.block_id)
-    const blockB = blocks.find((x) => x.id === b.block_id)
-    const orderA = blockA?.sort_order ?? 0
-    const orderB = blockB?.sort_order ?? 0
-    return orderA - orderB
-  })
+  // В превью только блоки с show_in_preview. Ответ без блока в списке (удалённый) оставляем, как раньше.
+  const previewBlockIds = new Set(blocksIncludedInRecordPreview(blocks).map((b) => b.id))
+  const sortedAnswers = [...(record.record_answers ?? [])]
+    .filter((a) => {
+      const block = blocks.find((x) => x.id === a.block_id)
+      if (!block) return true
+      return previewBlockIds.has(block.id)
+    })
+    .sort((a, b) => {
+      const blockA = blocks.find((x) => x.id === a.block_id)
+      const blockB = blocks.find((x) => x.id === b.block_id)
+      const orderA = blockA?.sort_order ?? 0
+      const orderB = blockB?.sort_order ?? 0
+      return orderA - orderB
+    })
 
   const yesNoOnlyPreview = formatYesNoOnlyRecordListPreview(record.record_answers ?? [], blocks)
   const preview =
@@ -71,6 +85,8 @@ export function RecordCard({
       .join(' · ') || '—')
 
   const timeStr = record.record_time?.slice(0, 5) ?? ''
+  // Квадрат слева — первая картинка, включённая в превью. В текст строки она не входит.
+  const recordImage = firstRecordImagePath(blocks, record.record_answers ?? [])
 
   const emoji = deedPrefix?.emoji ?? avatarFallback ?? '📋'
   const title = deedPrefix?.name ?? null
@@ -140,7 +156,13 @@ export function RecordCard({
                 className={styles.recordLink}
                 onPointerDownCapture={historyScrollCapture}
               >
+                {/* Текст, эмодзи и время на одной baseline. Квадрат сверху: у картинки baseline — нижний край, и он утянул бы первую строку вниз. */}
                 <Flex align="baseline" gap="2" width="100%">
+                  {recordImage ? (
+                    <Box alignSelf="start" flexShrink="0">
+                      <RecordImage path={recordImage.path} alt={recordImage.title} />
+                    </Box>
+                  ) : null}
                   {!hideAvatar ? <Text size="2">{emoji}</Text> : null}
                   <Flex direction="column" gap="1" flexGrow="1" minWidth="0">
                     {title ? (

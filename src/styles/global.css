@@ -20,6 +20,28 @@ html body[data-scroll-locked] {
 }
 
 /*
+ * Radix Themes по умолчанию ставит курсор-стрелку на кнопки, чекбоксы, радио,
+ * свитчи, пункты меню и бегунок слайдера (--cursor-*: default).
+ * Ссылки уже pointer. global.css идёт после themes/styles.css, селектор тот же.
+ * --cursor-disabled не трогаем: недоступные контролы остаются not-allowed.
+ * Подписи групп меню и селекта захардкожены как default — они не кликабельны.
+ */
+.radix-themes {
+  --cursor-button: pointer;
+  --cursor-checkbox: pointer;
+  --cursor-menu-item: pointer;
+  --cursor-radio: pointer;
+  --cursor-switch: pointer;
+  --cursor-slider-thumb: grab;
+  --cursor-slider-thumb-active: grabbing;
+}
+
+/* Дорожка слайдера сама курсор не задаёт — только бегунок. Клик по треку тоже двигает значение. */
+.rt-SliderRoot {
+  cursor: var(--cursor-slider-thumb);
+}
+
+/*
  * iOS Safari при фокусе на поле ввода увеличивает масштаб страницы, если font-size < 16px.
  * У TextArea Radix задаёт font-size на связке .rt-TextAreaRoot … .rt-TextAreaInput (2 класса) —
  * одного .rt-TextAreaInput недостаточно, плюс global.css подключается после themes/styles.css (main.tsx).

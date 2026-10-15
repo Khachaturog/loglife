@@ -3,7 +3,7 @@ export type DeedAnalyticsConfigV1 = {
   version: 1
   summary: {
     enabled: boolean
-    /** uuid блока number | scale | duration; null — первый числовой по sort_order */
+    /** uuid блока number | scale | duration; null — количество записей за период */
     block_id: string | null
     /** Карточки «Сегодня» / «За месяц» / «Всего» в сводке */
     show_today: boolean
@@ -22,6 +22,7 @@ export type DeedAnalyticsConfigV1 = {
   /** Теплокарта: цвет ячеек только из `deeds.card_color`, не из этого JSON. */
   heatmap: {
     enabled: boolean
+    /** uuid блока number | scale | duration; null — число записей в день */
     block_id: string | null
     show_weekday_labels: boolean
     show_month_labels: boolean

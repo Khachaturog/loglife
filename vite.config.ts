@@ -18,6 +18,10 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  optimizeDeps: {
+    // jSquash грузит .wasm через import.meta.url. Предсборка Vite этот путь ломает.
+    exclude: ['@jsquash/webp'],
+  },
   build: {
     rollupOptions: {
       output: {

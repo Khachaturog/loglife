@@ -11,6 +11,7 @@ import layoutStyles from '@/styles/layout.module.css'
 import type { RecordRow, RecordAnswerRow } from '@/types/database'
 import { ChevronsUpDown, Ellipsis, List, Grid3x3, Plus, CircleQuestionMark } from 'lucide-react'
 import { useOnboarding } from '@/lib/onboarding-context'
+import { normalizeDeedAnalyticsConfig } from '@/lib/deed-analytics-config'
 import { getDeedDisplayNumbers } from '@/lib/deed-utils'
 import { todayLocalISO } from '@/lib/format-utils'
 
@@ -155,7 +156,8 @@ export function DeedsListPage() {
     if (sortMode === 'default') return filteredDeeds
     const rows = filteredDeeds.map((deed) => {
       const records = recordsByDeedId[deed.id] ?? []
-      const { today } = getDeedDisplayNumbers(deed.blocks ?? [], records)
+      const summaryBlockId = normalizeDeedAnalyticsConfig(deed.analytics_config).summary.block_id
+      const { today } = getDeedDisplayNumbers(deed.blocks ?? [], records, summaryBlockId)
       return { deed, today }
     })
     rows.sort((a, b) => {

@@ -4,6 +4,7 @@ import { Box, Button, Card, Flex, IconButton, Text } from '@radix-ui/themes'
 import { CircleCheck, Circle, RefreshCw } from 'lucide-react'
 import type { DeedWithBlocks } from '@/types/database'
 import type { RecordRow, RecordAnswerRow } from '@/types/database'
+import { normalizeDeedAnalyticsConfig } from '@/lib/deed-analytics-config'
 import { getDeedDisplayNumbers } from '@/lib/deed-utils'
 import { deedQuickAddFromDefaultsActive, getQuickAddRecordAnswers, QUICK_ADD_FROM_DEFAULTS_LONG_PRESS_MS } from '@/lib/deed-quick-add'
 import { api } from '@/lib/api'
@@ -118,9 +119,10 @@ export function DeedCard({
   layout = 'row',
 }: DeedCardProps) {
   const navigate = useNavigate()
-  const { today } = getDeedDisplayNumbers(deed.blocks ?? [], records)
-  // Символ только у суммы одного блока «Число»; счётчик записей остаётся числом.
-  const summaryUnit = singleNumberBlockSummaryUnit(deed.blocks ?? [])
+  // Тот же источник, что виджет «Сегодня»: явный блок сводки или количество записей.
+  const summaryBlockId = normalizeDeedAnalyticsConfig(deed.analytics_config).summary.block_id
+  const { today } = getDeedDisplayNumbers(deed.blocks ?? [], records, summaryBlockId)
+  const summaryUnit = singleNumberBlockSummaryUnit(deed.blocks ?? [], summaryBlockId)
   const summaryTail = measurementUnitTail(summaryUnit)
   const todayLabel = formatNumberWithUnit(today, summaryUnit)
   // Барабан крутит только целые цифры. Дробь показываем строкой, иначе «72.5 кг» станет «72 кг».

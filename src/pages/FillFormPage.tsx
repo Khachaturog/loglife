@@ -29,8 +29,10 @@ import { FillFormNumberStepper } from '@/components/FillFormNumberStepper'
 import { NumberUnitMark } from '@/components/NumberUnitField'
 import { PageLoading } from '@/components/PageLoading'
 import { Check, Plus, RotateCcw, Trash2 } from 'lucide-react'
+import { RecordImageField } from '@/components/RecordImage'
 import { initialAnswersFromBlockDefaults } from '@/lib/block-default-value'
 import { api } from '@/lib/api'
+import { imagePathFromValue, type PendingRecordImage } from '@/lib/record-image'
 import {
   recentNumberSuggestions,
   recentSingleSelectSuggestions,
@@ -52,6 +54,8 @@ type FillDraft = {
   recordDate: string
   recordTime: string
   answers: Record<string, ValueJson>
+  /** Сжатые картинки до сохранения: в answers пути ещё нет. */
+  pendingImages: Record<string, PendingRecordImage>
   /** После ввода / ± / выбора в селекте / тапа по чипу скрываем чипы, пока ответ снова не «пустой». */
   recentChipsDismissedByBlock: Record<string, boolean>
 }
@@ -73,13 +77,18 @@ function createFillDraft(
     recordDate: overrides?.recordDate ?? todayLocalISO(),
     recordTime: overrides?.recordTime ?? nowTimeLocal(),
     answers: overrides?.answers ?? {},
+    pendingImages: {},
     recentChipsDismissedByBlock: {},
   }
 }
 
 /** Одна и та же логика, что раньше была в цикле `requiredMissing`, для подсветки конкретного блока. */
-function isRequiredBlockInvalid(block: BlockRow, answers: Record<string, ValueJson>): boolean {
-  const v = answers[block.id]
+function isRequiredBlockInvalid(block: BlockRow, draft: FillDraft): boolean {
+  if (block.block_type === 'image') {
+    if (draft.pendingImages[block.id]) return false
+    return imagePathFromValue(draft.answers[block.id]) == null
+  }
+  const v = draft.answers[block.id]
   if (v === undefined) return true
   if ('number' in v && v.number === 0) return true
   if ('text' in v && (v.text ?? '').trim() === '') return true
@@ -128,6 +137,9 @@ function sanitizeValue(v: ValueJson): ValueJson | null {
     if ((v.url ?? '').trim() === '') return null
     return v
   }
+  if ('imagePath' in v) {
+    return imagePathFromValue(v) ? v : null
+  }
   return null
 }
 
@@ -160,6 +172,11 @@ function stripEmptyNumbers(
   return changed ? next : answers
 }
 
+function draftHasSubmittableAnswer(draft: FillDraft): boolean {
+  if (Object.keys(sanitizedAnswersOf(draft.answers)).length > 0) return true
+  return Object.keys(draft.pendingImages).length > 0
+}
+
 function isDraftSubmittable(
   draft: FillDraft,
   blocks: BlockRow[],
@@ -168,9 +185,9 @@ function isDraftSubmittable(
   // Если есть обязательные блоки — сохраняем только когда они заполнены.
   // Если обязательных нет — нужен хотя бы один непустой ответ.
   if (hasRequiredBlocks) {
-    return !blocks.some((b) => b.is_required && isRequiredBlockInvalid(b, draft.answers))
+    return !blocks.some((b) => b.is_required && isRequiredBlockInvalid(b, draft))
   }
-  return Object.keys(sanitizedAnswersOf(draft.answers)).length > 0
+  return draftHasSubmittableAnswer(draft)
 }
 
 type FillFormEntryProps = {
@@ -194,6 +211,8 @@ type FillFormEntryProps = {
   onRestoreChips: (key: string, blockId: string) => void
   onRemove: (key: string) => void
   onEntryNode: (key: string, node: HTMLDivElement | null) => void
+  onPendingImage: (key: string, blockId: string, pending: PendingRecordImage) => void
+  onClearImage: (key: string, blockId: string) => void
 }
 
 /**
@@ -217,9 +236,11 @@ function FillFormEntry({
   onRestoreChips,
   onRemove,
   onEntryNode,
+  onPendingImage,
+  onClearImage,
 }: FillFormEntryProps) {
-  const { key: draftKey, answers, recentChipsDismissedByBlock } = draft
-  const hasAnyAnswer = Object.keys(sanitizedAnswersOf(answers)).length > 0
+  const { key: draftKey, answers, pendingImages, recentChipsDismissedByBlock } = draft
+  const hasAnyAnswer = draftHasSubmittableAnswer(draft)
   const dateId = `date-${draftKey}`
   const timeId = `time-${draftKey}`
 
@@ -251,6 +272,11 @@ function FillFormEntry({
   }
 
   function clearAnswer(blockId: string) {
+    const block = blocks.find((b) => b.id === blockId)
+    if (block?.block_type === 'image') {
+      onClearImage(draftKey, blockId)
+      return
+    }
     onAnswersChange(draftKey, (prev) => {
       const next = { ...prev }
       delete (next as Record<string, ValueJson | undefined>)[blockId]
@@ -342,7 +368,8 @@ function FillFormEntry({
                   {block.title}
                   {block.is_required && ' *'}
                 </Text>
-                {answers[block.id] !== undefined && block.block_type !== 'yes_no' && (
+                {(block.block_type !== 'yes_no' &&
+                  (answers[block.id] !== undefined || !!pendingImages[block.id])) && (
                   <IconButton
                     type="button"
                     size="2"
@@ -559,9 +586,19 @@ function FillFormEntry({
                   <CheckboxCards.Item value="done">Выполнено</CheckboxCards.Item>
                 </CheckboxCards.Root>
               )}
+              {block.block_type === 'image' && (
+                <RecordImageField
+                  alt={block.title || 'Картинка'}
+                  storedPath={imagePathFromValue(answers[block.id])}
+                  pending={pendingImages[block.id] ?? null}
+                  disabled={saving}
+                  onPending={(next) => onPendingImage(draftKey, block.id, next)}
+                  onClear={() => onClearImage(draftKey, block.id)}
+                />
+              )}
               {block.is_required &&
                 validationAttempted &&
-                isRequiredBlockInvalid(block, answers) && (
+                isRequiredBlockInvalid(block, draft) && (
                   <Text size="1" color="crimson" role="alert">
                     Заполни поле
                   </Text>
@@ -619,7 +656,12 @@ export function FillFormPage() {
   // Смена дела — снова один пустой черновик и дефолты при следующей загрузке.
   useEffect(() => {
     initialAnswersSeededRef.current = false
-    setDrafts([createFillDraft()])
+    setDrafts((prev) => {
+      for (const draft of prev) {
+        for (const image of Object.values(draft.pendingImages)) URL.revokeObjectURL(image.previewUrl)
+      }
+      return [createFillDraft()]
+    })
     setValidationAttempted(false)
     setSaveError(null)
   }, [deedId])
@@ -772,7 +814,45 @@ export function FillFormPage() {
   const removeDraft = useCallback((key: string) => {
     if (savingRef.current) return
     setSaveError(null)
-    setDrafts((prev) => (prev.length <= 1 ? prev : prev.filter((draft) => draft.key !== key)))
+    setDrafts((prev) => {
+      if (prev.length <= 1) return prev
+      const removed = prev.find((draft) => draft.key === key)
+      if (removed) {
+        for (const image of Object.values(removed.pendingImages)) {
+          URL.revokeObjectURL(image.previewUrl)
+        }
+      }
+      return prev.filter((draft) => draft.key !== key)
+    })
+  }, [])
+
+  const setDraftPendingImage = useCallback((key: string, blockId: string, pending: PendingRecordImage) => {
+    setDrafts((prev) =>
+      prev.map((draft) => {
+        if (draft.key !== key) return draft
+        const previous = draft.pendingImages[blockId]
+        if (previous) URL.revokeObjectURL(previous.previewUrl)
+        return {
+          ...draft,
+          pendingImages: { ...draft.pendingImages, [blockId]: pending },
+        }
+      }),
+    )
+  }, [])
+
+  const clearDraftImage = useCallback((key: string, blockId: string) => {
+    setDrafts((prev) =>
+      prev.map((draft) => {
+        if (draft.key !== key) return draft
+        const previous = draft.pendingImages[blockId]
+        if (previous) URL.revokeObjectURL(previous.previewUrl)
+        const pendingImages = { ...draft.pendingImages }
+        delete pendingImages[blockId]
+        const answers = { ...draft.answers }
+        delete answers[blockId]
+        return { ...draft, pendingImages, answers }
+      }),
+    )
   }, [])
 
   function addDraft() {
@@ -827,10 +907,15 @@ export function FillFormPage() {
     try {
       for (const draft of pending) {
         const sanitized = sanitizedAnswersOf(draft.answers)
+        const imageFiles: Record<string, Blob> = {}
+        for (const [blockId, image] of Object.entries(draft.pendingImages)) {
+          imageFiles[blockId] = image.blob
+        }
         await api.deeds.createRecord(deedId, {
           record_date: draft.recordDate,
           record_time: draft.recordTime,
           answers: Object.keys(sanitized).length ? sanitized : undefined,
+          imageFiles: Object.keys(imageFiles).length ? imageFiles : undefined,
         })
         savedKeys.push(draft.key)
       }
@@ -934,6 +1019,8 @@ export function FillFormPage() {
                 onRestoreChips={restoreRecentChips}
                 onRemove={removeDraft}
                 onEntryNode={setEntryNode}
+                onPendingImage={setDraftPendingImage}
+                onClearImage={clearDraftImage}
               />
             ))}
 

@@ -132,7 +132,7 @@ WHERE id = :id AND user_id = :uid
 
 **Запросы:**
 1. `INSERT INTO deeds` — создание дела
-2. `INSERT INTO blocks` — для каждого блока (по умолчанию 1 блок): в т.ч. `default_value`, `default_value_enabled`, `recent_suggestions_enabled`, jsonb `config` (для `single_select` — `singleSelectUi`: всегда `select`)
+2. `INSERT INTO blocks` — для каждого блока (по умолчанию 1 блок): в т.ч. `default_value`, `default_value_enabled`, `recent_suggestions_enabled`, `show_in_preview`, jsonb `config` (для `single_select` — `singleSelectUi`: всегда `select`)
 
 **Используется:** DeedFormPage (создание)
 
@@ -161,6 +161,8 @@ WHERE id = :id AND user_id = :uid
 
 ### `api.deeds.delete(id)`
 
+Перед удалением строк ответов снимаются файлы картинок этих записей из бакета `record-images`.
+
 ```sql
 DELETE FROM deeds WHERE id = :id AND user_id = :uid
 ```
@@ -173,7 +175,8 @@ DELETE FROM deeds WHERE id = :id AND user_id = :uid
 
 **Запросы:**
 1. `SELECT deeds` — проверка доступа
-2. `UPDATE blocks SET deleted_at = now()` — soft delete
+2. `SELECT record_answers` по блоку — пути картинок, затем удаление объектов в `record-images`
+3. `UPDATE blocks SET deleted_at = now()` — soft delete
 
 **Используется:** DeedFormPage
 
@@ -276,7 +279,10 @@ ORDER BY record_date DESC, record_time DESC
 **Запросы:**
 1. `SELECT deeds` — проверка доступа
 2. `INSERT INTO records`
-3. `INSERT INTO record_answers` — для каждого ответа
+3. Для картинок: загрузка WebP в `record-images` или копия файла при дублировании записи. В ответ пишется путь `{user_id}/{record_id}/{block_id}.webp`
+4. `INSERT INTO record_answers` — для каждого ответа
+
+Если загрузка картинки не удалась, созданная запись удаляется.
 
 **Используется:** FillFormPage
 
@@ -300,7 +306,7 @@ ORDER BY record_date DESC, record_time DESC
 1. `SELECT records` — deed_id
 2. `SELECT deeds` — проверка user_id
 3. `UPDATE records` — дата, время, заметки
-4. Для каждого ответа: `SELECT record_answers` → `UPDATE` или `INSERT`
+4. Для каждого ответа: `SELECT record_answers` → `UPDATE` или `INSERT`. Новые файлы картинок загружаются до записи ответа. Если у блока «Картинка» в наборе ответов больше нет пути, строка ответа и файл удаляются.
 
 **Используется:** RecordViewPage
 

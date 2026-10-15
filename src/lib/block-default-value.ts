@@ -90,6 +90,9 @@ export function normalizeDefaultValueForBlock(
     return { url: trimmed }
   }
 
+  // У картинки дефолта нет: подставлять файл в новую запись нечем.
+  if (t === 'image') return null
+
   return null
 }
 
@@ -152,6 +155,8 @@ export function createInitialDefaultForBlockType(
       return { durationHms: '00:00:00' }
     case 'url':
       return { url: '' }
+    case 'image':
+      return null
     default:
       return null
   }
@@ -193,12 +198,19 @@ export function getCompleteDefaultAnswers(blocks: BlockRow[] | undefined): Recor
   const out: Record<string, ValueJson> = {}
   for (const b of list) {
     if (!b.id) return null
+    // Необязательная картинка не блокирует быстрое добавление: файла по умолчанию нет.
+    if (b.block_type === 'image') {
+      if (b.is_required) return null
+      continue
+    }
     if (!b.default_value_enabled) return null
     const normalized = normalizeDefaultValueForBlock(b, b.default_value)
     if (!normalized) return null
     if (isOptionalEmptyTextOrUrl(b, normalized)) continue
     out[b.id] = normalized
   }
+  // Только необязательные картинки (или пустые тексты) — записывать нечего.
+  if (Object.keys(out).length === 0) return null
   return out
 }
 
@@ -222,9 +234,15 @@ export function areDefaultValuesCompleteForBlocks(
 ): boolean {
   const list = (blocks ?? []).filter((b) => !b.deleted_at)
   if (list.length === 0) return false
+  let hasConcreteDefault = false
   for (const b of list) {
+    if (b.block_type === 'image') {
+      if (b.is_required) return false
+      continue
+    }
     if (!b.default_value_enabled) return false
     if (!normalizeDefaultValueForBlock(b, b.default_value)) return false
+    hasConcreteDefault = true
   }
-  return true
+  return hasConcreteDefault
 }

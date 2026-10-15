@@ -2,7 +2,8 @@
  * Каталог единиц блока «Число»: коды в `blocks.config.unit`, подписи для экрана.
  * Смена единицы не пересчитывает сохранённые ответы — только формат показа.
  */
-import type { BlockConfig, MeasurementUnit, MeasurementUnitCode } from '@/types/database'
+import { resolveNumericBlockByConfigId } from '@/lib/deed-analytics-config'
+import type { BlockConfig, BlockRow, MeasurementUnit, MeasurementUnitCode } from '@/types/database'
 
 /** Своё название после обрезки пробелов. */
 export const MEASUREMENT_UNIT_CUSTOM_LABEL_MAX = 24
@@ -186,15 +187,14 @@ export function measurementUnitFromDurationNumber(unit: 'hours' | 'minutes' | 's
 }
 
 /**
- * Единица сводки на карточке дела: только когда на экране сумма одного блока «Число».
- * Несколько числовых блоков или «Время» — это счётчик записей, без символа.
+ * Единица на карточке списка: только если в сводке явно выбран блок «Число».
+ * Количество записей, шкала и время — без символа.
  */
 export function singleNumberBlockSummaryUnit(
-  blocks: { block_type: string; config: BlockConfig | null }[],
+  blocks: BlockRow[],
+  summaryBlockId: string | null,
 ): MeasurementUnit | null {
-  const numeric = blocks.filter(
-    (b) => b.block_type === 'number' || b.block_type === 'scale' || b.block_type === 'duration',
-  )
-  if (numeric.length !== 1 || numeric[0].block_type !== 'number') return null
-  return readMeasurementUnit(numeric[0].config)
+  const block = resolveNumericBlockByConfigId(blocks, summaryBlockId)
+  if (!block || block.block_type !== 'number') return null
+  return readMeasurementUnit(block.config)
 }

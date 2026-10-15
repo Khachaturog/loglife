@@ -7,6 +7,7 @@ export type BlockType =
   | 'yes_no'
   | 'duration'
   | 'url'
+  | 'image'
 
 /** Значение ответа в записи и в `blocks.default_value`. */
 export type ValueJson =
@@ -18,6 +19,8 @@ export type ValueJson =
   | { yesNo: boolean }
   | { durationHms: string }
   | { url: string }
+  /** Путь в бакете record-images, не байты файла. */
+  | { imagePath: string }
 
 export interface BlockRow {
   id: string
@@ -32,6 +35,8 @@ export interface BlockRow {
   default_value_enabled: boolean
   /** Чипы недавних значений на FillForm (number / single_select). */
   recent_suggestions_enabled: boolean
+  /** Ответ в превью записи на странице дела и во вкладке «История». Нет поля — показывать. */
+  show_in_preview?: boolean
   config: BlockConfig | null
   deleted_at: string | null
   created_at: string

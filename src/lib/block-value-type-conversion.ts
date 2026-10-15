@@ -2,6 +2,7 @@
  * Превью и MVP-конвертация ответов при смене типа блока (модалка в DeedFormPage).
  * Целевые типы single/multi/scale/duration/yes_no как приёмник — вне MVP: ответы не трогаем.
  * «Ссылка URL» ↔ «Текст»: строка копируется как есть. В ссылку из других типов автопереноса нет.
+ * «Картинка» ни откуда и никуда автоматически не переносится.
  */
 import { formatAnswer } from '@/lib/format-utils'
 import { formatNumberWithUnit, measurementUnitFromDurationNumber } from '@/lib/measurement-unit'
@@ -17,6 +18,8 @@ export function blockRowFromUiForApi(
     recent_suggestions_enabled: boolean
     default_value_enabled: boolean
     default_value: ValueJson | null
+    /** Нет поля — блок виден в превью. */
+    show_in_preview?: boolean
     config: BlockConfig | null
   },
   deedId: string,
@@ -32,6 +35,7 @@ export function blockRowFromUiForApi(
     default_value: ui.default_value,
     default_value_enabled: ui.default_value_enabled,
     recent_suggestions_enabled: ui.recent_suggestions_enabled,
+    show_in_preview: ui.show_in_preview !== false,
     config: ui.config,
     deleted_at: null,
     created_at: '1970-01-01T00:00:00Z',
@@ -52,6 +56,7 @@ export function isBlockedTypeTransition(fromType: BlockType, toType: BlockType):
  * В «Ссылку URL» — только из текста (строка копируется как есть).
  */
 export function supportsAutomaticAnswerMigration(toType: BlockType, fromType?: BlockType): boolean {
+  if (toType === 'image' || fromType === 'image') return false
   if (toType === 'number' || toType === 'text_paragraph') return true
   if (toType === 'url') return fromType === 'text_paragraph'
   return false
@@ -111,6 +116,8 @@ export function valueJsonMatchesBlockType(
       return typeof o.durationHms === 'string'
     case 'url':
       return typeof o.url === 'string'
+    case 'image':
+      return typeof o.imagePath === 'string' && o.imagePath.length > 0
     default:
       return false
   }
@@ -141,6 +148,10 @@ export function migrateValueMvp(params: {
   durationNumberUnit?: DurationNumberUnit
 }): MvpMigrationResult {
   const { value, fromType, toType, sourceBlock, durationNumberUnit = 'minutes' } = params
+
+  if (fromType === 'image' || toType === 'image') {
+    return { newValue: null, afterLabel: '—' }
+  }
 
   if (toType === 'text_paragraph') {
     if (fromType === 'scale' && 'scaleValue' in value) {

@@ -67,6 +67,8 @@ export function formatAnswer(
     const u = (value as { url: string }).url ?? ''
     return u.trim() === '' ? '—' : u
   }
+  // Картинка в текстовое превью не входит — её показывает карточка отдельно.
+  if ('imagePath' in value) return ''
   return '—'
 }
 
@@ -218,42 +220,59 @@ export function previewAnswer(
     if (!u.trim()) return '—'
     return u.length > maxTextLen ? u.slice(0, maxTextLen) + '…' : u
   }
+  if ('imagePath' in value) return ''
   return '—'
 }
 
 /**
- * Все неудалённые блоки дела — только тип «да/нет», и есть хотя бы один такой блок.
- * Для таких дел превью в списке записей показываем «N из M», а не склейку подписей по блокам.
+ * Блок участвует в превью списка записей.
+ * `show_in_preview === false` скрывает ответ; отсутствие поля — показывать (старые данные).
+ * Удалённые блоки в «N из M» не считаются.
  */
-export function isDeedOnlyYesNoBlocks(blocks: BlockRow[]): boolean {
-  const active = blocks.filter((b) => !b.deleted_at)
-  return active.length > 0 && active.every((b) => b.block_type === 'yes_no')
+export function isBlockIncludedInRecordPreview(block: Pick<BlockRow, 'deleted_at' | 'show_in_preview'>): boolean {
+  if (block.deleted_at) return false
+  return block.show_in_preview !== false
+}
+
+/** Активные блоки, чьи ответы попадают в строку превью, в порядке формы. */
+export function blocksIncludedInRecordPreview(blocks: BlockRow[]): BlockRow[] {
+  return blocks
+    .filter((b) => isBlockIncludedInRecordPreview(b))
+    .sort((a, b) => a.sort_order - b.sort_order)
 }
 
 /**
- * Если {@link isDeedOnlyYesNoBlocks} — строка «сколько выполнено из скольких блоков»; иначе `null`.
+ * Все блоки превью — тип «да/нет», и такой блок хотя бы один.
+ * Скрытые и удалённые не учитываются: если в превью остались только «Да/Нет», формат тоже «N из M».
+ */
+export function isDeedOnlyYesNoBlocks(blocks: BlockRow[]): boolean {
+  const visible = blocksIncludedInRecordPreview(blocks)
+  return visible.length > 0 && visible.every((b) => b.block_type === 'yes_no')
+}
+
+/**
+ * Если {@link isDeedOnlyYesNoBlocks} — «сколько выполнено из скольких блоков превью»; иначе `null`.
  * Ответ без ключа или с `yesNo: false` не увеличивает счётчик выполненных.
+ * Пустой набор превью — `null`: строку «—» собирает карточка записи.
  */
 export function formatYesNoOnlyRecordListPreview(
   recordAnswers: { block_id: string; value_json: unknown }[],
   blocks: BlockRow[]
 ): string | null {
   if (!isDeedOnlyYesNoBlocks(blocks)) return null
-  const active = blocks
-    .filter((b) => !b.deleted_at)
-    .sort((a, b) => a.sort_order - b.sort_order)
+  const visible = blocksIncludedInRecordPreview(blocks)
   const byBlockId = Object.fromEntries(recordAnswers.map((a) => [a.block_id, a.value_json])) as Record<
     string,
     unknown
   >
   let done = 0
-  for (const block of active) {
+  for (const block of visible) {
     const v = byBlockId[block.id]
     if (v && typeof v === 'object' && v !== null && 'yesNo' in v && (v as { yesNo: boolean }).yesNo === true) {
       done++
     }
   }
-  return `${done} из ${active.length}`
+  return `${done} из ${visible.length}`
 }
 
 /**
@@ -265,6 +284,7 @@ export function formatAnswerPreviewSegment(
   block: BlockRow | undefined
 ): string {
   if (!block) return previewAnswer(value, 20, undefined)
+  if (block.block_type === 'image') return ''
   if ('text' in value && (value.text ?? '').trim() === '') return ''
   return formatAnswer(value, block)
 }
