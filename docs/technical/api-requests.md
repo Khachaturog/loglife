@@ -132,7 +132,7 @@ WHERE id = :id AND user_id = :uid
 
 **Запросы:**
 1. `INSERT INTO deeds` — создание дела
-2. `INSERT INTO blocks` — для каждого блока (по умолчанию 1 блок): в т.ч. `default_value`, `default_value_enabled`, `recent_suggestions_enabled`, jsonb `config` (для `single_select` — `singleSelectUi`: `select` | `checkbox`)
+2. `INSERT INTO blocks` — для каждого блока (по умолчанию 1 блок): в т.ч. `default_value`, `default_value_enabled`, `recent_suggestions_enabled`, jsonb `config` (для `single_select` — `singleSelectUi`: всегда `select`)
 
 **Используется:** DeedFormPage (создание)
 
@@ -142,7 +142,7 @@ WHERE id = :id AND user_id = :uid
 
 **Запросы:**
 1. `UPDATE deeds` — emoji, name, description
-2. При изменении блоков: `SELECT blocks`, `UPDATE`/`INSERT`/soft-delete блоков (в `config` у `single_select` передаётся `singleSelectUi` при сохранении)
+2. При изменении блоков: `SELECT blocks`, `UPDATE`/`INSERT`/soft-delete блоков (в `config` у `single_select` при сохранении пишется `singleSelectUi: "select"`)
 
 **Используется:** DeedFormPage (редактирование)
 

@@ -8,6 +8,7 @@ import { getDeedDisplayNumbers } from '@/lib/deed-utils'
 import { deedQuickAddFromDefaultsActive, getQuickAddRecordAnswers, QUICK_ADD_FROM_DEFAULTS_LONG_PRESS_MS } from '@/lib/deed-quick-add'
 import { api } from '@/lib/api'
 import { nowTimeLocal, todayLocalISO } from '@/lib/format-utils'
+import { formatNumberWithUnit, measurementUnitTail, singleNumberBlockSummaryUnit } from '@/lib/measurement-unit'
 import { triggerHaptic } from '@/lib/haptics'
 import { useDelayedActionLoader } from '@/lib/use-delayed-action-loader'
 import deedCardStyles from '@/components/DeedCard.module.css'
@@ -118,6 +119,12 @@ export function DeedCard({
 }: DeedCardProps) {
   const navigate = useNavigate()
   const { today } = getDeedDisplayNumbers(deed.blocks ?? [], records)
+  // Символ только у суммы одного блока «Число»; счётчик записей остаётся числом.
+  const summaryUnit = singleNumberBlockSummaryUnit(deed.blocks ?? [])
+  const summaryTail = measurementUnitTail(summaryUnit)
+  const todayLabel = formatNumberWithUnit(today, summaryUnit)
+  // Барабан крутит только целые цифры. Дробь показываем строкой, иначе «72.5 кг» станет «72 кг».
+  const todayIsWhole = Number.isInteger(today)
   const { spinnerVisible, run: runQuickAddWithDelayedSpinner } = useDelayedActionLoader()
 
   const quickAddActive = useMemo(() => deedQuickAddFromDefaultsActive(deed), [deed])
@@ -204,7 +211,7 @@ export function DeedCard({
 
   const deedOpenLabel = countersLoading
     ? `Открыть дело «${deed.name}»${deed.category ? `. ${deed.category}` : ''}. Статистика загружается`
-    : `Открыть дело «${deed.name}»${deed.category ? `. ${deed.category}` : ''}. ${today} сегодня`
+    : `Открыть дело «${deed.name}»${deed.category ? `. ${deed.category}` : ''}. ${todayLabel} сегодня`
 
   const showSpinner = quickAddActive && actionPending && spinnerVisible
   const actionIdle = !actionPending
@@ -225,7 +232,7 @@ export function DeedCard({
       : layout === 'stack' && !markedToday
         ? 'Отметить'
         : markedToday
-          ? `Добавить запись, ${today} сегодня`
+          ? `Добавить запись, ${todayLabel} сегодня`
           : 'Добавить запись'
 
   const actionTitle = actionIdle
@@ -273,7 +280,14 @@ export function DeedCard({
       {/* Барабан остаётся в дереве на время спиннера, чтобы не начинать прокрутку с нуля заново */}
       {stackCount > 0 || markedToday ? (
         <span className={showSpinner || !markedToday ? deedCardStyles.slotHidden : undefined} aria-hidden="true">
-          <SlotCount value={stackCount} />
+          {todayIsWhole ? (
+            <>
+              <SlotCount value={stackCount} />
+              {summaryTail}
+            </>
+          ) : (
+            todayLabel
+          )}
         </span>
       ) : null}
       {!showSpinner && !countersLoading && !markedToday ? 'Отметить' : null}
@@ -342,7 +356,14 @@ export function DeedCard({
                   <Text weight="medium">{deed.name}</Text>
                   {markedToday ? (
                     <Text as="p" size="2" color="gray">
-                      <SlotCount value={today} />
+                      {todayIsWhole ? (
+                        <>
+                          <SlotCount value={today} />
+                          {summaryTail}
+                        </>
+                      ) : (
+                        todayLabel
+                      )}
                     </Text>
                   ) : null}
                 </Flex>

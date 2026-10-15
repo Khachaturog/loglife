@@ -25,6 +25,7 @@ import {
   Separator,
 } from "@radix-ui/themes";
 import { BlockTypeChangePreviewDialog } from "@/components/BlockTypeChangePreviewDialog";
+import { NumberUnitField } from "@/components/NumberUnitField";
 import {
   AutoGrowTextArea,
   AUTO_GROW_TEXTAREA_MAX_PX,
@@ -48,7 +49,6 @@ import {
   normalizeDefaultValueForBlock,
 } from "@/lib/block-default-value";
 import { blurActiveInputInForm, blurInputOnEnter } from "@/lib/ios-input-blur";
-import { getSingleSelectUi } from "@/lib/block-config";
 import type {
   BlockConfig,
   BlockType,
@@ -68,6 +68,10 @@ import {
 import type { DeedAnalyticsConfigV1 } from "@/types/deed-analytics-config";
 import { DEFAULT_DEED_ANALYTICS_CONFIG } from "@/types/deed-analytics-config";
 import { normalizeDeedAnalyticsConfig } from "@/lib/deed-analytics-config";
+import {
+  configWithMeasurementUnit,
+  measurementUnitFromDurationNumber,
+} from "@/lib/measurement-unit";
 import {
   DEFAULT_RECORD_HEADER_PINNED,
   RECORD_HEADER_ACTION_LABEL,
@@ -149,7 +153,7 @@ function computeNextUiBlockAfterTypeChange(b: UiBlock, nextType: BlockType): UiB
         nextType === "single_select"
           ? {
               options: [...b.config!.options!],
-              singleSelectUi: getSingleSelectUi(b.config),
+              singleSelectUi: "select",
             }
           : { options: [...b.config!.options!] };
     } else {
@@ -1071,14 +1075,24 @@ export function DeedFormPage() {
 
   async function handleTypeChangeConfirm() {
     if (!typeChangeModal || !id) return;
-    const { blockIndex, nextType, snapshot, rows } = typeChangeModal;
+    const { blockIndex, nextType, snapshot, rows, durationUnit } = typeChangeModal;
     const currentUi = blocks[blockIndex];
     // Пока модалка открыта, тип в форме не менялся — если расходится, закрываем без записи.
     if (currentUi.block_type !== snapshot.block_type) {
       setTypeChangeModal(null);
       return;
     }
-    const updated = computeNextUiBlockAfterTypeChange(currentUi, nextType);
+    let updated = computeNextUiBlockAfterTypeChange(currentUi, nextType);
+    // Выбранные часы/минуты/секунды сразу становятся единицей числового блока.
+    if (snapshot.block_type === "duration" && nextType === "number") {
+      updated = {
+        ...updated,
+        config: configWithMeasurementUnit(
+          updated.config,
+          measurementUnitFromDurationNumber(durationUnit),
+        ),
+      };
+    }
     const blockRow = blockRowFromUiForApi({ ...updated, id: updated.id! }, id, blockIndex);
     const migrations = rows
       .filter((r) => r.willMigrate && r.newValue)
@@ -1167,7 +1181,7 @@ export function DeedFormPage() {
         if (b.block_type === "single_select" && config) {
           config = {
             ...config,
-            singleSelectUi: getSingleSelectUi(config),
+            singleSelectUi: "select",
           };
         }
         const normalizedDefault =
@@ -1573,6 +1587,21 @@ export function DeedFormPage() {
                     </Select.Root>
                   </Flex>
 
+                  {block.block_type === "number" ? (
+                    <Flex direction="column" gap="1">
+                      <Text as="span" size="2" weight="medium">
+                        Единица
+                      </Text>
+                      <NumberUnitField
+                        config={block.config}
+                        contentClassName={styles.selectContentConstrained}
+                        onConfigChange={(config) =>
+                          updateBlock(index, (b) => ({ ...b, config }))
+                        }
+                      />
+                    </Flex>
+                  ) : null}
+
                   <Flex direction="column" gap="1">
                     <Text as="span" size="2" weight="medium">
                       Вопрос
@@ -1875,38 +1904,6 @@ export function DeedFormPage() {
                               }))
                             }
                           />
-                        </Flex>
-                      )}
-                      {block.block_type === "single_select" && (
-                        <Flex direction="column" gap="2">
-                          <Text size="3" weight="medium" as="span">
-                            Вид списка
-                          </Text>
-                          <SegmentedControl.Root
-                            size="3"
-                            value={
-                              block.config?.singleSelectUi === "checkbox"
-                                ? "checkbox"
-                                : "select"
-                            }
-                            onValueChange={(v) =>
-                              updateBlock(index, (b) => ({
-                                ...b,
-                                config: {
-                                  ...(b.config ?? {}),
-                                  singleSelectUi:
-                                    v === "checkbox" ? "checkbox" : "select",
-                                },
-                              }))
-                            }
-                          >
-                            <SegmentedControl.Item value="select">
-                              Список
-                            </SegmentedControl.Item>
-                            <SegmentedControl.Item value="checkbox">
-                              Чекбоксы
-                            </SegmentedControl.Item>
-                          </SegmentedControl.Root>
                         </Flex>
                       )}
                       <Flex direction="column" gap="2">
@@ -2466,7 +2463,7 @@ export function DeedFormPage() {
                               id="deed-card-color-select"
                               placeholder="Выберите цвет"
                               aria-label="Цвет карточки: по умолчанию, пресет или свой"
-                              style={{ width: "100%" }}
+                              style={{ width: "100%", justifyContent: "flex-start" }}
                               />
                             <Select.Content
                               position="popper"

@@ -38,8 +38,55 @@ export interface BlockRow {
   updated_at: string
 }
 
-/** Как показывать «Один из списка» при вводе (FillForm, редактирование на RecordView). Просмотр — всегда текст. */
+/**
+ * Старый ключ вида «Один из списка» в config.
+ * Формы заполнения и правки всегда показывают выпадающий список.
+ * `checkbox` может остаться в уже сохранённых делах; при следующем сохранении дела пишется `select`.
+ */
 export type SingleSelectUiMode = 'select' | 'checkbox'
+
+/**
+ * Код пресета единицы у блока «Число».
+ * Подписи и символы — в `src/lib/measurement-unit.ts`, таблица — в docs.
+ */
+export type MeasurementUnitCode =
+  | 'percent'
+  | 'rub'
+  | 'usd'
+  | 'eur'
+  | 'gbp'
+  | 'cny'
+  | 'jpy'
+  | 'inr'
+  | 'kzt'
+  | 'try'
+  | 'byn'
+  | 'amd'
+  | 'gel'
+  | 'btc'
+  | 'hour'
+  | 'minute'
+  | 'second'
+  | 'km'
+  | 'm'
+  | 'mi'
+  | 'ft'
+  | 'yd'
+  | 'l'
+  | 'ml'
+  | 'gal'
+  | 'fl_oz'
+  | 'kg'
+  | 'g'
+  | 'mg'
+  | 'lb'
+  | 'oz'
+  | 'kcal'
+
+/** Единица числового блока. Нет поля в config — «Нет единицы». */
+export type MeasurementUnit =
+  | { kind: 'preset'; code: MeasurementUnitCode }
+  | { kind: 'custom'; label: string; short?: string }
 
 export interface BlockConfig {
   /**
@@ -57,8 +104,10 @@ export interface BlockConfig {
     label: string
     sort_order: number
   }[]
-  /** Только для block_type === 'single_select'. В БД после миграции всегда задано для таких блоков. */
+  /** Только для single_select. При сохранении дела всегда `select`; старый `checkbox` на формах не используется. */
   singleSelectUi?: SingleSelectUiMode
+  /** Только для block_type === 'number'. Не задано — число без единицы. */
+  unit?: MeasurementUnit
 }
 
 /** Версия конфига блока (родительская таблица). */

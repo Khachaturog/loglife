@@ -1,3 +1,4 @@
+import { formatNumberWithUnit, readMeasurementUnit } from '@/lib/measurement-unit'
 import { formatScaleAnswerForDisplay } from '@/lib/scale-block'
 import type { BlockConfig, BlockRow, ValueJson } from '@/types/database'
 
@@ -40,7 +41,9 @@ export function formatAnswer(
   block: BlockRow,
   optionsOverride?: { id: string; label: string }[]
 ): string {
-  if ('number' in value && value.number !== undefined) return String(value.number)
+  if ('number' in value && value.number !== undefined) {
+    return formatNumberWithUnit(value.number, readMeasurementUnit(block.config))
+  }
   // Пустой или только пробелы — как «нет значения» (иначе в списках join даёт лишний «·» в конце).
   if ('text' in value) {
     const t = value.text ?? ''
@@ -198,7 +201,9 @@ export function previewAnswer(
   block?: BlockRow,
 ): string {
   if (!value) return '—'
-  if ('number' in value && value.number !== undefined) return String(value.number)
+  if ('number' in value && value.number !== undefined) {
+    return formatNumberWithUnit(value.number, block ? readMeasurementUnit(block.config) : null)
+  }
   if ('text' in value && value.text) return value.text.length > maxTextLen ? value.text.slice(0, maxTextLen) + '…' : value.text
   if ('optionId' in value) return '✅'
   if ('optionIds' in value && Array.isArray(value.optionIds)) return value.optionIds.length ? `✓ ${value.optionIds.length}` : '—'

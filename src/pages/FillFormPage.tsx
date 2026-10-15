@@ -26,9 +26,9 @@ import { AUTO_GROW_TEXTAREA_MIN_ONE_LINE_PX, AutoGrowTextArea } from '@/componen
 import { AppBar } from '@/components/AppBar'
 import { SingleSelectAnswerField } from '@/components/SingleSelectAnswerField'
 import { FillFormNumberStepper } from '@/components/FillFormNumberStepper'
+import { NumberUnitMark } from '@/components/NumberUnitField'
 import { PageLoading } from '@/components/PageLoading'
 import { Check, Plus, RotateCcw, Trash2 } from 'lucide-react'
-import { getSingleSelectUi } from '@/lib/block-config'
 import { initialAnswersFromBlockDefaults } from '@/lib/block-default-value'
 import { api } from '@/lib/api'
 import {
@@ -40,6 +40,7 @@ import { DatePicker } from '@/components/DatePicker'
 import { DurationStopwatchField } from '@/components/DurationStopwatchField'
 import { ScaleAnswerField } from '@/components/ScaleAnswerField'
 import { todayLocalISO, nowTimeLocal } from '@/lib/format-utils'
+import { readMeasurementUnit } from '@/lib/measurement-unit'
 import { blurActiveInputInForm, blurInputOnEnter } from '@/lib/ios-input-blur'
 import { triggerHaptic } from '@/lib/haptics'
 import type { BlockConfig, BlockRow, DeedWithBlocks, ValueJson } from '@/types/database'
@@ -319,6 +320,7 @@ function FillFormEntry({
         const numberChipValues = quickPickNumbersByBlockId[block.id]
         const selectChipIds = quickPickSelectIdsByBlockId[block.id]
         const numberAns = (answers[block.id] as { number?: number } | undefined)?.number
+        const numberUnit = block.block_type === 'number' ? readMeasurementUnit(block.config) : null
         const chipsDismissed = !!recentChipsDismissedByBlock[block.id]
         const showNumberRecentChips =
           (block.recent_suggestions_enabled ?? true) &&
@@ -359,6 +361,7 @@ function FillFormEntry({
               </Flex>
               {block.block_type === 'number' && (
                 <>
+                  {/* Иконка единицы внутри поля, чтобы не помнить, в чём ведётся счёт. */}
                   {/*
                     Не вешаем key от «пусто/заполнено» на поле/stepper: иначе при первом шаге ± или первой цифре
                     весь блок remount’ится — сбрасывается удержание кнопок и фокус.
@@ -374,6 +377,7 @@ function FillFormEntry({
                       enterKeyHint="done"
                       autoComplete="off"
                       autoCorrect="off"
+                      placeholder="Введите число..."
                       onKeyDown={blurInputOnEnter}
                       value={numberAns === undefined ? '' : String(numberAns)}
                       onChange={(e) => {
@@ -393,7 +397,10 @@ function FillFormEntry({
                         dismissRecentChips(block.id)
                         setAnswer(block.id, { number: Math.max(0, parsed) })
                       }}
-                    />
+                    >
+                      {/* Иконка слева, короткое обозначение справа. На чипах только число. */}
+                      <NumberUnitMark unit={numberUnit} />
+                    </TextField.Root>
                     <FillFormNumberStepper
                       blockId={block.id}
                       value={(answers[block.id] as { number?: number } | undefined)?.number ?? 0}
@@ -430,7 +437,7 @@ function FillFormEntry({
                   size="3"
                   value={(answers[block.id] as { text?: string } | undefined)?.text ?? ''}
                   onChange={(e) => setAnswer(block.id, { text: e.target.value })}
-                  placeholder=""
+                  placeholder="Введите текст..."
                   minHeightPx={AUTO_GROW_TEXTAREA_MIN_ONE_LINE_PX}
                 />
               )}
@@ -449,7 +456,6 @@ function FillFormEntry({
               {block.block_type === 'single_select' && (
                 <>
                   <SingleSelectAnswerField
-                    uiMode={getSingleSelectUi(block.config as BlockConfig)}
                     options={getBlockOptions(block)}
                     optionId={
                       (answers[block.id] as { optionId?: string } | undefined)?.optionId ||

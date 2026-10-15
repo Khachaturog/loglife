@@ -90,6 +90,7 @@ describe('migrateValueMvp', () => {
       durationNumberUnit: 'minutes',
     })
     expect(r.newValue).toEqual({ number: 60 })
+    expect(r.afterLabel).toBe('60 мин')
   })
 })
 

@@ -7,9 +7,9 @@ import { AppBar } from '@/components/AppBar'
 import { useOnboarding } from '@/lib/onboarding-context'
 import { SingleSelectAnswerField } from '@/components/SingleSelectAnswerField'
 import { FillFormNumberStepper } from '@/components/FillFormNumberStepper'
+import { NumberUnitMark } from '@/components/NumberUnitField'
 import { PageLoading } from '@/components/PageLoading'
 import { BriefcaseBusiness, Check, Copy, Ellipsis, Settings, Pencil, Plus, CircleQuestionMark, RotateCcw, Trash2 } from 'lucide-react'
-import { getSingleSelectUi } from '@/lib/block-config'
 import { api } from '@/lib/api'
 import { answersFromRecord } from '@/lib/answers-from-record'
 import type { BlockConfig, BlockRow, DeedWithBlocks, RecordAnswerRow, RecordWithAnswers, ValueJson } from '@/types/database'
@@ -18,6 +18,7 @@ import { DurationStopwatchField } from '@/components/DurationStopwatchField'
 import { ScaleAnswerField } from '@/components/ScaleAnswerField'
 import { valueJsonMatchesBlockType } from '@/lib/block-value-type-conversion'
 import { formatAnswer, formatRecordDateTimeDisplay, safeUrlHref } from '@/lib/format-utils'
+import { readMeasurementUnit } from '@/lib/measurement-unit'
 import { blurInputOnEnter } from '@/lib/ios-input-blur'
 import {
   RECORD_HEADER_ACTION_LABEL,
@@ -747,7 +748,9 @@ export function RecordViewPage() {
                       if (!Number.isFinite(parsed)) return
                       setAnswer(block.id, { number: Math.max(0, parsed) })
                     }}
-                  />
+                  >
+                    <NumberUnitMark unit={readMeasurementUnit(block.config)} />
+                  </TextField.Root>
                   <FillFormNumberStepper
                     blockId={block.id}
                     value={(answers[block.id] as { number?: number } | undefined)?.number ?? 0}
@@ -778,7 +781,6 @@ export function RecordViewPage() {
               )}
               {block.block_type === 'single_select' && (
                 <SingleSelectAnswerField
-                  uiMode={getSingleSelectUi(block.config as BlockConfig)}
                   options={getBlockOptions(block)}
                   optionId={
                     (answers[block.id] as { optionId?: string } | undefined)?.optionId ||
@@ -1016,7 +1018,9 @@ export function RecordViewPage() {
                           }
                           setUpdateDraftValue(block.id, { number: Math.max(0, parsed) })
                         }}
-                      />
+                      >
+                        <NumberUnitMark unit={readMeasurementUnit(block.config)} />
+                      </TextField.Root>
                       <FillFormNumberStepper
                         blockId={block.id}
                         value={(draft as { number?: number } | undefined)?.number ?? 0}
@@ -1047,7 +1051,6 @@ export function RecordViewPage() {
                   )}
                   {block.block_type === 'single_select' && (
                     <SingleSelectAnswerField
-                      uiMode={getSingleSelectUi(block.config as BlockConfig)}
                       options={currentOptions}
                       optionId={(draft as { optionId?: string } | undefined)?.optionId || undefined}
                       onOptionIdChange={(v) => {

@@ -59,14 +59,9 @@ export function BlockTypeChangePreviewDialog({
 
         {showDurationUnit ? (
           <Flex direction="column" gap="3" mb="3">
-            <Flex direction="column" gap="1">
-              <Text size="2" weight="medium" as="p">
-                Как переводить время в число?
-              </Text>
-              <Text size="2" color="gray">
-                После конвертации не забудьте вручную указать единицу измерения
-              </Text>
-            </Flex>
+            <Text size="2" weight="medium" as="p">
+              Как переводить время в число?
+            </Text>
             {/* Единица конвертации duration → number: секунды, минуты или часы. */}
             <SegmentedControl.Root
               size="2"

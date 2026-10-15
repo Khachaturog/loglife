@@ -1,10 +1,22 @@
 /* Сброс margin у html/body — браузеры по умолчанию добавляют 8px к body,
- * что даёт лишние отступы поверх pageContainer (16px). */
-html,
+ * что даёт лишние отступы поверх pageContainer (16px).
+ * Жёлоб только у html и только справа: ширина трека не двигает колонку,
+ * когда полоса появляется или пропадает. На body его нет — иначе резерв удваивается. */
+html {
+  margin: 0;
+  scrollbar-gutter: stable;
+}
+
 body {
   margin: 0;
-  /* Резервируем место под вертикальный скроллбар, чтобы контент не скакал */
-  scrollbar-gutter: stable both-edges;
+}
+
+/* react-remove-scroll при оверлее Radix ставит
+ * body[data-scroll-locked] { margin-right: Npx !important }.
+ * Жёлоб уже занят scrollbar-gutter, повторный сдвиг не нужен.
+ * Селектор html body перебивает инжект: тот же !important, но стиль вставляется позже. */
+html body[data-scroll-locked] {
+  margin-right: 0 !important;
 }
 
 /*

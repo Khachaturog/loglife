@@ -4,6 +4,7 @@
  * «Ссылка URL» ↔ «Текст»: строка копируется как есть. В ссылку из других типов автопереноса нет.
  */
 import { formatAnswer } from '@/lib/format-utils'
+import { formatNumberWithUnit, measurementUnitFromDurationNumber } from '@/lib/measurement-unit'
 import type { BlockConfig, BlockRow, BlockType, RecordAnswerRow, RecordRow, ValueJson } from '@/types/database'
 
 /** UiBlock из формы дела → BlockRow для formatAnswer / API (временные поля даты — заглушки). */
@@ -182,16 +183,17 @@ export function migrateValueMvp(params: {
     }
     if (fromType === 'duration' && 'durationHms' in value) {
       const sec = parseDurationHmsToSeconds((value as { durationHms: string }).durationHms)
+      const unit = measurementUnitFromDurationNumber(durationNumberUnit)
       if (sec === null) {
         const fallback = extractFirstNumberFromString((value as { durationHms: string }).durationHms)
         if (fallback === null) return { newValue: null, afterLabel: '—' }
-        return { newValue: { number: fallback }, afterLabel: String(fallback) }
+        return { newValue: { number: fallback }, afterLabel: formatNumberWithUnit(fallback, unit) }
       }
       let n: number
       if (durationNumberUnit === 'hours') n = Math.floor(sec / 3600)
       else if (durationNumberUnit === 'minutes') n = Math.floor(sec / 60)
       else n = sec
-      return { newValue: { number: n }, afterLabel: String(n) }
+      return { newValue: { number: n }, afterLabel: formatNumberWithUnit(n, unit) }
     }
     const s = meaningString(value, sourceBlock)
     const n = extractFirstNumberFromString(s)

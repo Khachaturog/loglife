@@ -1,4 +1,5 @@
 import type { BlockConfig, BlockRow, DeedWithBlocks, RecordAnswerRow, ValueJson } from '@/types/database'
+import { formatNumberWithUnit, readMeasurementUnit } from '@/lib/measurement-unit'
 import { formatScaleAnswerForDisplay } from '@/lib/scale-block'
 import { api } from '@/lib/api'
 
@@ -41,6 +42,9 @@ function formatAnswerForCsv(value: ValueJson, block: BlockRow): string {
   }
   if ('scaleValue' in value && typeof value.scaleValue === 'number') {
     return formatScaleAnswerForDisplay(block.config as BlockConfig | null, value.scaleValue)
+  }
+  if ('number' in value && value.number !== undefined) {
+    return formatNumberWithUnit(value.number, readMeasurementUnit(block.config))
   }
   return formatValueForCsv(value)
 }
