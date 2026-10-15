@@ -31,7 +31,7 @@ CREATE TABLE public.pomodoro_sessions (
   user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   project_id uuid REFERENCES public.pomodoro_projects(id) ON DELETE SET NULL,
   planned_seconds int NOT NULL CHECK (planned_seconds >= 300),
-  actual_seconds int NOT NULL CHECK (actual_seconds > 0 AND actual_seconds <= planned_seconds),
+  actual_seconds int NOT NULL CHECK (actual_seconds >= 300 AND actual_seconds <= planned_seconds),
   status text NOT NULL CHECK (status IN ('completed', 'stopped')),
   started_at timestamptz NOT NULL,
   ended_at timestamptz NOT NULL CHECK (ended_at >= started_at),
@@ -39,7 +39,7 @@ CREATE TABLE public.pomodoro_sessions (
 );
 
 COMMENT ON TABLE public.pomodoro_sessions IS
-  'Законченный фокус-сеанс. План короче 5 минут в таблицу не попадает.';
+  'Законченный фокус-сеанс. План и факт короче 5 минут в таблицу не попадают.';
 
 CREATE INDEX idx_pomodoro_projects_user_id
   ON public.pomodoro_projects (user_id, created_at DESC);

@@ -935,7 +935,8 @@ export const api = {
     },
 
     /**
-     * Пишет сеанс, только если план не короче 5 минут и факт больше нуля.
+     * Пишет сеанс, только если и план, и факт не короче 5 минут.
+     * Досрочный выход раньше этого порога строку не создаёт.
      * Если проект уже удалён, сеанс сохраняется без проекта.
      */
     async createSession(input: {
@@ -948,7 +949,7 @@ export const api = {
     }): Promise<void> {
       const planned = Math.round(input.plannedSeconds)
       const actual = Math.min(planned, Math.max(0, Math.round(input.actualSeconds)))
-      if (planned < POMODORO_MIN_RECORDED_SECONDS || actual <= 0) return
+      if (planned < POMODORO_MIN_RECORDED_SECONDS || actual < POMODORO_MIN_RECORDED_SECONDS) return
 
       const uid = await getUserIdOrThrow()
       const row = {

@@ -292,7 +292,7 @@ auth.users (Supabase Auth)
 | `user_id` | uuid | NOT NULL, FK → auth.users(id) ON DELETE CASCADE | Владелец |
 | `project_id` | uuid | FK → pomodoro_projects(id) ON DELETE SET NULL | Пусто для режима «Без проекта» и после удаления проекта |
 | `planned_seconds` | int | NOT NULL, CHECK ≥ 300 | Снимок плана. Короче 5 минут строка не создаётся |
-| `actual_seconds` | int | NOT NULL, CHECK > 0 и ≤ planned_seconds | Сколько реально прошло |
+| `actual_seconds` | int | NOT NULL, CHECK ≥ 300 и ≤ planned_seconds | Сколько реально прошло. Короче 5 минут строка не создаётся |
 | `status` | text | NOT NULL, `completed` или `stopped` | Дошёл до конца или остановлен раньше |
 | `started_at` | timestamptz | NOT NULL | |
 | `ended_at` | timestamptz | NOT NULL, ≥ started_at | |
@@ -365,3 +365,4 @@ auth.users (Supabase Auth)
 | `20261008` | Добавлен тип блока `url` |
 | `20261008` | Добавлена `deeds.record_header_pinned` (text[], закреплённые действия шапки записи) |
 | `20261009` | Таблицы `pomodoro_settings`, `pomodoro_projects`, `pomodoro_sessions` + RLS |
+| `20261015` | `pomodoro_sessions.actual_seconds` не короче 300; более короткие строки удалены |

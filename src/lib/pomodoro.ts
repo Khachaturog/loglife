@@ -3,7 +3,7 @@ export const POMODORO_DEFAULT_FOCUS_SECONDS = 25 * 60
 /** Линейка минут: от 1 до 180. */
 export const POMODORO_MIN_FOCUS_SECONDS = 60
 export const POMODORO_MAX_FOCUS_SECONDS = 180 * 60
-/** Сеанс короче этого плана в базу не пишется. */
+/** План или факт короче этого порога в базу не пишется. */
 export const POMODORO_MIN_RECORDED_SECONDS = 5 * 60
 /** Поле эмодзи, когда проект не выбран. */
 export const POMODORO_FALLBACK_EMOJI = '🍅'
