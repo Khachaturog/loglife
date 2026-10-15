@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Badge, Box, Button, Flex, Heading, IconButton, Text } from '@radix-ui/themes'
+import { Box, Button, Flex, Heading, IconButton, Text } from '@radix-ui/themes'
 import { ChevronUp, House } from 'lucide-react'
 import { AppBar } from '@/components/AppBar'
 import { OnboardingHelpButton } from '@/components/onboarding/OnboardingHelpButton'
