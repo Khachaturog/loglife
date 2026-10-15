@@ -344,6 +344,20 @@ auth.users (Supabase Auth)
 
 ---
 
+## Функция `delete_own_account`
+
+`public.delete_own_account()` — удаление своего аккаунта с профиля. Аргументов нет: берётся `auth.uid()`. `SECURITY DEFINER`, `search_path` пустой. `EXECUTE` только у `authenticated`.
+
+Каскад с `auth.users` не используется как единственный путь: у `record_answers.block_id` и у `block_id` в таблицах версий конфига нет `ON DELETE CASCADE`. Функция удаляет данные явно, в таком порядке:
+
+1. `record_answers`
+2. `block_config_select_option_versions`, `block_config_scale_versions`, `block_config_versions`
+3. `records`, `blocks`, `deeds`
+4. `pomodoro_sessions`, `pomodoro_projects`, `pomodoro_settings`
+5. `auth.users`
+
+---
+
 ## История изменений схемы
 
 | Миграция | Изменение |
@@ -366,3 +380,4 @@ auth.users (Supabase Auth)
 | `20261008` | Добавлена `deeds.record_header_pinned` (text[], закреплённые действия шапки записи) |
 | `20261009` | Таблицы `pomodoro_settings`, `pomodoro_projects`, `pomodoro_sessions` + RLS |
 | `20261015` | `pomodoro_sessions.actual_seconds` не короче 300; более короткие строки удалены |
+| `20261015` | Функция `delete_own_account`: удаление данных текущего пользователя и строки `auth.users` |

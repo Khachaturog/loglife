@@ -14,7 +14,8 @@
   box-sizing: border-box;
   padding: 8px 0;
   background: var(--color-panel-solid);
-  border-top: 1px solid var(--gray-a4);
+  border: 1px solid var(--gray-a4);
+  border-bottom: none;
   /* HIG: не меньше 16pt от контента до «опасных» зон; на вырезе — берём больший из отступов */
   padding-left: max(var(--space-2), env(safe-area-inset-left, 0px));
   padding-right: max(var(--space-2), env(safe-area-inset-right, 0px));
@@ -28,7 +29,7 @@
 .tabBar {
   flex: 1;
   display: flex;
-  gap: 8px;
+  gap: 4px;
   width: 100%;
   min-width: 0;
   align-items: stretch;

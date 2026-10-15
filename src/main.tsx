@@ -34,6 +34,7 @@ createRoot(document.getElementById('root')!).render(
       <Theme accentColor="indigo" grayColor="slate" radius="large" scaling="100%">
         <BrowserRouter basename={import.meta.env.BASE_URL}>
           <AuthProvider>
+            {/* Справка (openFlow) нужна на всех экранах после входа */}
             <OnboardingProvider>
               <App />
             </OnboardingProvider>

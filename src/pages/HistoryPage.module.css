@@ -1,0 +1,8 @@
+/* Над таббаром (60px + зазор), у правого края колонки 668px; на узком экране — 16px от края. */
+.scrollTop {
+  position: fixed;
+  z-index: 11;
+  bottom: calc(70px + env(safe-area-inset-bottom, 0px));
+  right: max(16px, calc((100vw - 668px) / 2 + 16px));
+  /* box-shadow: 0 2px 8px var(--black-a3); */
+}

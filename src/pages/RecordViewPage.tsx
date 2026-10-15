@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { Link, useParams, useNavigate, useLocation } from 'react-router-dom'
 import { AlertDialog, Badge, Box, Button, Card, Checkbox, CheckboxGroup, DropdownMenu, Flex, IconButton, Link as ThemeLink, Separator, Text, TextField } from '@radix-ui/themes'
@@ -25,6 +25,7 @@ import {
   type RecordHeaderActionId,
 } from '@/lib/record-header-actions'
 import layoutStyles from '@/styles/layout.module.css'
+import styles from '@/pages/RecordViewPage.module.css'
 
 function recordHeaderActionIcon(id: RecordHeaderActionId) {
   switch (id) {
@@ -49,24 +50,89 @@ function getBlockOptions(block: BlockRow): { id: string; label: string }[] {
 
 type ConfigVersionData = { scale?: { divisions: number; labels: (string | null)[] }; options?: { id: string; label: string; sort_order: number }[] }
 
-/** Просмотр ответа «Ссылка URL»: адрес кликабелен и открывается в новой вкладке. */
+/** Просмотр ответа «Ссылка URL»: одна строка с «…», клик открывает адрес в новой вкладке. */
 function UrlAnswerView({ raw }: { raw: string }) {
   const href = safeUrlHref(raw)
-  const wrap = { overflowWrap: 'anywhere' as const }
+  const trimmed = raw.trim()
   if (!href) {
     return (
-      <Text as="p" size="3" style={wrap}>
-        {raw.trim() === '' ? '—' : raw}
+      <Text as="p" size="3" className={styles.urlAnswer} title={trimmed === '' ? undefined : raw}>
+        {trimmed === '' ? '—' : raw}
       </Text>
     )
   }
   return (
-    <Text as="p" size="3" style={wrap}>
-      <ThemeLink href={href} size="3" underline="hover" target="_blank" rel="noopener noreferrer">
+    <Text as="p" size="3" className={styles.urlAnswer}>
+      <ThemeLink href={href} size="3" underline="hover" target="_blank" rel="noopener noreferrer" title={raw}>
         {raw}
       </ThemeLink>
     </Text>
   )
+}
+
+/** Видимый текст ответа для буфера. Пусто и «—» не копируем. */
+function copyableAnswerText(
+  value: ValueJson | null | undefined,
+  block: BlockRow,
+  optionsOverride?: { id: string; label: string }[],
+): string | null {
+  if (!value) return null
+  const text = formatAnswer(value, block, optionsOverride)
+  if (!text.trim() || text === '—') return null
+  return text
+}
+
+/**
+ * Копирование значения поля на просмотре.
+ * `corner` — правый верхний угол блока; `inline` — в ряду с бейджем, чтобы не перекрывать его.
+ */
+function CopyFieldButton({
+  text,
+  placement = 'corner',
+}: {
+  text: string
+  placement?: 'corner' | 'inline'
+}) {
+  const [copied, setCopied] = useState(false)
+  const timerRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current != null) window.clearTimeout(timerRef.current)
+    }
+  }, [])
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      // Буфер недоступен (небезопасный контекст) — кнопку не ломаем.
+      return
+    }
+    setCopied(true)
+    if (timerRef.current != null) window.clearTimeout(timerRef.current)
+    timerRef.current = window.setTimeout(() => setCopied(false), 1200)
+  }
+
+  const button = (
+    <IconButton
+      type="button"
+      size="1"
+      variant="classic"
+      color="gray"
+      radius="large"
+      className={placement === 'corner' ? styles.copyButton : undefined}
+      aria-label={copied ? 'Скопировано' : 'Копировать'}
+      onClick={() => void handleCopy()}
+    >
+      {copied ? <Check size={16} /> : <Copy size={16} />}
+    </IconButton>
+  )
+
+  if (placement === 'inline') {
+    return <span className={styles.copyButtonInlineSlot}>{button}</span>
+  }
+  return button
 }
 
 /** Несовпадение формы value_json с текущим типом/конфигом блока (в т.ч. после смены типа в деле). */
@@ -644,9 +710,9 @@ export function RecordViewPage() {
                 {isEditBlockDirty(block.id) && block.block_type !== 'yes_no' && (
                   <IconButton
                   type="button"
-                  size="3"
+                  size="2"
                   variant="ghost"
-                  color="red"
+                  color="gray"
                   radius="large"
                     onClick={() => resetEditBlock(block.id)}
                   >
@@ -793,11 +859,13 @@ export function RecordViewPage() {
         <Flex direction="column" gap="4" >
           <Card>
             <Flex direction="column" gap="3">
-              <Box>
+              <Box className={deed?.name?.trim() ? styles.fieldWithCopy : undefined}>
+                {deed?.name?.trim() ? <CopyFieldButton text={deed.name.trim()} /> : null}
                 <Text size="3" color="gray" weight="medium">Дело</Text>
                 <Text as="p" size="3">{deed?.name}</Text>
               </Box>
-              <Box>
+              <Box className={styles.fieldWithCopy}>
+                <CopyFieldButton text={formatRecordDateTimeDisplay(record.record_date, record.record_time)} />
                 <Text size="3" color="gray" weight="medium">Дата</Text>
                 <Text as="p" size="3">{formatRecordDateTimeDisplay(record.record_date, record.record_time)}</Text>
               </Box>
@@ -815,9 +883,11 @@ export function RecordViewPage() {
             const optionsOverride = versionConfig?.options?.map((o) => ({ id: o.id, label: o.label }))
 
             if (!outdated && !unfilled) {
+              const copyText = copyableAnswerText(value, block, optionsOverride)
               if (block.block_type === 'url' && value && 'url' in value) {
                 return (
-                  <Card key={block.id}>
+                  <Card key={block.id} className={copyText ? styles.fieldWithCopy : undefined}>
+                    {copyText && <CopyFieldButton text={copyText} />}
                     <Text size="3" color="gray" weight="medium">{block.title}</Text>
                     <UrlAnswerView raw={value.url} />
                   </Card>
@@ -826,7 +896,8 @@ export function RecordViewPage() {
               if (block.block_type === 'yes_no' && value) {
                 const done = (value as { yesNo: boolean }).yesNo === true
                 return (
-                  <Card key={block.id}>
+                  <Card key={block.id} className={copyText ? styles.fieldWithCopy : undefined}>
+                    {copyText && <CopyFieldButton text={copyText} />}
                     <Text size="3" color="gray" weight="medium">{block.title}</Text>
                     <Flex align="center" gap="2" mt="1">
                       <Checkbox size="3" disabled checked={done} />
@@ -836,9 +907,16 @@ export function RecordViewPage() {
                 )
               }
               return (
-                <Card key={block.id}>
+                <Card key={block.id} className={copyText ? styles.fieldWithCopy : undefined}>
+                  {copyText && <CopyFieldButton text={copyText} />}
                   <Text size="3" color="gray" weight="medium">{block.title}</Text>
-                  <Text as="p" size="3">{value ? formatAnswer(value, block, optionsOverride) : '—'}</Text>
+                  <Text
+                    as="p"
+                    size="3"
+                    className={block.block_type === 'text_paragraph' ? styles.answerText : undefined}
+                  >
+                    {copyText ?? '—'}
+                  </Text>
                 </Card>
               )
             }
@@ -846,22 +924,48 @@ export function RecordViewPage() {
             const currentOptions = getBlockOptions(block)
             const oldVal = value as ValueJson | undefined
             const draft = updateDraft[block.id] ?? (unfilled ? undefined : getMigratedValue(block, oldVal))
+            const copyText = unfilled ? null : copyableAnswerText(value, block, optionsOverride)
 
             return (
-              <Card key={block.id}>
-                <Flex align="baseline" gap="2">
-                  <Box flexGrow="1" minWidth="0">
-                    <Text size="3" color="gray" weight="medium" wrap="wrap">{block.title}</Text>
-                  </Box>
-                  <Flex gap="2" wrap="wrap" flexShrink="0">
-                    {outdated && (
-                      <Badge size="2" color="amber" variant="surface">Устарело</Badge>
-                    )}
-                    {unfilled && (
-                      <Badge size="2" color="orange" variant="surface">Не заполнено</Badge>
-                    )}
+              <Card key={block.id} className={copyText ? styles.fieldWithCopy : undefined}>
+                <Flex direction="column" gap="2">
+                  <Flex align="baseline" gap="2">
+                    <Box flexGrow="1" minWidth="0">
+                      <Text size="3" color="gray" weight="medium" wrap="wrap">{block.title}</Text>
+                    </Box>
+                    {/* Сброс в одной строке с бейджем: кнопка сдвигает бейдж, а не опускает поле новой строкой. */}
+                    <Flex align="center" gap="2" wrap="nowrap" flexShrink="0">
+                      {copyText && <CopyFieldButton text={copyText} placement="inline" />}
+                      {outdated && (
+                        <Badge 
+                        size="2" 
+                        color="amber" 
+                        variant="surface">
+                          Устарело
+                        </Badge>
+                      )}
+                      {unfilled && (
+                        <Badge 
+                        size="2" 
+                        color="orange" 
+                        variant="surface">
+                          Не заполнено
+                        </Badge>
+                      )}
+                      {updateDraft[block.id] != null && block.block_type !== 'yes_no' && (
+                        <Button
+                          type="button"
+                          size="1"
+                          variant="soft"
+                          color="gray"
+                          radius="large"
+                          onClick={() => clearUpdateDraft(block.id)}
+                        >
+                          <RotateCcw size={16} />
+                        </Button>
+                      )}
+                    </Flex>
                   </Flex>
-                </Flex>
                 {/* У незаполненного блока прочерк не нужен: бейдж и поле ввода уже показывают пустоту. */}
                 {!unfilled && (value && block.block_type === 'yes_no' ? (
                   <Flex align="center" gap="2" mt="1">
@@ -873,26 +977,15 @@ export function RecordViewPage() {
                     <Text size="3">{(value as { yesNo: boolean }).yesNo ? 'Выполнено' : 'Не выполнено'}</Text>
                   </Flex>
                 ) : (
-                  <Text as="p" size="3">{value ? formatAnswer(value, block, optionsOverride) : '—'}</Text>
+                  <Text
+                    as="p"
+                    size="3"
+                    className={block.block_type === 'text_paragraph' ? styles.answerText : undefined}
+                  >
+                    {value ? formatAnswer(value, block, optionsOverride) : '—'}
+                  </Text>
                 ))}
                 <Flex direction="column" gap="1">
-                  <Flex direction="row" align="center" gap="3" wrap="wrap">
-                    {/* <Flex direction="row" align="center" gap="1">
-                      <ArrowTopLeftIcon />
-                      <Text weight="medium" size="2">Обнови блок</Text>
-                    </Flex> */}
-                    {updateDraft[block.id] != null && block.block_type !== 'yes_no' && (
-                      <Button
-                        type="button"
-                        size="2"
-                        variant="ghost"
-                        color="gray"
-                        onClick={() => clearUpdateDraft(block.id)}
-                      >
-                        Сбросить
-                      </Button>
-                    )}
-                  </Flex>
                   {block.block_type === 'number' && (
                     <Flex gap="2" align="center">
                       <TextField.Root
@@ -1024,6 +1117,7 @@ export function RecordViewPage() {
                     </Text>
                   )}
                 </Flex>
+                </Flex>
               </Card>
             )
           })}
@@ -1038,8 +1132,10 @@ export function RecordViewPage() {
                     : null
                   const scaleConfig = versionConfig?.scale
                   const configStr = scaleConfig ? formatScaleConfig(scaleConfig) : null
+                  const answerBlock = block ?? ({} as BlockRow)
+                  const copyText = copyableAnswerText(ans.value_json, answerBlock, optionsOverride)
                   return (
-                    <Card key={ans.id}>
+                    <Card key={ans.id} className={copyText ? styles.fieldWithCopy : undefined}>
                       <Flex direction="column" gap="1">
                         <Flex align="start" gap="2">
                           <Box flexGrow="1" minWidth="0">
@@ -1047,12 +1143,19 @@ export function RecordViewPage() {
                               {title}
                             </Text>
                           </Box>
-                          <Box flexShrink="0">
+                          <Flex align="center" gap="2" wrap="nowrap" flexShrink="0">
+                            {copyText && <CopyFieldButton text={copyText} placement="inline" />}
                             <Badge size="3" color="red" variant="surface">Блок удалён</Badge>
-                          </Box>
+                          </Flex>
                         </Flex>
                         <Flex direction="row" align="center" gap="2" wrap="wrap">
-                          <Text as="p" size="3">{ans.value_json ? formatAnswer(ans.value_json, block ?? ({} as BlockRow), optionsOverride) : '—'}</Text>
+                          <Text
+                            as="p"
+                            size="3"
+                            className={block?.block_type === 'text_paragraph' ? styles.answerText : undefined}
+                          >
+                            {copyText ?? '—'}
+                          </Text>
                           <Text size="3" color="gray">·</Text>
                           {configStr && <Text as="p" size="3">Раньше было от 1 до {configStr}</Text>}
                         </Flex>

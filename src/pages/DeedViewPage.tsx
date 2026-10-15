@@ -386,33 +386,28 @@ export function DeedViewPage() {
             <Flex direction="row" gap="2" wrap="wrap" mb="2">
               {s.show_today ? (
                 <Card style={{ flex: '1' }}>
-                  <Flex direction="column" gap="1">
-                    <Text size="2" color="gray">Сегодня</Text>
-                    <Text size="4">
-                      {displayNumbers.today}
-                    </Text>
+                  <Flex direction="row" align="baseline" gap="1" justify="between">
+                    {/* Подпись заполняет ширину карточки, число остаётся у правого края. */}
+                    <Text as="p" size="2" color="gray">Сегодня</Text>
+                    <Text size="4">{displayNumbers.today}</Text>
                   </Flex>
                 </Card>
               ) : null}
 
               {s.show_month ? (
                 <Card style={{ flex: '1' }}>
-                  <Flex direction="column" gap="1">
-                    <Text size="2" color="gray">За месяц</Text>
-                    <Text size="4">
-                      {displayNumbers.month}
-                    </Text>
+                  <Flex direction="row" align="baseline" gap="1" justify="between">
+                    <Text as="p" size="2" color="gray">За месяц</Text>
+                    <Text size="4">{displayNumbers.month}</Text>
                   </Flex>
                 </Card>
               ) : null}
 
               {s.show_total ? (
                 <Card style={{ flex: '1' }}>
-                  <Flex direction="column" gap="1">
-                    <Text size="2" color="gray">Всего</Text>
-                    <Text size="4">
-                      {displayNumbers.total}
-                    </Text>
+                  <Flex direction="row" align="baseline" gap="1" justify="between">
+                    <Text as="p" size="2" color="gray">Всего</Text>
+                    <Text size="4">{displayNumbers.total}</Text>
                   </Flex>
                 </Card>
               ) : null}

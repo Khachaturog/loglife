@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link as RouterLink, useNavigate } from 'react-router-dom'
-import { Box, Button, DropdownMenu, Flex, Heading, IconButton, Link, RadioGroup, Text, TextField } from '@radix-ui/themes'
+import { AlertDialog, Box, Button, DropdownMenu, Flex, Heading, IconButton, Link, RadioGroup, Text, TextField } from '@radix-ui/themes'
 import { AppBar } from '@/components/AppBar'
 import { useOnboarding } from '@/lib/onboarding-context'
 import { Ellipsis, LogOut, CircleQuestionMark } from 'lucide-react'
@@ -14,6 +14,12 @@ import layoutStyles from '@/styles/layout.module.css'
 import styles from './ProfilePage.module.css'
 
 const MIN_PASSWORD_LENGTH = 6
+/** Слово подтверждения удаления аккаунта, сравнение без регистра. */
+const DELETE_ACCOUNT_PHRASE = 'удалить'
+
+function isDeleteAccountPhrase(value: string): boolean {
+  return value.trim().toLocaleLowerCase('ru') === DELETE_ACCOUNT_PHRASE
+}
 
 function monthAgo(): string {
   const d = new Date()
@@ -45,6 +51,14 @@ export function ProfilePage() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [passwordChanging, setPasswordChanging] = useState(false)
   const [passwordMessage, setPasswordMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+
+  // Удаление аккаунта: RPC только после ввода «УДАЛИТЬ», выход — только после успеха.
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [confirmText, setConfirmText] = useState('')
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const confirmInputRef = useRef<HTMLInputElement>(null)
+  const confirmMatches = isDeleteAccountPhrase(confirmText)
 
   async function handleSignOut() {
     await supabase.auth.signOut()
@@ -96,6 +110,35 @@ export function ProfilePage() {
       })
     } finally {
       setPasswordChanging(false)
+    }
+  }
+
+  function handleDeleteOpenChange(open: boolean) {
+    if (!open && deleting) return
+    setDeleteOpen(open)
+    if (!open) {
+      setConfirmText('')
+      setDeleteError(null)
+    }
+  }
+
+  async function handleDeleteAccount() {
+    if (!confirmMatches || deleting) return
+    setDeleting(true)
+    setDeleteError(null)
+    try {
+      const { error } = await supabase.rpc('delete_own_account')
+      if (error) {
+        setDeleteError(error.message)
+        return
+      }
+      // Выход после RPC: иначе auth.uid() пустой и функция ничего не удалит.
+      await supabase.auth.signOut()
+      navigate('/login')
+    } catch (e) {
+      setDeleteError(e instanceof Error ? e.message : 'Не удалось удалить аккаунт')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -255,6 +298,29 @@ export function ProfilePage() {
         </Flex>
       </Flex>
 
+      {/* Удаление аккаунта */}
+      <Flex direction="column" gap="2">
+        <Flex direction="column" gap="1">
+          <Heading as="h2" size="3">
+            Удаление аккаунта
+          </Heading>
+          <Text as="p" size="2" color="gray">
+            Дела, записи и сессии помодоро будут удалены без восстановления. Перед удалением можно скачать CSV.
+          </Text>
+        </Flex>
+        <Flex align="start">
+          <Button
+            type="button"
+            size="3"
+            color="red"
+            variant="soft"
+            onClick={() => setDeleteOpen(true)}
+          >
+            Удалить аккаунт
+          </Button>
+        </Flex>
+      </Flex>
+
       {/* Ссылки внизу профиля — по центру */}
       <Flex direction="column" gap="2" align="center" pt="2" pb="6">
         <Link href="#" size="3" underline="hover">
@@ -274,6 +340,59 @@ export function ProfilePage() {
       </Flex>
         </Flex>
       </Box>
+
+      <AlertDialog.Root open={deleteOpen} onOpenChange={handleDeleteOpenChange}>
+        <AlertDialog.Content
+          maxWidth="450px"
+          onOpenAutoFocus={(e) => {
+            e.preventDefault()
+            confirmInputRef.current?.focus({ preventScroll: true })
+          }}
+        >
+          <AlertDialog.Title>Удалить аккаунт?</AlertDialog.Title>
+          <AlertDialog.Description size="2">
+            Дела, записи и сессии помодоро будут удалены без восстановления. Чтобы подтвердить, введите УДАЛИТЬ.
+          </AlertDialog.Description>
+          <TextField.Root
+            ref={confirmInputRef}
+            mt="3"
+            size="3"
+            placeholder="УДАЛИТЬ"
+            value={confirmText}
+            autoComplete="off"
+            disabled={deleting}
+            onChange={(e) => setConfirmText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && confirmMatches && !deleting) {
+                e.preventDefault()
+                void handleDeleteAccount()
+              }
+            }}
+          />
+          {deleteError ? (
+            <Text as="p" color="red" size="2" mt="2">
+              {deleteError}
+            </Text>
+          ) : null}
+          <Flex gap="3" justify="end" mt="4">
+            <AlertDialog.Cancel>
+              <Button type="button" size="3" color="gray" variant="soft" disabled={deleting}>
+                Отмена
+              </Button>
+            </AlertDialog.Cancel>
+            <Button
+              type="button"
+              size="3"
+              color="red"
+              variant="classic"
+              disabled={!confirmMatches || deleting}
+              onClick={() => void handleDeleteAccount()}
+            >
+              {deleting ? 'Удаляю…' : 'Удалить'}
+            </Button>
+          </Flex>
+        </AlertDialog.Content>
+      </AlertDialog.Root>
     </Box>
   )
 }

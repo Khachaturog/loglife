@@ -1,7 +1,7 @@
 /**
  * Модалка превью «Было → Стало» при смене типа блока в редакторе дела.
  */
-import { Box, Button, Dialog, Flex, RadioGroup, Table, Text } from '@radix-ui/themes'
+import { Box, Button, Dialog, Flex, SegmentedControl, Table, Text } from '@radix-ui/themes'
 import { formatDate } from '@/lib/format-utils'
 import type { BlockTypeChangePreviewRow, DurationNumberUnit } from '@/lib/block-value-type-conversion'
 
@@ -44,7 +44,7 @@ export function BlockTypeChangePreviewDialog({
 }: Props) {
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Content maxWidth="700px" maxHeight="90vh" width="100%">
+      <Dialog.Content maxHeight="90vh" maxWidth="90vw">
         <Dialog.Title>Смена типа блока</Dialog.Title>
         <Dialog.Description size="2" mb="3">
           Вопрос: {blockTitle || 'Без названия'} · {fromTypeLabel} → {toTypeLabel}
@@ -52,48 +52,34 @@ export function BlockTypeChangePreviewDialog({
 
         {!supportsMigrate ? (
           <Text size="2" color="gray" mb="2">
-            Автоматический перенос ответов для целевого типа пока не выполняется — тип блока в базе обновится,
+            Автоматический перенос ответов для целевого типа пока не выполняется — тип блока в базе обновится, но
             записи могут отображаться как устаревшие до ручной актуализации.
           </Text>
         ) : null}
 
         {showDurationUnit ? (
-          <Box mb="3">
-            <Text size="2" weight="medium" mb="2" as="div">
-              Как переводить время в число?
-            </Text>
-            <RadioGroup.Root
+          <Flex direction="column" gap="3" mb="3">
+            <Flex direction="column" gap="1">
+              <Text size="2" weight="medium" as="p">
+                Как переводить время в число?
+              </Text>
+              <Text size="2" color="gray">
+                После конвертации не забудьте вручную указать единицу измерения
+              </Text>
+            </Flex>
+            {/* Единица конвертации duration → number: секунды, минуты или часы. */}
+            <SegmentedControl.Root
+              size="2"
+              variant="classic"
               value={durationUnit}
               onValueChange={(v) => onDurationUnitChange(v as DurationNumberUnit)}
+              style={{ width: '100%' }}
             >
-              <Flex direction="column" gap="2">
-                <Flex asChild align="center" gap="2">
-                  <label>
-                    <RadioGroup.Item value="seconds" />
-                    <Text as="span" size="2">
-                      В секундах
-                    </Text>
-                  </label>
-                </Flex>
-                <Flex asChild align="center" gap="2">
-                  <label>
-                    <RadioGroup.Item value="minutes" />
-                    <Text as="span" size="2">
-                      В минутах
-                    </Text>
-                  </label>
-                </Flex>
-                <Flex asChild align="center" gap="2">
-                  <label>
-                    <RadioGroup.Item value="hours" />
-                    <Text as="span" size="2">
-                      В часах
-                    </Text>
-                  </label>
-                </Flex>
-              </Flex>
-            </RadioGroup.Root>
-          </Box>
+              <SegmentedControl.Item value="hours">Часы</SegmentedControl.Item>
+              <SegmentedControl.Item value="minutes">Минуты</SegmentedControl.Item>
+              <SegmentedControl.Item value="seconds">Секунды</SegmentedControl.Item>
+            </SegmentedControl.Root>
+          </Flex>
         ) : null}
 
         {error ? (

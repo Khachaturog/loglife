@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Badge, Box, Button, Flex, Heading, Text } from '@radix-ui/themes'
-import { House } from 'lucide-react'
+import { Badge, Box, Button, Flex, Heading, IconButton, Text } from '@radix-ui/themes'
+import { ChevronUp, House } from 'lucide-react'
 import { AppBar } from '@/components/AppBar'
 import { OnboardingHelpButton } from '@/components/onboarding/OnboardingHelpButton'
 import { PageLoading } from '@/components/PageLoading'
@@ -16,6 +16,7 @@ import {
   readHistoryLoadedFrom,
 } from '@/lib/history-scroll-storage'
 import layoutStyles from '@/styles/layout.module.css'
+import styles from './HistoryPage.module.css'
 
 /** Первый экран — последние 7 календарных дней, включая сегодня. */
 const HISTORY_INITIAL_DAYS = 7
@@ -81,6 +82,8 @@ export function HistoryPage() {
   const [loadedFrom, setLoadedFrom] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  /** Кнопка «Наверх»: видна после прокрутки больше чем на один экран. */
+  const [showScrollTop, setShowScrollTop] = useState(false)
   /** Одно восстановление скролла за визит (после готовности списка в DOM). */
   const scrollRestoreDoneRef = useRef(false)
   const loadedFromRef = useRef<string | null>(null)
@@ -102,6 +105,11 @@ export function HistoryPage() {
   useEffect(() => {
     if (loading || error) return
     let ticking = false
+    // ignoreScrollRef на видимость не влияет: после восстановления позиции кнопка тоже должна появиться.
+    const syncScrollTop = () => {
+      const next = window.scrollY > window.innerHeight
+      setShowScrollTop((prev) => (prev === next ? prev : next))
+    }
     const onScroll = () => {
       const el = sentinelRef.current
       let cameFromBelow = false
@@ -111,6 +119,7 @@ export function HistoryPage() {
         cameFromBelow = sentinelWasBelowRef.current && inView
         sentinelWasBelowRef.current = rect.top >= window.innerHeight
       }
+      syncScrollTop()
       if (!ignoreScrollRef.current && cameFromBelow) loadOlderRef.current()
       if (ticking) return
       ticking = true
@@ -121,6 +130,7 @@ export function HistoryPage() {
     }
     window.addEventListener('scroll', onScroll, { passive: true })
     persistHistoryListScrollY()
+    syncScrollTop()
     const el = sentinelRef.current
     sentinelWasBelowRef.current = !!el && el.getBoundingClientRect().top >= window.innerHeight
     return () => window.removeEventListener('scroll', onScroll)
@@ -287,7 +297,7 @@ export function HistoryPage() {
           type="button"
           size="3"
           color="gray"
-          variant="surface"
+          variant="ghost"
           disabled={loadingMore}
           onClick={loadOlder}
         >
@@ -305,13 +315,12 @@ export function HistoryPage() {
         title="История"
         actions={
           <Flex gap="2" align="center">
-            <Badge 
-            size="3" 
+            <Text 
+            size="2" 
             color="gray" 
-            variant="soft" 
-            radius="full">
+            >
               {pluralRecords(badgeCount)}
-            </Badge>
+            </Text>
             <OnboardingHelpButton flowId="help_history" />
           </Flex>
         }
@@ -376,14 +385,13 @@ export function HistoryPage() {
                     <Text as="p" size="3" color="gray">
                       {formatHistoryGroupDate(date)}
                     </Text>
-                    <Badge
+                    <Text
+                    
                     size="2" 
-                    color="gray" 
-                    variant="soft"
-                    radius="full"
+                    color="gray"
                     >
                       {records.length}
-                    </Badge>
+                    </Text>
                   </Flex>
                   {records.map((rec) => (
                     <RecordCard
@@ -404,6 +412,20 @@ export function HistoryPage() {
           {olderControl}
         </Flex>
       )}
+      {showScrollTop ? (
+        <IconButton
+          type="button"
+          size="3"
+          color="gray"
+          variant="soft"
+          radius="full"
+          className={styles.scrollTop}
+          aria-label="Наверх"
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+        >
+          <ChevronUp size={16} />
+        </IconButton>
+      ) : null}
     </Box>
   )
 }

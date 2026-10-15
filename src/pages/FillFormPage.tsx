@@ -334,7 +334,7 @@ function FillFormEntry({
             : ({} as Record<string, string>)
         return (
           <Card key={block.id}>
-            <Flex direction="column" gap="1">
+            <Flex direction="column" gap="2">
               <Flex direction="row" align="baseline" gap="3" wrap="wrap" mr="2px">
                 <Text size="3" weight="medium" style={{ flex: 1, minWidth: 0 }}>
                   {block.title}
@@ -343,9 +343,9 @@ function FillFormEntry({
                 {answers[block.id] !== undefined && block.block_type !== 'yes_no' && (
                   <IconButton
                     type="button"
-                    size="3"
+                    size="2"
                     variant="ghost"
-                    color="red"
+                    color="gray"
                     radius="large"
                     aria-label={`Сбросить ${block.title}`}
                     onClick={() => {
@@ -467,7 +467,7 @@ function FillFormEntry({
                     selectRemountKey={`${draftKey}-${block.id}-fill-ss-${(answers[block.id] as { optionId?: string } | undefined)?.optionId ?? 'cleared'}`}
                   />
                   {showSelectRecentChips && (
-                    <Flex gap="1" wrap="wrap" mt="1">
+                    <Flex gap="1" wrap="wrap">
                       {selectChipIds!.map((optId) => (
                         <Button
                           key={optId}

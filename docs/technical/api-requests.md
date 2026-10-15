@@ -11,6 +11,7 @@
 | Auth | `getSession()` | — | AuthProvider (первая гидратация сессии), каждый вызов api |
 | Auth | `onAuthStateChange` | — | AuthProvider |
 | Auth | `signOut()` | — | ProfilePage |
+| Auth | `rpc('delete_own_account')` | deeds, blocks, records, record_answers, block_config_*, pomodoro_*, auth.users | ProfilePage |
 | api.deeds | `list()` | deeds | export-csv |
 | api.deeds | `listWithBlocks()` | deeds, blocks | DeedsListPage |
 | api.deeds | `get(id)` | deeds, blocks | DeedViewPage, FillFormPage, DeedFormPage, RecordViewPage, export-csv |
@@ -53,7 +54,21 @@
 ### `signOut()`
 
 - **Используется:** ProfilePage
-- **Когда:** по клику «Выйти»
+- **Когда:** по клику «Выйти»; также после успешного `delete_own_account` (не раньше — иначе `auth.uid()` в функции пустой)
+
+### `rpc('delete_own_account')`
+
+**POST** (PostgREST): `POST /rest/v1/rpc/delete_own_account`
+
+Функция `public.delete_own_account()` без аргументов. Выполняется от имени владельца (`SECURITY DEFINER`), удаляет только строку `auth.uid()`:
+
+1. ответы, версии конфигов блоков, записи, блоки и дела;
+2. сессии, проекты и настройки помодоро;
+3. `auth.users` (сессии и refresh-токены уходят вместе со строкой).
+
+`EXECUTE` только у роли `authenticated`. Выход из аккаунта на клиенте — после успешного ответа.
+
+**Используется:** ProfilePage — диалог «Удалить аккаунт?» после ввода слова «УДАЛИТЬ».
 
 ### Редирект после входа (`LoginPage`)
 
