@@ -18,6 +18,8 @@ auth.users (Supabase Auth)
 │  category · card_color · analytics_config      │
 │  quick_add_defaults_enabled                    │
 │  record_header_pinned                          │
+│  fill_counter_enabled                          │
+│  fill_counter_show_complete                    │
 │  created_at · updated_at                       │
 └────────────────────┬────────────────────────────┘
                      │ deed_id
@@ -73,6 +75,8 @@ auth.users (Supabase Auth)
 | `analytics_config` | jsonb | | Настройки отображения аналитики на карточке дела (см. ниже); `null` = дефолты в приложении |
 | `quick_add_defaults_enabled` | boolean | NOT NULL, DEFAULT false | Вкл. у пользователя: короткое «+» создаёт запись из дефолтов блоков, если дефолты полные и валидны |
 | `record_header_pinned` | text[] | NOT NULL, DEFAULT `{edit}` | До двух id действий в шапке записи, в порядке кнопок: `edit`, `new`, `duplicate`, `delete`, `help`. Пустой массив — только меню «⋯». Check: длина ≤ 2 и значения из этого списка |
+| `fill_counter_enabled` | boolean | NOT NULL, DEFAULT true | Счётчик «заполнено/всего» на карточке записи, если есть пустые поля |
+| `fill_counter_show_complete` | boolean | NOT NULL, DEFAULT false | Показывать счётчик и когда заполнены все поля. Учитывается только при включённом счётчике |
 | `created_at` | timestamptz | NOT NULL, DEFAULT now() | |
 | `updated_at` | timestamptz | NOT NULL, DEFAULT now() | |
 
@@ -429,3 +433,4 @@ auth.users (Supabase Auth)
 | `20261015` | `pomodoro_sessions.actual_seconds` не короче 300; более короткие строки удалены |
 | `20261015` | Функция `delete_own_account`: удаление данных текущего пользователя и строки `auth.users` |
 | `20261015` | Тип блока `image`; приватный бакет `record-images` (WebP до 24 КБ) и политики Storage по папке пользователя |
+| `20261021` | `deeds.fill_counter_enabled` (по умолчанию да) и `deeds.fill_counter_show_complete` (по умолчанию нет) |

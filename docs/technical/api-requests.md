@@ -15,8 +15,8 @@
 | api.deeds | `list()` | deeds | export-csv |
 | api.deeds | `listWithBlocks()` | deeds, blocks | DeedsListPage |
 | api.deeds | `get(id)` | deeds, blocks | DeedViewPage, FillFormPage, DeedFormPage, RecordViewPage, export-csv |
-| api.deeds | `create()` | deeds (в т.ч. `analytics_config`, `quick_add_defaults_enabled`, `record_header_pinned`), blocks | DeedFormPage |
-| api.deeds | `update()` | deeds (в т.ч. `analytics_config`, `quick_add_defaults_enabled`, `record_header_pinned`), blocks | DeedFormPage |
+| api.deeds | `create()` | deeds (в т.ч. `analytics_config`, `quick_add_defaults_enabled`, `record_header_pinned`, `fill_counter_enabled`, `fill_counter_show_complete`), blocks | DeedFormPage |
+| api.deeds | `update()` | deeds (в т.ч. `analytics_config`, `quick_add_defaults_enabled`, `record_header_pinned`, `fill_counter_enabled`, `fill_counter_show_complete`), blocks | DeedFormPage |
 | api.deeds | `applyBlockTypeChangeAndMigrateAnswers()` | blocks, record_answers, block_config_versions (+ дочерние при необходимости) | DeedFormPage (модалка смены типа блока) |
 | api.deeds | `delete()` | deeds | DeedViewPage |
 | api.deeds | `deleteBlock()` | deeds, blocks | DeedFormPage |
@@ -131,7 +131,7 @@ WHERE id = :id AND user_id = :uid
 ### `api.deeds.create(payload)`
 
 **Запросы:**
-1. `INSERT INTO deeds` — создание дела
+1. `INSERT INTO deeds` — создание дела, в том числе `fill_counter_enabled` и `fill_counter_show_complete`
 2. `INSERT INTO blocks` — для каждого блока (по умолчанию 1 блок): в т.ч. `default_value`, `default_value_enabled`, `recent_suggestions_enabled`, `show_in_preview`, jsonb `config` (для `single_select` — `singleSelectUi`: всегда `select`)
 
 **Используется:** DeedFormPage (создание)
@@ -141,7 +141,7 @@ WHERE id = :id AND user_id = :uid
 ### `api.deeds.update(id, payload)`
 
 **Запросы:**
-1. `UPDATE deeds` — emoji, name, description
+1. `UPDATE deeds` — emoji, name, description, в том числе `fill_counter_enabled` и `fill_counter_show_complete`
 2. При изменении блоков: `SELECT blocks`, `UPDATE`/`INSERT`/soft-delete блоков (в `config` у `single_select` при сохранении пишется `singleSelectUi: "select"`)
 
 **Используется:** DeedFormPage (редактирование)
@@ -226,7 +226,7 @@ LIMIT :limit
 1. `SELECT records, record_answers, deeds, blocks` — записи пользователя. `fromDate` / `toDate` (YYYY-MM-DD), если заданы, ограничивают `record_date` включительно
 
 ```sql
-SELECT *, record_answers(*), deeds!inner(emoji, name, blocks(*))
+SELECT *, record_answers(*), deeds!inner(emoji, name, blocks(*), fill_counter_enabled, fill_counter_show_complete)
 FROM records
 WHERE deeds.user_id = auth.uid()
   AND record_date >= :fromDate -- только если fromDate задан

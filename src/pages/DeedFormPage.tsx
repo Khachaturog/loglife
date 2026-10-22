@@ -38,7 +38,7 @@ import { PageLoading } from "@/components/PageLoading";
 import { DurationInput } from "@/components/DurationInput";
 import { EmojiPickerButton } from "@/components/EmojiPickerButton";
 import scaleSegmentedStyles from "@/components/ScaleSegmentedControl.module.css";
-import { ArrowDownRight, ArrowDown, ArrowUp, Check, ChevronDown, Copy, X, Pencil, Plus, CircleQuestionMark, Trash2 } from "lucide-react";
+import { ArrowDownRight, ArrowDown, ArrowUp, Check, ChevronDown, Copy, CornerDownRight, X, Pencil, Plus, CircleQuestionMark, Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
 import {
   RADIX_COLOR_9_PRESETS,
@@ -827,6 +827,9 @@ export function DeedFormPage() {
   );
   /** Быстрое «+» на карточке и экране дела — только при полных дефолтах и явном включении. */
   const [quickAddDefaultsEnabled, setQuickAddDefaultsEnabled] = useState(false);
+  /** Счётчик на карточке записи. Второй флаг хранится и когда счётчик выключен. */
+  const [fillCounterEnabled, setFillCounterEnabled] = useState(true);
+  const [fillCounterShowComplete, setFillCounterShowComplete] = useState(false);
   /** Кнопки в шапке записи этого дела. Порядок массива — порядок кнопок. */
   const [recordHeaderPinned, setRecordHeaderPinned] = useState<RecordHeaderActionId[]>(
     () => [...DEFAULT_RECORD_HEADER_PINNED],
@@ -983,6 +986,8 @@ export function DeedFormPage() {
         setBlocks(mapped.length ? mapped : [createDefaultBlock()]);
         setAnalyticsConfig(normalizeDeedAnalyticsConfig(deed.analytics_config));
         setQuickAddDefaultsEnabled(deed.quick_add_defaults_enabled ?? false);
+        setFillCounterEnabled(deed.fill_counter_enabled !== false);
+        setFillCounterShowComplete(deed.fill_counter_show_complete === true);
         setRecordHeaderPinned(normalizeRecordHeaderPinned(deed.record_header_pinned));
       })
       .catch((e) => {
@@ -1213,6 +1218,8 @@ export function DeedFormPage() {
           analytics_config: analyticsPayload,
           quick_add_defaults_enabled: quickAddPayload,
           record_header_pinned: normalizeRecordHeaderPinned(recordHeaderPinned),
+          fill_counter_enabled: fillCounterEnabled,
+          fill_counter_show_complete: fillCounterShowComplete,
           blocks: payloadBlocks,
         });
         navigate(`/deeds/${deed.id}`);
@@ -1226,6 +1233,8 @@ export function DeedFormPage() {
           analytics_config: analyticsPayload,
           quick_add_defaults_enabled: quickAddPayload,
           record_header_pinned: normalizeRecordHeaderPinned(recordHeaderPinned),
+          fill_counter_enabled: fillCounterEnabled,
+          fill_counter_show_complete: fillCounterShowComplete,
           blocks: payloadBlocks,
         });
         closeOpenedForm();
@@ -2037,6 +2046,38 @@ export function DeedFormPage() {
                   Какие ответы показывать в строке записи на странице дела и во вкладке «История».
                 </Text>
               </Flex>
+              <CheckboxCards.Root
+                size="2"
+                columns="1"
+                gap="2"
+                value={fillCounterEnabled ? ["counter"] : []}
+                onValueChange={(next) => setFillCounterEnabled(next.includes("counter"))}
+              >
+                <CheckboxCards.Item value="counter">Счётчик (1/5)</CheckboxCards.Item>
+              </CheckboxCards.Root>
+              {/* Значение второго чекбокса не сбрасываем: при повторном включении счётчика оно вернётся. */}
+              {fillCounterEnabled ? (
+                  <Flex pl="4" align="center" gap="3" width="100%">
+                    <Box flexShrink="0">
+                      <CornerDownRight size={16} />
+                    </Box>
+                    {/* Корень — сетка по содержимому; без flex: 1 карточка не доходит до правого края. */}
+                    <CheckboxCards.Root
+                      size="2"
+                      columns="1"
+                      gap="2"
+                      style={{ flex: 1, minWidth: 0 }}
+                      value={fillCounterShowComplete ? ["complete"] : []}
+                      onValueChange={(next) => setFillCounterShowComplete(next.includes("complete"))}
+                    >
+                      <CheckboxCards.Item value="complete">
+                        <Text as="span" style={{ minWidth: 0, flex: 1, overflowWrap: "anywhere" }}>
+                          Показывать, если заполнены все поля (5/5)
+                        </Text>
+                      </CheckboxCards.Item>
+                    </CheckboxCards.Root>
+                  </Flex>
+              ) : null}
               <CheckboxCards.Root
                 size="2"
                 columns="1"

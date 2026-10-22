@@ -25,8 +25,16 @@ const HISTORY_OLDER_CHUNK_DAYS = 30
 
 type HistoryListRow = Awaited<ReturnType<typeof api.deeds.listAllRecordsWithDeedInfo>>[number]
 
+type HistoryDeed = {
+  emoji: string
+  name: string
+  blocks?: BlockRow[]
+  fill_counter_enabled?: boolean
+  fill_counter_show_complete?: boolean
+}
+
 type RecordWithDeed = (RecordRow & { record_answers?: { block_id: string; value_json: unknown }[] }) & {
-  deed?: { emoji: string; name: string; blocks?: BlockRow[] }
+  deed?: HistoryDeed
 }
 
 function historyLoadErrorMessage(e: unknown): string {
@@ -40,11 +48,19 @@ function historyLoadErrorMessage(e: unknown): string {
 /** Ответ API списка истории → состояние страницы (сортировка: новые выше). */
 function mapListToRecordsWithDeed(records: HistoryListRow[]): RecordWithDeed[] {
   const all: RecordWithDeed[] = records.map((r) => {
-    const row = r as { deeds?: { emoji: string; name: string; blocks?: BlockRow[] } | null; deed?: { emoji: string; name: string; blocks?: BlockRow[] } | null }
+    const row = r as { deeds?: HistoryDeed | null; deed?: HistoryDeed | null }
     const deedInfo = row.deeds ?? row.deed
     return {
       ...r,
-      deed: deedInfo ? { emoji: deedInfo.emoji ?? '', name: deedInfo.name ?? '', blocks: deedInfo.blocks ?? [] } : undefined,
+      deed: deedInfo
+        ? {
+            emoji: deedInfo.emoji ?? '',
+            name: deedInfo.name ?? '',
+            blocks: deedInfo.blocks ?? [],
+            fill_counter_enabled: deedInfo.fill_counter_enabled,
+            fill_counter_show_complete: deedInfo.fill_counter_show_complete,
+          }
+        : undefined,
     }
   })
   all.sort((a, b) => {
@@ -401,6 +417,8 @@ export function HistoryPage() {
                     deedPrefix={rec.deed ? { emoji: rec.deed.emoji, name: rec.deed.name } : undefined}
                     linkState={{ from: 'history' }}
                     previewGray
+                    fillCounterEnabled={rec.deed?.fill_counter_enabled !== false}
+                    fillCounterShowComplete={rec.deed?.fill_counter_show_complete === true}
                     onRecordDeleted={refetchHistoryRecords}
                     />
                   ))}

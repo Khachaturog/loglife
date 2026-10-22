@@ -472,6 +472,8 @@ export function DeedViewPage() {
                     record={rec}
                     blocks={deed.blocks ?? []}
                     hideAvatar
+                    fillCounterEnabled={deed.fill_counter_enabled !== false}
+                    fillCounterShowComplete={deed.fill_counter_show_complete === true}
                     onRecordDeleted={() => {
                       if (!id) return
                       void api.deeds.records(id).then(setRecords)

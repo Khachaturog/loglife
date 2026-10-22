@@ -169,6 +169,10 @@ export interface DeedRow {
   quick_add_defaults_enabled?: boolean
   /** До двух действий, закреплённых кнопками в шапке записи. Пустой массив — только меню «⋯». */
   record_header_pinned?: RecordHeaderActionId[]
+  /** Счётчик «заполнено/всего» на карточке, если есть пустые поля. Нет поля — показывать. */
+  fill_counter_enabled?: boolean
+  /** Показывать счётчик и при полной записи (5/5). Нет поля — не показывать. */
+  fill_counter_show_complete?: boolean
   created_at: string
   updated_at: string
   blocks?: BlockRow[]

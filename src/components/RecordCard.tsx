@@ -7,6 +7,7 @@ import {
   blocksIncludedInRecordPreview,
   formatAnswerPreviewSegment,
   formatYesNoOnlyRecordListPreview,
+  recordFillProgress,
 } from '@/lib/format-utils'
 import { triggerHaptic } from '@/lib/haptics'
 import { persistHistoryListScrollY } from '@/lib/history-scroll-storage'
@@ -33,6 +34,10 @@ type RecordCardProps = {
   linkState?: Record<string, unknown>
   /** Серый текст превью — только на странице «История»; на странице дела оставляем обычный цвет */
   previewGray?: boolean
+  /** Счётчик «заполнено/всего». Нет пропа — как у нового дела: показывать, если есть пустые. */
+  fillCounterEnabled?: boolean
+  /** Показывать и 5/5. Нет пропа — не показывать. */
+  fillCounterShowComplete?: boolean
   /** После удаления записи на сервере — обновить список на родителе (История / дело) */
   onRecordDeleted?: () => void | Promise<void>
 }
@@ -49,6 +54,8 @@ export function RecordCard({
   hideAvatar = false,
   linkState,
   previewGray = false,
+  fillCounterEnabled = true,
+  fillCounterShowComplete = false,
   onRecordDeleted,
 }: RecordCardProps) {
   const navigate = useNavigate()
@@ -85,6 +92,12 @@ export function RecordCard({
       .join(' · ') || '—')
 
   const timeStr = record.record_time?.slice(0, 5) ?? ''
+  // Правый нижний угол: по флагам дела. Выключенный счётчик не рисуем; 5/5 — только если это включили.
+  const fill = fillCounterEnabled
+    ? recordFillProgress(blocks, record.record_answers ?? [], {
+        showWhenComplete: fillCounterShowComplete,
+      })
+    : null
   // Квадрат слева — первая картинка, включённая в превью. В текст строки она не входит.
   const recordImage = firstRecordImagePath(blocks, record.record_answers ?? [])
 
@@ -174,9 +187,26 @@ export function RecordCard({
                       {preview}
                     </Text>
                   </Flex>
-                  <Text as="p" size="2" color="gray">
-                    {timeStr}
-                  </Text>
+                  {fill ? (
+                    <Flex direction="column" align="end" alignSelf="stretch" flexShrink="0" gap="1">
+                      <Text as="p" size="2" color="gray">
+                        {timeStr}
+                      </Text>
+                      <Text
+                        as="p"
+                        size="2"
+                        color="gray"
+                        mt="auto"
+                        aria-label={`Заполнено ${fill.filled} из ${fill.total}`}
+                      >
+                        {fill.filled}/{fill.total}
+                      </Text>
+                    </Flex>
+                  ) : (
+                    <Text as="p" size="2" color="gray">
+                      {timeStr}
+                    </Text>
+                  )}
                 </Flex>
               </Link>
             </Card>

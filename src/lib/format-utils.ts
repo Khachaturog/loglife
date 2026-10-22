@@ -1,4 +1,5 @@
 import { formatNumberWithUnit, readMeasurementUnit } from '@/lib/measurement-unit'
+import { imagePathFromValue } from '@/lib/record-image'
 import { formatScaleAnswerForDisplay } from '@/lib/scale-block'
 import type { BlockConfig, BlockRow, ValueJson } from '@/types/database'
 
@@ -287,4 +288,64 @@ export function formatAnswerPreviewSegment(
   if (block.block_type === 'image') return ''
   if ('text' in value && (value.text ?? '').trim() === '') return ''
   return formatAnswer(value, block)
+}
+
+/**
+ * Ответ, который реально сохранился бы: те же «пустые» значения, что отбрасывает форма.
+ * «Нет» у «Да/Нет» — ответ. Число 0, пустой текст, пустой выбор, пустая ссылка и картинка без файла — нет.
+ */
+function isFilledStoredAnswer(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  if ('number' in value) {
+    const n = (value as { number?: unknown }).number
+    return typeof n === 'number' && n !== 0
+  }
+  if ('text' in value) {
+    const text = (value as { text?: unknown }).text
+    return typeof text === 'string' && text.trim() !== ''
+  }
+  if ('optionId' in value) {
+    const id = (value as { optionId?: unknown }).optionId
+    return typeof id === 'string' && id.length > 0
+  }
+  if ('optionIds' in value) {
+    const ids = (value as { optionIds?: unknown }).optionIds
+    return Array.isArray(ids) && ids.length > 0
+  }
+  if ('scaleValue' in value) {
+    const n = (value as { scaleValue?: unknown }).scaleValue
+    return typeof n === 'number' && n >= 1
+  }
+  if ('yesNo' in value) return typeof (value as { yesNo?: unknown }).yesNo === 'boolean'
+  if ('durationHms' in value) {
+    const hms = (value as { durationHms?: unknown }).durationHms
+    return typeof hms === 'string' && /^\d{2}:\d{2}:\d{2}$/.test(hms)
+  }
+  if ('url' in value) {
+    const url = (value as { url?: unknown }).url
+    return typeof url === 'string' && url.trim() !== ''
+  }
+  if ('imagePath' in value) return imagePathFromValue(value) != null
+  return false
+}
+
+/**
+ * Сколько текущих блоков дела уже с ответом.
+ * Скрытые из превью входят в знаменатель, удалённые — нет. Дата и время не блоки и сюда не попадают.
+ * `null` — показывать нечего: блоков нет, или пустых полей нет и `showWhenComplete` не задан.
+ */
+export function recordFillProgress(
+  blocks: ReadonlyArray<Pick<BlockRow, 'id' | 'deleted_at'>>,
+  recordAnswers: ReadonlyArray<{ block_id: string; value_json: unknown }>,
+  options?: { showWhenComplete?: boolean },
+): { filled: number; total: number } | null {
+  const active = blocks.filter((block) => !block.deleted_at)
+  if (active.length === 0) return null
+  const filledIds = new Set<string>()
+  for (const answer of recordAnswers) {
+    if (isFilledStoredAnswer(answer.value_json)) filledIds.add(answer.block_id)
+  }
+  const filled = active.filter((block) => filledIds.has(block.id)).length
+  if (filled === active.length && !options?.showWhenComplete) return null
+  return { filled, total: active.length }
 }

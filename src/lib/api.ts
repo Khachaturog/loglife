@@ -320,6 +320,8 @@ export const api = {
       analytics_config?: DeedAnalyticsConfigV1 | null
       quick_add_defaults_enabled?: boolean
       record_header_pinned?: RecordHeaderActionId[]
+      fill_counter_enabled?: boolean
+      fill_counter_show_complete?: boolean
       blocks?: Partial<BlockRow>[]
     }): Promise<DeedRow> {
       const uid = await getUserIdOrThrow()
@@ -338,6 +340,12 @@ export const api = {
           }),
           ...(payload.record_header_pinned !== undefined && {
             record_header_pinned: payload.record_header_pinned,
+          }),
+          ...(payload.fill_counter_enabled !== undefined && {
+            fill_counter_enabled: payload.fill_counter_enabled,
+          }),
+          ...(payload.fill_counter_show_complete !== undefined && {
+            fill_counter_show_complete: payload.fill_counter_show_complete,
           }),
         })
         .select()
@@ -388,6 +396,8 @@ export const api = {
       analytics_config?: DeedAnalyticsConfigV1 | null
       quick_add_defaults_enabled?: boolean
       record_header_pinned?: RecordHeaderActionId[]
+      fill_counter_enabled?: boolean
+      fill_counter_show_complete?: boolean
       blocks?: Partial<BlockRow>[]
     }): Promise<void> {
       const uid = await getUserIdOrThrow()
@@ -406,6 +416,12 @@ export const api = {
           }),
           ...(payload.record_header_pinned !== undefined && {
             record_header_pinned: payload.record_header_pinned,
+          }),
+          ...(payload.fill_counter_enabled !== undefined && {
+            fill_counter_enabled: payload.fill_counter_enabled,
+          }),
+          ...(payload.fill_counter_show_complete !== undefined && {
+            fill_counter_show_complete: payload.fill_counter_show_complete,
           }),
         })
         .eq('id', id)
@@ -697,11 +713,11 @@ export const api = {
     async listAllRecordsWithDeedInfo(range?: {
       fromDate?: string
       toDate?: string
-    }): Promise<(RecordRow & { record_answers?: RecordAnswerRow[]; deeds?: { emoji: string; name: string; blocks?: BlockRow[] } | null })[]> {
+    }): Promise<(RecordRow & { record_answers?: RecordAnswerRow[]; deeds?: { emoji: string; name: string; blocks?: BlockRow[]; fill_counter_enabled?: boolean; fill_counter_show_complete?: boolean } | null })[]> {
       const uid = await getUserIdOrThrow()
       let query = supabase
         .from('records')
-        .select('*, record_answers(*), deeds!inner(emoji, name, blocks(*))')
+        .select('*, record_answers(*), deeds!inner(emoji, name, blocks(*), fill_counter_enabled, fill_counter_show_complete)')
         .eq('deeds.user_id', uid)
       if (range?.fromDate) query = query.gte('record_date', range.fromDate)
       if (range?.toDate) query = query.lte('record_date', range.toDate)
@@ -712,7 +728,7 @@ export const api = {
         console.error(error.message ?? 'Ошибка загрузки истории')
         throw error
       }
-      return (data ?? []) as (RecordRow & { record_answers?: RecordAnswerRow[]; deeds?: { emoji: string; name: string; blocks?: BlockRow[] } | null })[]
+      return (data ?? []) as (RecordRow & { record_answers?: RecordAnswerRow[]; deeds?: { emoji: string; name: string; blocks?: BlockRow[]; fill_counter_enabled?: boolean; fill_counter_show_complete?: boolean } | null })[]
     },
 
     /** Ближайшая record_date строго раньше beforeDate. null — более старых записей нет. */
