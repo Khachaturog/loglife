@@ -649,7 +649,7 @@ export function RecordViewPage() {
               variant="classic"
               radius="full"
               size="3"
-              disabled={saving}
+              loading={saving}
               onClick={handleSave}
               aria-label={saving ? 'Сохранение…' : 'Сохранить'}
             >
@@ -740,7 +740,9 @@ export function RecordViewPage() {
                     color="indigo"
                     radius="full"
                     size="3"
+                    // Явный disabled отменяет автоблокировку loading, поэтому сохранение тоже держим здесь.
                     disabled={!hasAnyValidDraft || savingOutdated}
+                    loading={savingOutdated}
                     onClick={handleUpdateAllOutdated}
                     aria-label={savingOutdated ? 'Сохранение…' : 'Актуализировать'}
                   >

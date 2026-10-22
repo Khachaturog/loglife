@@ -980,7 +980,7 @@ export function FillFormPage() {
                 radius="full"
                 variant="classic"
                 type="submit"
-                disabled={saving}
+                loading={saving}
                 aria-label={
                   saving ? 'Сохранение…' : multiple ? 'Добавить записи' : 'Добавить запись'
                 }
