@@ -437,6 +437,8 @@ export function RecordViewPage() {
   }
 
   function isDraftValidForBlock(block: BlockRow, draft: ValueJson | undefined): boolean {
+    // Фото при актуализации живёт в pendingImages, а не в updateDraft — как на FillForm.
+    if (block.block_type === 'image' && pendingImages[block.id]) return true
     if (draft == null) return false
     switch (block.block_type) {
       case 'number': {
@@ -471,7 +473,7 @@ export function RecordViewPage() {
         return typeof u === 'string' && u.trim().length > 0
       }
       case 'image':
-        return !!pendingImages[block.id] || imagePathFromValue(draft) != null
+        return imagePathFromValue(draft) != null
       default:
         return false
     }
