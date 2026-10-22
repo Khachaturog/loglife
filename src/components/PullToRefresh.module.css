@@ -1,0 +1,45 @@
+/* Колонка экрана. transform вешаем только на время тяги: постоянный transform ломает sticky AppBar. */
+.root {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.settling {
+  transition: transform 0.28s ease;
+}
+
+.settling .indicator {
+  transition: height 0.28s ease;
+}
+
+/* Сидит над колонкой и при сдвиге вниз заполняет открывшийся зазор. */
+.indicator {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 8px;
+  box-sizing: border-box;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 11;
+}
+
+.live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

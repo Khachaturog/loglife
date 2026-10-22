@@ -1,0 +1,29 @@
+/*
+ * Фильтр категорий на главной.
+ * Шире 768px кнопки переносятся (wrap у Flex).
+ * На мобильном — одна строка: скролл внутри ряда, страница по горизонтали не растёт.
+ */
+@media (max-width: 768px) {
+  div.categoryRow {
+    flex-wrap: nowrap;
+    /* Иначе min-content ряда (сумма кнопок) растянет колонку страницы. */
+    min-width: 0;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    /* До края экрана: у pageContainer по 16px, первая и последняя кнопки на линии контента. */
+    margin-left: -16px;
+    margin-right: -16px;
+    padding-left: 16px;
+    padding-right: 16px;
+    scrollbar-width: none;
+  }
+
+  div.categoryRow::-webkit-scrollbar {
+    display: none;
+  }
+
+  div.categoryRow > button {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+}

@@ -3,11 +3,13 @@ import { Link } from 'react-router-dom'
 import { Box, Button, DropdownMenu, Flex, Grid, Heading, IconButton, Text } from '@radix-ui/themes'
 import { AppBar } from '@/components/AppBar'
 import { PageLoading } from '@/components/PageLoading'
+import { PullToRefresh } from '@/components/PullToRefresh'
 import { PageErrorState } from '@/components/PageErrorState'
 import { api } from '@/lib/api'
 import { DeedCard } from '@/components/DeedCard'
 import type { DeedWithBlocks } from '@/types/database'
 import layoutStyles from '@/styles/layout.module.css'
+import styles from './DeedsListPage.module.css'
 import type { RecordRow, RecordAnswerRow } from '@/types/database'
 import { ChevronsUpDown, Ellipsis, List, Grid3x3, Plus, CircleQuestionMark } from 'lucide-react'
 import { useOnboarding } from '@/lib/onboarding-context'
@@ -91,41 +93,50 @@ export function DeedsListPage() {
     }
   }, [viewMode])
 
-  // --- Загрузка дел и записей ---
+  // Первый заход — полный экран. Жест вниз вызывает ту же загрузку без этого флага и без экрана ошибки.
+  const loadDeeds = useCallback(async (mode: 'initial' | 'refresh', isCancelled?: () => boolean) => {
+    if (mode === 'initial') {
+      setDeedsLoading(true)
+      setError(null)
+    }
+    try {
+      const data = await api.deeds.listWithBlocks()
+      if (isCancelled?.()) return
+      // Список показываем сразу, счётчики за сегодня — вторым запросом.
+      setDeeds(data)
+      if (data.length === 0) {
+        setRecordsByDeedId({})
+        setRecordsLoading(false)
+        return
+      }
+      // При обновлении жестом числа на карточках остаются, пока не придёт ответ.
+      if (mode === 'initial') setRecordsLoading(true)
+      const byId = await api.deeds.recordsByDeedIds(data.map((d) => d.id), {
+        skipDeedCheck: true,
+        recordDate: todayLocalISO(),
+      })
+      if (isCancelled?.()) return
+      setRecordsByDeedId(byId)
+    } catch (e: unknown) {
+      if (isCancelled?.()) return
+      if (mode === 'initial') {
+        const message = e instanceof Error ? e.message : 'Ошибка загрузки'
+        setError(message)
+      }
+    } finally {
+      if (isCancelled?.()) return
+      if (mode === 'initial') setDeedsLoading(false)
+      setRecordsLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
     let cancelled = false
-    api.deeds
-      .listWithBlocks()
-      .then((data) => {
-        if (cancelled) return null
-        // Показываем список дел немедленно, не ждём второго запроса
-        setDeeds(data)
-        setDeedsLoading(false)
-        if (data.length === 0) {
-          setRecordsLoading(false)
-        } else {
-          setRecordsLoading(true)
-        }
-        return api.deeds.recordsByDeedIds(data.map((d) => d.id), {
-          skipDeedCheck: true,
-          recordDate: todayLocalISO(),
-        })
-      })
-      .then((byId) => {
-        // Записи приходят позже — счётчики обновятся без перерисовки всего списка
-        if (cancelled || !byId) return
-        setRecordsByDeedId(byId)
-        setRecordsLoading(false)
-      })
-      .catch((e) => {
-        if (!cancelled) {
-          setError(e?.message ?? 'Ошибка загрузки')
-          setDeedsLoading(false)
-          setRecordsLoading(false)
-        }
-      })
+    void loadDeeds('initial', () => cancelled)
     return () => { cancelled = true }
-  }, [])
+  }, [loadDeeds])
+
+  const refreshDeeds = useCallback(() => loadDeeds('refresh'), [loadDeeds])
 
   // --- Вычисляемые данные ---
   // Уникальные категории из дел, «Без категории» в конце
@@ -206,6 +217,7 @@ export function DeedsListPage() {
 
   // --- Основной контент ---
   return (
+    <PullToRefresh onRefresh={refreshDeeds}>
     <Box
       className={layoutStyles.pageContainer}
       style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}
@@ -286,7 +298,7 @@ export function DeedsListPage() {
 
       {/* Фильтр по категориям (скрыт, если нет дел или категорий) */}
       {deeds.length > 0 && categories.length > 0 && (
-        <Flex gap="1" mb="4" wrap="wrap">
+        <Flex gap="1" mb="4" wrap="wrap" className={styles.categoryRow}>
           <Button
             type="button"
             color='gray'
@@ -375,5 +387,6 @@ export function DeedsListPage() {
         )
       )}
     </Box>
+    </PullToRefresh>
   )
 }
