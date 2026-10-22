@@ -5,6 +5,7 @@ import { ChevronUp, House } from 'lucide-react'
 import { AppBar } from '@/components/AppBar'
 import { OnboardingHelpButton } from '@/components/onboarding/OnboardingHelpButton'
 import { PageLoading } from '@/components/PageLoading'
+import { PullToRefresh } from '@/components/PullToRefresh'
 import { api } from '@/lib/api'
 import { RecordCard } from '@/components/RecordCard'
 import type { BlockRow, RecordRow } from '@/types/database'
@@ -203,20 +204,23 @@ export function HistoryPage() {
     return () => { cancelled = true }
   }, [])
 
-  const refetchHistoryRecords = useCallback(() => {
+  // Жест вниз обновляет уже открытое окно дат, счётчик и флаг «есть раньше». Хвост и scrollY не сбрасываем.
+  const refetchHistoryRecords = useCallback(async () => {
     const from = loadedFromRef.current
     if (!from) return
-    void Promise.all([
-      api.deeds.listAllRecordsWithDeedInfo({ fromDate: from }),
-      api.deeds.countAllRecords().catch(() => null),
-    ])
-      .then(([records, count]) => {
-        setRecordsWithDeed(mapListToRecordsWithDeed(records))
-        if (count != null) setTotalCount(count)
-      })
-      .catch((e: unknown) => {
-        console.error(e instanceof Error ? e.message : e)
-      })
+    try {
+      const [records, count, olderDate] = await Promise.all([
+        api.deeds.listAllRecordsWithDeedInfo({ fromDate: from }),
+        api.deeds.countAllRecords().catch(() => null),
+        api.deeds.oldestRecordDateBefore(from),
+      ])
+      setRecordsWithDeed(mapListToRecordsWithDeed(records))
+      if (count != null) setTotalCount(count)
+      setHasMore(olderDate != null)
+    } catch (e: unknown) {
+      // Ошибка жеста и обновления после удаления не стирает уже показанный список.
+      console.error(e instanceof Error ? e.message : e)
+    }
   }, [])
 
   const loadOlder = useCallback(() => {
@@ -309,6 +313,7 @@ export function HistoryPage() {
 
   // --- Основной контент ---
   return (
+    <PullToRefresh onRefresh={refetchHistoryRecords} disabled={loadingMore}>
     <Box
       className={layoutStyles.pageContainer}>
       <AppBar
@@ -427,5 +432,6 @@ export function HistoryPage() {
         </IconButton>
       ) : null}
     </Box>
+    </PullToRefresh>
   )
 }

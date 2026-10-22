@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { Link, useParams, useNavigate, useLocation } from 'react-router-dom'
 import { AlertDialog, Badge, Box, Button, Card, Checkbox, CheckboxGroup, DropdownMenu, Flex, IconButton, Link as ThemeLink, Separator, Text, TextField } from '@radix-ui/themes'
@@ -9,6 +9,7 @@ import { SingleSelectAnswerField } from '@/components/SingleSelectAnswerField'
 import { FillFormNumberStepper } from '@/components/FillFormNumberStepper'
 import { NumberUnitMark } from '@/components/NumberUnitField'
 import { PageLoading } from '@/components/PageLoading'
+import { PullToRefresh } from '@/components/PullToRefresh'
 import { BriefcaseBusiness, Check, Copy, Ellipsis, Settings, Pencil, Plus, CircleQuestionMark, RotateCcw, Trash2 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { answersFromRecord } from '@/lib/answers-from-record'
@@ -212,52 +213,64 @@ export function RecordViewPage() {
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
 
-  useEffect(() => {
+  const editingRef = useRef(false)
+  editingRef.current = editing
+  const recordIdRef = useRef(recordId)
+  recordIdRef.current = recordId
+
+  // Первый заход включает полный экран. Жест обновляет запись, дело и конфиги, не трогая черновик правки.
+  const loadRecord = useCallback(async (mode: 'initial' | 'refresh', isCancelled?: () => boolean) => {
     if (!recordId) return
+    const requestId = recordId
+    if (mode === 'initial') setLoading(true)
+    try {
+      const rec = await api.records.get(recordId)
+      if (isCancelled?.() || recordIdRef.current !== requestId) return
+      if (!rec) {
+        if (mode === 'refresh' && editingRef.current) return
+        setRecord(null)
+        return
+      }
+      const versionIds = (rec.record_answers ?? [])
+        .map((a) => (a as RecordAnswerRow & { config_version_id?: string | null }).config_version_id)
+        .filter((v): v is string => !!v)
+      const [d, configMap] = await Promise.all([
+        api.deeds.get(rec.deed_id, { includeDeletedBlocks: true }),
+        versionIds.length ? api.records.getConfigForVersions(versionIds) : Promise.resolve({}),
+      ])
+      if (isCancelled?.() || recordIdRef.current !== requestId) return
+      if (mode === 'refresh' && editingRef.current) return
+      setRecord(rec)
+      setRecordDate(rec.record_date)
+      setRecordTime(rec.record_time?.slice(0, 5) ?? '')
+      setAnswers(answersFromRecord(rec))
+      if (d) setDeed(d)
+      setConfigByVersion(configMap)
+    } catch (e: unknown) {
+      if (isCancelled?.() || recordIdRef.current !== requestId) return
+      if (mode === 'initial') {
+        console.error(e instanceof Error ? e.message : 'Ошибка загрузки записи')
+        navigate('/', { replace: true })
+      }
+    } finally {
+      if (mode === 'initial' && !isCancelled?.() && recordIdRef.current === requestId) setLoading(false)
+    }
+  }, [navigate, recordId])
+
+  useEffect(() => {
     let cancelled = false
-    setLoading(true)
-    api.records
-      .get(recordId)
-      .then((rec) => {
-        if (!rec || cancelled) return
-        setRecord(rec)
-        setRecordDate(rec.record_date)
-        setRecordTime(rec.record_time?.slice(0, 5) ?? '')
-        setAnswers(answersFromRecord(rec))
-        return rec
-      })
-      .then(async (rec) => {
-        if (!rec || cancelled) return
-        const deedId = rec.deed_id
-        const [d, configMap] = await Promise.all([
-          api.deeds.get(deedId, { includeDeletedBlocks: true }),
-          (() => {
-            const ids = (rec.record_answers ?? [])
-              .map((a) => (a as RecordAnswerRow & { config_version_id?: string | null }).config_version_id)
-              .filter((v): v is string => !!v)
-            return ids.length ? api.records.getConfigForVersions(ids) : Promise.resolve({})
-          })(),
-        ])
-        if (!cancelled && d) setDeed(d)
-        if (!cancelled) setConfigByVersion(configMap)
-      })
-      .catch((e) => {
-        if (!cancelled) {
-          console.error(e?.message ?? 'Ошибка загрузки записи')
-          navigate('/', { replace: true })
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
+    void loadRecord('initial', () => cancelled)
     return () => { cancelled = true }
-  }, [recordId, navigate])
+  }, [loadRecord])
+
+  const refreshRecord = useCallback(() => loadRecord('refresh'), [loadRecord])
 
   // Вход в правку с списка (RecordCard): после загрузки записи снимаем флаг из state, иначе повторный заход откроет редактор снова.
   useEffect(() => {
     if (!record) return
     const st = location.state as { openEditing?: boolean; from?: string } | null | undefined
     if (!st?.openEditing) return
+    editingRef.current = true
     setEditAnswersBaseline(structuredClone(answersFromRecord(record)))
     setEditing(true)
     navigate(
@@ -315,6 +328,7 @@ export function RecordViewPage() {
       }
       setEditAnswersBaseline(null)
       clearAllPendingImages()
+      editingRef.current = false
       setEditing(false)
     } catch (err: unknown) {
       console.error(err instanceof Error ? err.message : 'Ошибка сохранения')
@@ -605,6 +619,7 @@ export function RecordViewPage() {
   function runHeaderAction(actionId: RecordHeaderActionId) {
     switch (actionId) {
       case 'edit':
+        editingRef.current = true
         setEditAnswersBaseline(structuredClone(answers))
         setEditing(true)
         return
@@ -625,6 +640,7 @@ export function RecordViewPage() {
   }
 
   return (
+    <PullToRefresh onRefresh={refreshRecord} disabled={editing}>
     <Box className={layoutStyles.pageContainer} >
       <AppBar
         backHref={editing ? undefined : backLink}
@@ -637,6 +653,7 @@ export function RecordViewPage() {
                 setRecordTime(record.record_time?.slice(0, 5) ?? '')
                 setEditAnswersBaseline(null)
                 clearAllPendingImages()
+                editingRef.current = false
                 setEditing(false)
               }
             : undefined
@@ -1325,5 +1342,6 @@ export function RecordViewPage() {
         </AlertDialog.Content>
       </AlertDialog.Root>
     </Box>
+    </PullToRefresh>
   )
 }
