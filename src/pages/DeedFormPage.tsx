@@ -1366,7 +1366,7 @@ export function DeedFormPage() {
               size="3"
               variant="classic"
               radius="full"
-              disabled={saving}
+              loading={saving}
               onClick={() => formRef.current?.requestSubmit()}
               aria-label={saving ? "Сохранение…" : "Сохранить дело"}
             >

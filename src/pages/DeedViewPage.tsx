@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
 import { AlertDialog, Box, Button, Card, DropdownMenu, Flex, Heading, IconButton, Separator, Text } from '@radix-ui/themes'
 import { DeedActivityHeatmap } from '@/components/DeedActivityHeatmap'
@@ -6,6 +6,7 @@ import { DeedDescriptionText } from '@/components/DeedDescriptionText'
 import { AppBar } from '@/components/AppBar'
 import { useOnboarding } from '@/lib/onboarding-context'
 import { PageLoading } from '@/components/PageLoading'
+import { PullToRefresh } from '@/components/PullToRefresh'
 import { Check, Ellipsis, Plus, Pencil, Trash2, CircleQuestionMark, RefreshCw } from 'lucide-react'
 import { api } from '@/lib/api'
 import { RecordCard } from '@/components/RecordCard'
@@ -64,25 +65,38 @@ export function DeedViewPage() {
     }
   }, [])
 
-  // --- Загрузка дела и записей ---
-  useEffect(() => {
+  // Смена id не должна применить ответ жеста, начатого на предыдущем деле.
+  const deedIdRef = useRef(id)
+  deedIdRef.current = id
+
+  // Первый заход — полный экран (loading с первого рендера). Жест этот флаг не включает.
+  const loadDeed = useCallback(async (mode: 'initial' | 'refresh', isCancelled?: () => boolean) => {
     if (!id) return
-    let cancelled = false
-    Promise.all([api.deeds.get(id), api.deeds.records(id)])
-      .then(([deedData, recordsData]) => {
-        if (!cancelled) {
-          setDeed(deedData ?? null)
-          setRecords(recordsData)
-        }
-      })
-      .catch((e) => {
-        if (!cancelled) setError(e?.message ?? 'Ошибка загрузки')
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-    return () => { cancelled = true }
+    const requestId = id
+    try {
+      const [deedData, recordsData] = await Promise.all([api.deeds.get(id), api.deeds.records(id)])
+      if (isCancelled?.() || deedIdRef.current !== requestId) return
+      setDeed(deedData ?? null)
+      setRecords(recordsData)
+      setError(null)
+    } catch (e: unknown) {
+      if (isCancelled?.() || deedIdRef.current !== requestId) return
+      if (mode === 'initial') {
+        const message = e instanceof Error ? e.message : 'Ошибка загрузки'
+        setError(message)
+      }
+    } finally {
+      if (mode === 'initial' && !isCancelled?.() && deedIdRef.current === requestId) setLoading(false)
+    }
   }, [id])
+
+  useEffect(() => {
+    let cancelled = false
+    void loadDeed('initial', () => cancelled)
+    return () => { cancelled = true }
+  }, [loadDeed])
+
+  const refreshDeed = useCallback(() => loadDeed('refresh'), [loadDeed])
 
   // --- Удаление дела (подтверждение через AlertDialog) ---
   async function confirmDeleteDeed() {
@@ -254,6 +268,7 @@ export function DeedViewPage() {
 
   // --- Основной контент ---
   return (
+    <PullToRefresh onRefresh={refreshDeed} disabled={addingRecord || deleteOpen}>
     <Box className={layoutStyles.pageContainer}>
       <AppBar
         backHref="/"
@@ -517,5 +532,6 @@ export function DeedViewPage() {
         </AlertDialog.Content>
       </AlertDialog.Root>
     </Box>
+    </PullToRefresh>
   )
 }
