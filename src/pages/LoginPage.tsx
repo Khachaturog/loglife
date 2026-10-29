@@ -21,6 +21,15 @@ import { supabase } from '@/lib/supabase'
  * Стили только через Radix Themes (без локальных оверрайдов).
  */
 /**
+ * Куда вернуть из письма подтверждения.
+ * На GitHub Pages `origin` — это `https://user.github.io` без `/loglife/`, и такая ссылка открывает 404.
+ * `BASE_URL` в проде равен базовому пути сборки, локально — `/`.
+ */
+function authEmailRedirectUrl(): string {
+  return new URL(import.meta.env.BASE_URL, window.location.origin).href
+}
+
+/**
  * Куда увести после успешного входа. Профиль не используем как цель — после логина открываем главную,
  * иначе при редиректе с /login?redirect=/profile пользователь снова попадал бы на вкладку «Профиль».
  */
@@ -112,6 +121,8 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [passwordVisible, setPasswordVisible] = useState(false)
   const [passwordConfirmVisible, setPasswordConfirmVisible] = useState(false)
+  /** Почта, на которую ушло письмо. Пока задана — вместо формы экран «Проверь почту». */
+  const [pendingConfirmEmail, setPendingConfirmEmail] = useState<string | null>(null)
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -133,9 +144,24 @@ export function LoginPage() {
     setLoading(true)
     try {
       if (isSignUp) {
-        const { error: err } = await supabase.auth.signUp({ email: email.trim(), password })
+        const trimmedEmail = email.trim()
+        const { data, error: err } = await supabase.auth.signUp({
+          email: trimmedEmail,
+          password,
+          options: {
+            // Полный адрес приложения, включая base GitHub Pages. Origin без пути даёт 404.
+            emailRedirectTo: authEmailRedirectUrl(),
+          },
+        })
         if (err) throw err
-        navigate(redirectTo)
+        // Сессия сразу — подтверждение почты выключено, можно входить.
+        if (data.session) {
+          navigate(redirectTo)
+          return
+        }
+        // Сессии нет: письмо отправлено (или почта уже занята, и Supabase это не раскрывает).
+        // Не уходим на / — гостя оттуда снова вернёт на /login.
+        setPendingConfirmEmail(trimmedEmail)
       } else {
         const { error: err } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
         if (err) throw err
@@ -159,6 +185,17 @@ export function LoginPage() {
     })
   }
 
+  /** С экрана «Проверь почту» обратно к форме входа, без остатка паролей регистрации. */
+  function returnToLogin() {
+    setPendingConfirmEmail(null)
+    setIsSignUp(false)
+    setPassword('')
+    setPasswordConfirm('')
+    setError(null)
+    setPasswordVisible(false)
+    setPasswordConfirmVisible(false)
+  }
+
   const fieldColor = error ? ('crimson' as const) : undefined
 
   return (
@@ -172,6 +209,32 @@ export function LoginPage() {
     >
       <Box width="100%" maxWidth="400px">
         <Card>
+          {pendingConfirmEmail ? (
+            <Flex direction="column" gap="4" p="4">
+              <Flex direction="column" align="center" gap="1" mb="3">
+                <Heading as="h1" size="6" weight="bold" align="center">
+                  Проверь почту
+                </Heading>
+                <Text size="2" color="gray" align="center">
+                  Мы отправили на {pendingConfirmEmail} ссылку для подтверждения регистрации. Перейди по ней,
+                  чтобы завершить регистрацию.
+                </Text>
+              </Flex>
+              <Text size="2" color="gray" align="center">
+                <Link
+                  size="2"
+                  href="#"
+                  underline="hover"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    returnToLogin()
+                  }}
+                >
+                  Вернуться ко входу
+                </Link>
+              </Text>
+            </Flex>
+          ) : (
           <form onSubmit={handleSubmit}>
             <Flex direction="column" gap="4" p="4">
               <Flex direction="column" align="center" gap="1" mb="3">
@@ -277,6 +340,7 @@ export function LoginPage() {
               </Text>
             </Flex>
           </form>
+          )}
         </Card>
       </Box>
 
