@@ -12,6 +12,7 @@ import {
   Text,
   TextField,
 } from '@radix-ui/themes'
+import { authErrorMessage } from '@/lib/auth-error-message'
 import { useAuth } from '@/lib/auth-context'
 import { supabase } from '@/lib/supabase'
 
@@ -142,7 +143,7 @@ export function LoginPage() {
         navigate(redirectTo)
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Ошибка входа')
+      setError(authErrorMessage(err, isSignUp ? 'signup' : 'login'))
     } finally {
       setLoading(false)
     }
