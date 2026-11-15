@@ -33,6 +33,8 @@ import {
   AUTO_GROW_TEXTAREA_MIN_TWO_LINES_PX,
 } from "@/components/AutoGrowTextArea";
 import { AppBar } from "@/components/AppBar";
+import { DeedTemplatePicker } from "@/components/DeedTemplatePicker";
+import { createBlocksFromTemplate, type DeedTemplate } from "@/lib/deed-templates";
 import { OnboardingHelpButton } from "@/components/onboarding/OnboardingHelpButton";
 import { PageLoading } from "@/components/PageLoading";
 import { DurationInput } from "@/components/DurationInput";
@@ -801,6 +803,8 @@ export function DeedFormPage() {
   /** «Другое»: серый на кнопке пикера, пока не меняли нативный color input */
   const [cardColorPickerPristine, setCardColorPickerPristine] = useState(true);
   const [blocks, setBlocks] = useState<UiBlock[]>([createDefaultBlock()]);
+  const [templatePickerOpen, setTemplatePickerOpen] = useState(isNew);
+  const [pendingTemplate, setPendingTemplate] = useState<DeedTemplate | "blank" | null>(null);
   /**
    * Снимок location.state на маунте: вкладка и куда вернуться после сохранения.
    */
@@ -879,6 +883,31 @@ export function DeedFormPage() {
     setSelectOptionFieldErrors([]);
     setSelectBlocksNoOptions([]);
     setBlockDefaultErrorIndices([]);
+  }
+
+  function applyTemplate(template: DeedTemplate | "blank") {
+    const chosen = template === "blank" ? null : template;
+    setName(chosen?.name ?? "");
+    setEmoji(chosen?.emoji ?? "📋");
+    setDescription(chosen?.description ?? "");
+    setCategory(chosen?.category ?? "");
+    setCategoryCustom(chosen ? !allCategories.includes(chosen.category) : false);
+    setBlocks(chosen ? createBlocksFromTemplate(chosen) : [createDefaultBlock()]);
+    setAnalyticsConfig({ ...DEFAULT_DEED_ANALYTICS_CONFIG });
+    setQuickAddDefaultsEnabled(false);
+    setEditorTab("deed");
+    clearAllSubmitValidation();
+    setPendingTemplate(null);
+    setTemplatePickerOpen(false);
+    window.scrollTo(0, 0);
+  }
+
+  function chooseTemplate(template: DeedTemplate | "blank") {
+    // Каталог можно открыть повторно. Не заменяем заполненный черновик без подтверждения.
+    const hasDraft = name.trim() !== "" || description.trim() !== "" || category !== "" ||
+      emoji !== "📋" || JSON.stringify(blocks) !== JSON.stringify([createDefaultBlock()]);
+    if (hasDraft) setPendingTemplate(template);
+    else applyTemplate(template);
   }
 
   /** Числовые блоки для выбора в сводке и heatmap (порядок формы). */
@@ -1351,12 +1380,35 @@ export function DeedFormPage() {
     );
   }
 
+  if (isNew && templatePickerOpen) {
+    return (
+      <Box className={layoutStyles.pageContainer}>
+        <AppBar title="Новое дело" backHref="/" />
+        <DeedTemplatePicker onChoose={chooseTemplate} onBlank={() => chooseTemplate("blank")} />
+        <AlertDialog.Root open={pendingTemplate !== null} onOpenChange={(open) => { if (!open) setPendingTemplate(null); }}>
+          <AlertDialog.Content maxWidth="480px">
+            <AlertDialog.Title>Заменить данные дела?</AlertDialog.Title>
+            <AlertDialog.Description>
+              {pendingTemplate === "blank"
+                ? "Название, описание, категория и вопросы будут очищены для создания дела с нуля. Изменения в этих полях будут потеряны."
+                : `Название, описание, категория и вопросы будут заменены шаблоном «${pendingTemplate?.name}». Изменения в этих полях будут потеряны.`}
+            </AlertDialog.Description>
+            <Flex gap="3" mt="4" justify="end" wrap="wrap">
+              <AlertDialog.Cancel><Button type="button" size="3" variant="surface" color="gray">Отмена</Button></AlertDialog.Cancel>
+              <AlertDialog.Action><Button type="button" size="3" variant="surface" onClick={() => { if (pendingTemplate) applyTemplate(pendingTemplate); }}>Заменить</Button></AlertDialog.Action>
+            </Flex>
+          </AlertDialog.Content>
+        </AlertDialog.Root>
+      </Box>
+    );
+  }
+
   return (
     <Box className={layoutStyles.pageContainer}>
       <AppBar
-        backHref={openedFromRecord.returnToRecordId ? undefined : id ? `/deeds/${id}` : "/"}
-        onBack={openedFromRecord.returnToRecordId ? closeOpenedForm : undefined}
-        backButtonIcon="close"
+        backHref={isNew || openedFromRecord.returnToRecordId ? undefined : `/deeds/${id}`}
+        onBack={isNew ? () => { setTemplatePickerOpen(true); window.scrollTo(0, 0); } : openedFromRecord.returnToRecordId ? closeOpenedForm : undefined}
+        backButtonIcon={isNew ? "arrow" : "close"}
         title={isNew ? "Новое дело" : "Редактирование дела"}
         actions={
           <Flex gap="2" align="center">
