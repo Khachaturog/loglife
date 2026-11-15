@@ -1,0 +1,27 @@
+.templateCard {
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.templateCard:hover {
+  background: var(--gray-a2);
+}
+
+.templateCard:focus-visible {
+  outline: 2px solid var(--accent-8);
+  outline-offset: 2px;
+}
+
+.cardContent {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+
+
+.closeButton {
+  flex-shrink: 0;
+}

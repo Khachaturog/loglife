@@ -5,6 +5,7 @@ import { AppBar } from '@/components/AppBar'
 import { useOnboarding } from '@/lib/onboarding-context'
 import { Ellipsis, LogOut, CircleQuestionMark } from 'lucide-react'
 import { DatePicker } from '@/components/DatePicker'
+import { authErrorMessage } from '@/lib/auth-error-message'
 import { useAuth } from '@/lib/auth-context'
 import { supabase } from '@/lib/supabase'
 import { exportAllToCsv, downloadCsv } from '@/lib/export-csv'
@@ -97,7 +98,7 @@ export function ProfilePage() {
     try {
       const { error } = await supabase.auth.updateUser({ password: newPassword })
       if (error) {
-        setPasswordMessage({ type: 'error', text: error.message })
+        setPasswordMessage({ type: 'error', text: authErrorMessage(error, 'password') })
         return
       }
       setPasswordMessage({ type: 'success', text: 'Пароль успешно изменён' })
@@ -106,7 +107,7 @@ export function ProfilePage() {
     } catch (e) {
       setPasswordMessage({
         type: 'error',
-        text: e instanceof Error ? e.message : 'Не удалось изменить пароль',
+        text: authErrorMessage(e, 'password'),
       })
     } finally {
       setPasswordChanging(false)
