@@ -22,11 +22,11 @@
 | api.deeds | `deleteBlock()` | deeds, blocks | DeedFormPage |
 | api.deeds | `records(deedId)` | deeds, records, record_answers | DeedViewPage, DeedFormPage (модалка смены типа), export-csv |
 | api.deeds | `recentRecords(deedId, limit?)` | deeds, records, record_answers | FillFormPage |
-| api.deeds | `recordsByDeedIds(ids, { recordDate? })` | records, record_answers | DeedsListPage (на главной `record_date` = сегодня) |
+| api.deeds | `recordsByDeedIds(ids, { recordDate?, fromDate?, toDate? })` | records, record_answers | DeedsListPage (список и карточки — `record_date` = сегодня; календарь — диапазон месяца) |
 | api.deeds | `listAllRecordsWithDeedInfo({ fromDate?, toDate? })` | records, record_answers, deeds | HistoryPage (диапазон `record_date`, оба края включительно) |
 | api.deeds | `oldestRecordDateBefore(beforeDate)` | records, deeds | HistoryPage (есть ли записи старше границы) |
 | api.deeds | `countAllRecords()` | records, deeds | HistoryPage (бейдж, без тел ответов) |
-| api.deeds | `createRecord()` | deeds, records, record_answers | FillFormPage, DeedCard, DeedViewPage (быстрое добавление из дефолтов) |
+| api.deeds | `createRecord()` | deeds, records, record_answers | FillFormPage, DeedCard, DeedViewPage, DeedsCalendarView (быстрое добавление из дефолтов) |
 | api.records | `get(id)` | records, record_answers, deeds | RecordViewPage |
 | api.records | `update()` | records, record_answers, deeds | RecordViewPage |
 | api.pomodoro | `getSettings()` | pomodoro_settings | PomodoroPage |
@@ -262,17 +262,19 @@ ORDER BY record_date DESC, record_time DESC
 
 **Запросы:**
 1. Без `skipDeedCheck`: `SELECT deeds` — оставить только id текущего пользователя
-2. `SELECT records, record_answers` — записи по этим делам. Если передан `recordDate` (YYYY-MM-DD) — только эта дата
+2. `SELECT records, record_answers` — записи по этим делам. Если передан `recordDate` (YYYY-MM-DD) — только эта дата. Иначе, если заданы `fromDate` и/или `toDate`, диапазон `record_date` включительно. Без границ — вся история
 
 ```sql
 SELECT *, record_answers(*)
 FROM records
 WHERE deed_id IN (:ids)
   AND record_date = :recordDate -- только если recordDate задан
+  AND record_date >= :fromDate -- только если recordDate не задан и fromDate задан
+  AND record_date <= :toDate -- только если recordDate не задан и toDate задан
 ORDER BY record_date DESC, record_time DESC
 ```
 
-**Используется:** DeedsListPage — второй запрос после списка дел и обновление одной карточки после быстрого «+»; оба раза с `recordDate` = локальное «сегодня» и `skipDeedCheck: true` (проверка deeds не нужна, RLS на records остаётся).
+**Используется:** DeedsListPage — второй запрос после списка дел и обновление одной карточки после быстрого «+» (оба раза с `recordDate` = локальное «сегодня» и `skipDeedCheck: true`). Вид «Календарь» — тот же метод с `fromDate`/`toDate` на выбранный месяц и `skipDeedCheck: true`. Проверка deeds не нужна, RLS на records остаётся.
 
 ---
 
@@ -322,8 +324,9 @@ ORDER BY record_date DESC, record_time DESC
 |---|--------|---------|
 | 1 | listWithBlocks | deeds, blocks |
 | 2 | recordsByDeedIds (`record_date` = сегодня) | records, record_answers |
+| 3 | только вид «Календарь»: recordsByDeedIds (`record_date` от первого до последнего дня месяца) | records, record_answers |
 
-**Итого:** 2 запроса
+**Итого:** 2 запроса в списке и карточках; в календаре ещё один запрос на выбранный месяц (и повтор при смене месяца, категории или отметке одного дела).
 
 ---
 
@@ -453,6 +456,6 @@ INSERT INTO pomodoro_sessions (
 
 | Страница | Количество запросов | Комментарий |
 |----------|---------------------|-------------|
-| DeedsListPage | 2 | listWithBlocks + recordsByDeedIds за сегодня |
+| DeedsListPage | 2 или 3 | listWithBlocks + recordsByDeedIds за сегодня; в виде «Календарь» ещё диапазон месяца |
 | HistoryPage | 3 | 7 дней + проба более старой даты + count; хвост и порции по 30 дней отдельно |
 | export-csv | 1 + 2N | list + get×N + records×N (потенциал для оптимизации) |

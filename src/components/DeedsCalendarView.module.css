@@ -1,0 +1,504 @@
+/* Сетка месяца. Вертикальный скролл внутренний, чтобы липли шапка столбцов и колонка дат.
+   Горизонтальный скролл — только в режиме «с прокруткой». «По ширине» сжимает столбцы в экран. */
+
+.calendar {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* Небольшой зазор над TabBar. Больше раздувает пустоту под листом. */
+.calendarWithSheet {
+  padding-bottom: 8px;
+}
+
+.scroller {
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border-radius: var(--radius-3);
+}
+
+.hideScrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.hideScrollbar::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.scrollerFit {
+  overflow-x: hidden;
+}
+
+.table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.tableScroll {
+  width: max-content;
+  min-width: 100%;
+}
+
+.tableFit {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.table th,
+.table td {
+  padding: 0;
+  height: 36px;
+  vertical-align: middle;
+  background: var(--color-background);
+  font-variant-numeric: tabular-nums;
+  transition: background-color 180ms ease;
+}
+
+.colHead,
+.corner {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  text-align: center;
+  font-weight: 500;
+}
+
+.table th.colHead,
+.table th.corner {
+  background: var(--gray-2);
+}
+
+.corner,
+.dateCell {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  /* Впритык к «18 ср»: лишняя ширина читалась как отступ справа на ховере. */
+  width: 4rem;
+  min-width: 4rem;
+  max-width: 4rem;
+  text-align: left;
+}
+
+.corner {
+  z-index: 3;
+}
+
+.tableScroll .colHead,
+.tableScroll .cell {
+  min-width: 4.75rem;
+  max-width: 6.5rem;
+}
+
+.tableFit .colHead,
+.tableFit .cell {
+  min-width: 0;
+  max-width: none;
+  width: auto;
+}
+
+.colHeadLabel {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 4px;
+}
+
+.cell {
+  text-align: center;
+}
+
+.cellButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 36px;
+  margin: 0;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: background-color 140ms ease, transform 140ms ease;
+}
+
+@media (hover: hover) {
+  .cellButton:hover {
+    background: var(--gray-a3);
+  }
+}
+
+.cellButton:active:not(:disabled) {
+  background: var(--gray-a4);
+  transform: scale(0.94);
+}
+
+.dateCell .dateButton {
+  justify-content: flex-start;
+  /* Слева столько же, сколько сверху и снизу у плашки внутри строки 36px. */
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+.dateCell .dateButton:active:not(:disabled) {
+  transform: none;
+}
+
+.cellText {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Средняя точка в шрифте сидит ниже оптического центра строки. */
+.cellDot {
+  overflow: visible;
+  transform: translateY(-2px);
+}
+
+/* Пустая ячейка сегодня: красная звёздочка чуть меньше серой точки. */
+.todayStar {
+  display: block;
+  color: var(--red-9);
+  /* font-size: 14px;
+  line-height: 1;
+  transform: translateY(-1px); */
+}
+
+.weekend td,
+.weekend .dateCell {
+  background: var(--gray-2);
+}
+
+.dayOpen td,
+.dayOpen .dateCell {
+  background: var(--amber-3);
+}
+
+.dayOpen .dateCell {
+  border-radius: 10px 0 0 10px;
+}
+
+.dayOpen td:last-child {
+  border-radius: 0 10px 10px 0;
+}
+
+.future .dateNumText,
+.future .dateWeek,
+.future .cellText,
+.future .cellText * {
+  color: var(--gray-8);
+}
+
+.future .cellButton,
+.future .cellButton:hover,
+.future .cellButton:active,
+.future .cellButton:disabled {
+  background: transparent;
+  cursor: default;
+  opacity: 1;
+}
+
+/* Число и буква всегда в одних слотах. Красный фон — абсолютный слой, строку не раздвигает. */
+.dateLabel {
+  display: grid;
+  grid-template-columns: 1.75rem auto;
+  align-items: center;
+  column-gap: 6px;
+}
+
+.dateNum {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+}
+
+.dateNumMark {
+  position: absolute;
+  inset: 0;
+  border-radius: 7px;
+  background: var(--red-9);
+}
+
+.dateNumText,
+.dateNumTextToday,
+.dateWeek {
+  font-size: 13px;
+  line-height: 1;
+}
+
+.dateNumText,
+.dateWeek {
+  color: var(--gray-11);
+}
+
+.dateNumText,
+.dateNumTextToday {
+  position: relative;
+  z-index: 1;
+}
+
+.dateNumTextToday {
+  display: block;
+  width: 26px;
+  color: var(--red-contrast);
+  font-weight: 600;
+  line-height: 22px;
+  text-align: center;
+  /* Цифры в шрифте сидят ниже геометрического центра плашки. */
+  transform: translateY(-1px);
+}
+
+.dock {
+  position: relative;
+  z-index: 3;
+  flex: none;
+  width: auto;
+  box-sizing: border-box;
+  /* 4px от краёв колонки и от нижнего бара, чтобы панель не прилипала. */
+  margin: 0 4px 4px;
+  padding: 6px;
+  border-radius: 16px;
+  background: var(--color-panel-solid);
+  box-shadow: 0 0 0 1px var(--gray-a5);
+}
+
+/* Только ширина: вид кнопки задаёт Radix. */
+.todayButton {
+  flex: 1;
+  min-width: 0;
+}
+
+.sheetSlot {
+  display: grid;
+  grid-template-rows: 0fr;
+  /* Иначе min-height: auto раздувает колонку и низ листа рисуется поверх TabBar. */
+  min-height: 0;
+  overflow: hidden;
+  /* Мягкий выезд: прежняя кривая добирала высоту почти сразу. */
+  transition: grid-template-rows 440ms cubic-bezier(0.22, 0.8, 0.24, 1);
+}
+
+.sheetSlotClosing {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.sheetSlotOpen {
+  grid-template-rows: 1fr;
+}
+
+.sheet {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  /* По контенту, не на всю свободную высоту: иначе под карточками пустой колодец. */
+  height: auto;
+  min-height: 0;
+  margin-top: 4px;
+  border-radius: 24px;
+  background: var(--gray-2);
+  border: 1px solid var(--gray-a4);
+  max-height: min(46dvh, 420px);
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(8px);
+  /* Прозрачность раньше высоты, чтобы лист не всплывал пустым в конце роста. */
+  transition:
+    opacity 240ms ease-out,
+    transform 440ms cubic-bezier(0.22, 0.8, 0.24, 1);
+}
+
+.sheetSlotOpen > .sheet {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.sheetViewport {
+  flex: 1 1 auto;
+  overflow: hidden;
+  touch-action: pan-y;
+  min-height: 0;
+}
+
+.sheetBody {
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  /* Снизу тот же зазор, что по бокам. Внутренний отступ держит скролл выше скругления. */
+  margin: 0 8px 8px;
+  padding-bottom: 10px;
+  overflow: hidden;
+  border-radius: 20px;
+  background: var(--color-background);
+}
+
+.sheetTrack {
+  display: flex;
+  width: 300%;
+  height: auto;
+  transform: translate3d(-33.333%, 0, 0);
+}
+
+.sheetTrackInstant {
+  transition: none;
+}
+
+.sheetPane {
+  width: 33.333%;
+  flex: none;
+  box-sizing: border-box;
+  height: auto;
+  min-height: 0;
+  max-height: min(calc(46dvh - 88px), 348px);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.sheetHeader {
+  --sheet-control: 34px;
+  position: relative;
+  z-index: 3;
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 12px 10px 16px;
+  background: var(--gray-2);
+}
+
+.sheetHeader .sheetTitle {
+  min-width: 0;
+  height: var(--sheet-control);
+  line-height: var(--sheet-control);
+}
+
+.sheetHeaderAside {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+.dayNav {
+  display: none;
+  align-items: center;
+  gap: 4px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .dayNav {
+    display: flex;
+  }
+}
+
+.sheetList {
+  padding: 12px;
+}
+
+.sheetBadge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  width: var(--sheet-control);
+  height: var(--sheet-control);
+  border-radius: 8px;
+  background: var(--gray-3);
+  color: var(--gray-12);
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.sheetBadgeDay {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  transform: translateY(0.5px);
+}
+
+.sheetBadgeMonth {
+  display: block;
+  margin: 0;
+  font-size: 8px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--gray-11);
+}
+
+.monthTitle {
+  animation: monthIn 200ms ease;
+}
+
+@keyframes monthIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheetTrack,
+  .cellButton,
+  .table th,
+  .table td,
+  .dayNav {
+    transition: none;
+  }
+
+  .sheetSlot,
+  .sheet {
+    transition: none;
+  }
+
+  .sheet,
+  .dock,
+  .monthTitle {
+    animation: none;
+  }
+
+  .sheet,
+  .sheetSlotOpen > .sheet {
+    transform: none;
+  }
+
+  .cellButton:active:not(:disabled) {
+    transform: none;
+  }
+}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Box, Button, DropdownMenu, Flex, Grid, Heading, IconButton, Text } from '@radix-ui/themes'
 import { AppBar } from '@/components/AppBar'
@@ -11,7 +11,8 @@ import type { DeedWithBlocks } from '@/types/database'
 import layoutStyles from '@/styles/layout.module.css'
 import styles from './DeedsListPage.module.css'
 import type { RecordRow, RecordAnswerRow } from '@/types/database'
-import { ChevronsUpDown, Ellipsis, List, Grid3x3, Plus, CircleQuestionMark } from 'lucide-react'
+import { ChevronsUpDown, Ellipsis, List, Grid3x3, Plus, CircleQuestionMark, Calendar, UnfoldHorizontal, Shrink } from 'lucide-react'
+import { DeedsCalendarView, type CalendarColumnsMode } from '@/components/DeedsCalendarView'
 import { useOnboarding } from '@/lib/onboarding-context'
 import { normalizeDeedAnalyticsConfig } from '@/lib/deed-analytics-config'
 import { getDeedDisplayNumbers } from '@/lib/deed-utils'
@@ -20,11 +21,12 @@ import { todayLocalISO } from '@/lib/format-utils'
 /** Режим сортировки списка на главной: по умолчанию или по числу за сегодня на карточке. */
 type DeedSortMode = 'default' | 'today'
 
-/** list — колонка на всю ширину; cards — сетка (2 колонки до 768px, 3 начиная с sm). */
-type DeedListViewMode = 'list' | 'cards'
+/** list — колонка; cards — сетка; calendar — дни месяца × дела. */
+type DeedListViewMode = 'list' | 'cards' | 'calendar'
 
 const DEEDS_LIST_SORT_STORAGE_KEY = 'log-life:deeds-list-sort'
 const DEEDS_LIST_VIEW_STORAGE_KEY = 'log-life:deeds-list-view'
+const CALENDAR_COLUMNS_STORAGE_KEY = 'log-life:deeds-calendar-columns'
 
 /** Восстановление из localStorage; «всего» и прочее невалидное — как «По умолчанию». */
 function readStoredDeedSortMode(): DeedSortMode {
@@ -41,11 +43,21 @@ function readStoredDeedSortMode(): DeedSortMode {
 function readStoredDeedListViewMode(): DeedListViewMode {
   try {
     const raw = localStorage.getItem(DEEDS_LIST_VIEW_STORAGE_KEY)
-    if (raw === 'list' || raw === 'cards') return raw
+    if (raw === 'list' || raw === 'cards' || raw === 'calendar') return raw
   } catch {
     /* приватный режим и т.п. */
   }
   return 'list'
+}
+
+function readStoredCalendarColumnsMode(): CalendarColumnsMode {
+  try {
+    const raw = localStorage.getItem(CALENDAR_COLUMNS_STORAGE_KEY)
+    if (raw === 'scroll' || raw === 'fit') return raw
+  } catch {
+    /* приватный режим и т.п. */
+  }
+  return 'scroll'
 }
 
 function deedCreatedAtDesc(a: DeedWithBlocks, b: DeedWithBlocks): number {
@@ -61,7 +73,7 @@ function deedCreatedAtDesc(a: DeedWithBlocks, b: DeedWithBlocks): number {
  * Прогрессивная загрузка: список дел появляется сразу после первого запроса,
  * число за сегодня доподгружается вторым запросом только за сегодняшний день (плейсхолдер, без ложных нулей).
  * Сортировка — по этому же числу или порядок по умолчанию (created_at убывание из API).
- * Выбор сортировки и вида (список / карточки) сохраняется в `localStorage` (этот браузер); после F5 и при следующих визитах не теряется, пока не очищены данные сайта.
+ * Выбор сортировки и вида (список / карточки / календарь) сохраняется в `localStorage` (этот браузер); после F5 и при следующих визитах не теряется, пока не очищены данные сайта.
  */
 export function DeedsListPage() {
   const { openFlow } = useOnboarding()
@@ -75,6 +87,12 @@ export function DeedsListPage() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [sortMode, setSortMode] = useState<DeedSortMode>(() => readStoredDeedSortMode())
   const [viewMode, setViewMode] = useState<DeedListViewMode>(() => readStoredDeedListViewMode())
+  const [calendarColumnsMode, setCalendarColumnsMode] = useState<CalendarColumnsMode>(() => readStoredCalendarColumnsMode())
+  // Календарь сам грузит месяц; жест вниз увеличивает токен, чтобы перечитать сетку.
+  const [calendarReloadToken, setCalendarReloadToken] = useState(0)
+  const pageRef = useRef<HTMLDivElement>(null)
+  /** Календарь занимает экран целиком: документ не крутится, только сетка и лист дня. */
+  const calendarLock = viewMode === 'calendar' && !deedsLoading && !error && deeds.length > 0
 
   // Запись выбора сортировки: без частых сбросов при обычном F5/возврате на вкладку.
   useEffect(() => {
@@ -92,6 +110,60 @@ export function DeedsListPage() {
       /* квота / приватный режим */
     }
   }, [viewMode])
+
+  // Высота 100% по цепочке до html, иначе колонка растёт и скроллится вся страница.
+  useEffect(() => {
+    if (!calendarLock) return
+    const page = pageRef.current
+    if (!page) return
+    const nodes: HTMLElement[] = []
+    let node: HTMLElement | null = page.parentElement
+    while (node) {
+      nodes.push(node)
+      node = node.parentElement
+    }
+    const prev = nodes.map((el) => ({
+      el,
+      height: el.style.height,
+      maxHeight: el.style.maxHeight,
+      minHeight: el.style.minHeight,
+      overflow: el.style.overflow,
+      overscroll: el.style.overscrollBehavior,
+      scrollbarGutter: el.style.scrollbarGutter,
+      boxSizing: el.style.boxSizing,
+    }))
+    // У main уже есть padding под TabBar. Потомкам нельзя ставить 100dvh: это выше родителя, и лист заезжает на бар.
+    const mainIndex = nodes.findIndex((el) => String(el.className).includes('mainWithTabBar'))
+    nodes.forEach((el, index) => {
+      const aboveMain = mainIndex >= 0 && index > mainIndex
+      el.style.boxSizing = 'border-box'
+      el.style.height = '100%'
+      el.style.maxHeight = aboveMain ? '100dvh' : '100%'
+      el.style.minHeight = '0'
+      el.style.overflow = 'hidden'
+      el.style.overscrollBehavior = 'none'
+      if (el === document.documentElement) el.style.scrollbarGutter = 'auto'
+    })
+    return () => {
+      for (const item of prev) {
+        item.el.style.height = item.height
+        item.el.style.maxHeight = item.maxHeight
+        item.el.style.minHeight = item.minHeight
+        item.el.style.overflow = item.overflow
+        item.el.style.overscrollBehavior = item.overscroll
+        item.el.style.scrollbarGutter = item.scrollbarGutter
+        item.el.style.boxSizing = item.boxSizing
+      }
+    }
+  }, [calendarLock])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(CALENDAR_COLUMNS_STORAGE_KEY, calendarColumnsMode)
+    } catch {
+      /* квота / приватный режим */
+    }
+  }, [calendarColumnsMode])
 
   // Первый заход — полный экран. Жест вниз вызывает ту же загрузку без этого флага и без экрана ошибки.
   const loadDeeds = useCallback(async (mode: 'initial' | 'refresh', isCancelled?: () => boolean) => {
@@ -117,6 +189,7 @@ export function DeedsListPage() {
       })
       if (isCancelled?.()) return
       setRecordsByDeedId(byId)
+      if (mode === 'refresh') setCalendarReloadToken((token) => token + 1)
     } catch (e: unknown) {
       if (isCancelled?.()) return
       if (mode === 'initial') {
@@ -190,7 +263,7 @@ export function DeedsListPage() {
 
   // --- Рендер состояний загрузки и ошибки ---
   if (deedsLoading) {
-    return <PageLoading title="" titleReserve actionsReserveCount={2} />
+    return <PageLoading title="" titleReserve actionsReserveCount={viewMode === 'calendar' ? 1 : 2} />
   }
 
   if (error) {
@@ -217,9 +290,10 @@ export function DeedsListPage() {
 
   // --- Основной контент ---
   return (
-    <PullToRefresh onRefresh={refreshDeeds}>
+    <PullToRefresh onRefresh={refreshDeeds} disabled={viewMode === 'calendar'}>
     <Box
-      className={layoutStyles.pageContainer}
+      ref={pageRef}
+      className={`${layoutStyles.pageContainer}${calendarLock ? ` ${styles.calendarPage}` : ''}`}
       style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}
     >
       <AppBar
@@ -227,7 +301,8 @@ export function DeedsListPage() {
         /* Основные действия главной — в overflow-меню (позже добавим пункты). «Создать» не дублируем текстовой кнопкой. */
         actions={
           <Flex gap="2">
-            {/* Сортировка: то же число за сегодня, что на карточке (getDeedDisplayNumbers). */}
+            {/* В календаре порядок столбцов фиксирован (как «по умолчанию»), меню сортировки не нужно. */}
+            {viewMode !== 'calendar' && (
             <DropdownMenu.Root>
               <DropdownMenu.Trigger>
                 <IconButton
@@ -258,6 +333,7 @@ export function DeedsListPage() {
                 </DropdownMenu.RadioGroup>
               </DropdownMenu.Content>
             </DropdownMenu.Root>
+            )}
             <DropdownMenu.Root>
               <DropdownMenu.Trigger>
                 <IconButton
@@ -285,7 +361,25 @@ export function DeedsListPage() {
                 >
                   <DropdownMenu.RadioItem value="list"> <List size={16} /> Список</DropdownMenu.RadioItem>
                   <DropdownMenu.RadioItem value="cards"> <Grid3x3 size={16} /> Карточки</DropdownMenu.RadioItem>
+                  <DropdownMenu.RadioItem value="calendar"> <Calendar size={16} /> Календарь</DropdownMenu.RadioItem>
                 </DropdownMenu.RadioGroup>
+                {viewMode === 'calendar' && (
+                  <>
+                    <DropdownMenu.Separator />
+                    <DropdownMenu.Label>Столбцы</DropdownMenu.Label>
+                    <DropdownMenu.RadioGroup
+                      value={calendarColumnsMode}
+                      onValueChange={(value) => setCalendarColumnsMode(value as CalendarColumnsMode)}
+                    >
+                      <DropdownMenu.RadioItem value="scroll">
+                        <UnfoldHorizontal size={16} /> С прокруткой
+                      </DropdownMenu.RadioItem>
+                      <DropdownMenu.RadioItem value="fit">
+                        <Shrink size={16} /> По ширине
+                      </DropdownMenu.RadioItem>
+                    </DropdownMenu.RadioGroup>
+                  </>
+                )}
                 <DropdownMenu.Separator />
                 <DropdownMenu.Item color="gray" onSelect={() => openFlow('help_deeds_list')}>
                   <CircleQuestionMark size={16} /> Справка
@@ -357,8 +451,15 @@ export function DeedsListPage() {
           </Button>
         </Flex>
       ) : (
-        /* Вид из меню «⋯»: колонка или сетка (2 колонки до 768px, 3 с sm). */
-        viewMode === 'cards' ? (
+        /* Вид из меню «⋯»: колонка, сетка или календарь месяца. */
+        viewMode === 'calendar' ? (
+          <DeedsCalendarView
+            deeds={filteredDeeds}
+            reloadToken={calendarReloadToken}
+            onRecordsRefresh={refreshRecordsForDeed}
+            columnsMode={calendarColumnsMode}
+          />
+        ) : viewMode === 'cards' ? (
           <Grid columns={{ initial: '2', sm: '3' }} gap="2">
             {deedsForList.map((deed) => (
               <DeedCard

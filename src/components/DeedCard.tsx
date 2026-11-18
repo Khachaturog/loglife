@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Box, Button, Card, Flex, IconButton, Text } from '@radix-ui/themes'
+import { Box, Card, Flex, Text } from '@radix-ui/themes'
 import { CircleCheck, Circle, RefreshCw } from 'lucide-react'
 import type { DeedWithBlocks } from '@/types/database'
 import type { RecordRow, RecordAnswerRow } from '@/types/database'
@@ -14,8 +14,8 @@ import { triggerHaptic } from '@/lib/haptics'
 import { useDelayedActionLoader } from '@/lib/use-delayed-action-loader'
 import deedCardStyles from '@/components/DeedCard.module.css'
 
-/** row — строка списка; stack — плитка в сетке (эмодзи, название, число «сегодня» в кнопке). */
-export type DeedCardLayout = 'row' | 'stack'
+/** row — строка списка; stack — плитка; outline — строка календаря: кружок слева, превью справа. */
+export type DeedCardLayout = 'row' | 'stack' | 'outline'
 
 const SLOT_GLYPHS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] as const
 
@@ -36,8 +36,8 @@ function sameSlotDigits(a: number[], b: number[]): boolean {
  * Число за сегодня: на кнопке плитки и под названием в списке.
  * Каждая цифра — лента 0–9, которая доезжает до новой. Ноль не крутим.
  */
-function SlotCount({ value }: { value: number }) {
-  const [digits, setDigits] = useState<number[]>([0])
+export function SlotCount({ value, startAtValue = false }: { value: number; startAtValue?: boolean }) {
+  const [digits, setDigits] = useState<number[]>(() => (startAtValue ? toSlotDigits(value) : [0]))
   const digitsRef = useRef(digits)
   digitsRef.current = digits
 
@@ -103,6 +103,10 @@ type DeedCardProps = {
   /** После успешного быстрого «+» — обновить счётчики на карточке. */
   onRecordsRefresh?: (deedId: string) => void | Promise<void>
   layout?: DeedCardLayout
+  /** День отметки. Без него — сегодня. Календарь передаёт дату открытой строки. */
+  recordDate?: string
+  /** Превью записи этого дня справа в режиме outline. */
+  dayPreview?: string
 }
 
 /**
@@ -117,6 +121,8 @@ export function DeedCard({
   countersLoading = false,
   onRecordsRefresh,
   layout = 'row',
+  recordDate,
+  dayPreview,
 }: DeedCardProps) {
   const navigate = useNavigate()
   // Тот же источник, что виджет «Сегодня»: явный блок сводки или количество записей.
@@ -130,6 +136,8 @@ export function DeedCard({
   const { spinnerVisible, run: runQuickAddWithDelayedSpinner } = useDelayedActionLoader()
 
   const quickAddActive = useMemo(() => deedQuickAddFromDefaultsActive(deed), [deed])
+  // Календарный день отмечает факт записи на эту дату. Список и плитка — метрика «сегодня».
+  const markDate = recordDate ?? todayLocalISO()
 
   /** Быстрый «+»: лоадер с задержкой и минимальной длительностью — см. useDelayedActionLoader. */
   const [actionPending, setActionPending] = useState(false)
@@ -163,7 +171,7 @@ export function DeedCard({
     try {
       await runQuickAddWithDelayedSpinner(async () => {
         await api.deeds.createRecord(deed.id, {
-          record_date: todayLocalISO(),
+          record_date: markDate,
           record_time: nowTimeLocal(),
           answers,
         })
@@ -186,7 +194,7 @@ export function DeedCard({
     longPressTimerRef.current = setTimeout(() => {
       longPressTimerRef.current = null
       longPressConsumedClickRef.current = true
-      navigate(`/deeds/${deed.id}/fill`)
+      navigate(`/deeds/${deed.id}/fill`, { state: { fillRecordDate: markDate } })
       triggerHaptic('medium', { intensity: 0.45 })
     }, QUICK_ADD_FROM_DEFAULTS_LONG_PRESS_MS)
   }
@@ -205,11 +213,14 @@ export function DeedCard({
     if (quickAddActive) {
       void handleQuickAddFromDefaults(e)
     } else {
-      navigate(`/deeds/${deed.id}/fill`)
+      navigate(`/deeds/${deed.id}/fill`, { state: { fillRecordDate: markDate } })
     }
   }
 
-  const markedToday = !countersLoading && today > 0
+  const markedToday =
+    layout === 'outline'
+      ? !countersLoading && records.some((record) => record.record_date === markDate)
+      : !countersLoading && today > 0
 
   const deedOpenLabel = countersLoading
     ? `Открыть дело «${deed.name}»${deed.category ? `. ${deed.category}` : ''}. Статистика загружается`
@@ -231,11 +242,15 @@ export function DeedCard({
     ? 'Добавление записи'
     : countersLoading
       ? 'Добавить запись'
-      : layout === 'stack' && !markedToday
-        ? 'Отметить'
-        : markedToday
-          ? `Добавить запись, ${todayLabel} сегодня`
-          : 'Добавить запись'
+      : layout === 'outline'
+        ? markedToday
+          ? 'Добавить ещё запись за этот день'
+          : 'Отметить'
+        : layout === 'stack' && !markedToday
+          ? 'Отметить'
+          : markedToday
+            ? `Добавить запись, ${todayLabel} сегодня`
+            : 'Добавить запись'
 
   const actionTitle = actionIdle
     ? quickAddActive
@@ -258,27 +273,30 @@ export function DeedCard({
         },
       }
 
-  /** Плитка: кружок и «Отметить», либо галочка и число. Список: кружок или галочка. */
+  /** Тот же кружок 18px, что в строке дня, на серой заливке кнопки. */
+  const markIcon = (
+    <span className={deedCardStyles.outlineMark} aria-hidden="true">
+      {showSpinner ? (
+        <RefreshCw className={deedCardStyles.iconSpin} size={18} />
+      ) : markedToday ? (
+        <CircleCheck size={18} />
+      ) : (
+        <Circle size={18} />
+      )}
+    </span>
+  )
+
+  /** Плитка: кружок и «Отметить», либо галочка и число. Список: только кружок. */
   const actionButton = layout === 'stack' ? (
-    <Button
+    <button
       type="button"
-      size="3"
-      variant="soft"
-      color="gray"
-      // highContrast={true}
-      className={`${deedCardStyles.cardActionButton} ${deedCardStyles.pillActionButton}`}
+      className={`${deedCardStyles.cardActionButton} ${deedCardStyles.markButton} ${deedCardStyles.markButtonWide}`}
       title={actionTitle}
       aria-label={actionLabel}
       disabled={!actionIdle}
       {...pointerHandlers}
     >
-      {showSpinner ? (
-        <RefreshCw className={deedCardStyles.iconSpin} size={16} />
-      ) : markedToday ? (
-        <CircleCheck size={16} />
-      ) : (
-        <Circle size={16} />
-      )}
+      {markIcon}
       {/* Барабан остаётся в дереве на время спиннера, чтобы не начинать прокрутку с нуля заново */}
       {stackCount > 0 || markedToday ? (
         <span className={showSpinner || !markedToday ? deedCardStyles.slotHidden : undefined} aria-hidden="true">
@@ -293,27 +311,18 @@ export function DeedCard({
         </span>
       ) : null}
       {!showSpinner && !countersLoading && !markedToday ? 'Отметить' : null}
-    </Button>
+    </button>
   ) : (
-    <IconButton
+    <button
       type="button"
-      size="4"
-      variant="soft"
-      color="gray"
-      className={deedCardStyles.cardActionButton}
+      className={`${deedCardStyles.cardActionButton} ${deedCardStyles.markButton}`}
       title={actionTitle}
       aria-label={actionLabel}
       disabled={!actionIdle}
       {...pointerHandlers}
     >
-      {showSpinner ? (
-        <RefreshCw className={deedCardStyles.iconSpin} size={16} />
-      ) : markedToday ? (
-        <CircleCheck size={16} />
-      ) : (
-        <Circle size={16} />
-      )}
-    </IconButton>
+      {markIcon}
+    </button>
   )
 
   const quickAddErrorNode = quickAddError ? (
@@ -322,9 +331,41 @@ export function DeedCard({
     </Text>
   ) : null
 
+  if (layout === 'outline') {
+    const preview = dayPreview?.trim() ?? ''
+    return (
+      <Card variant="surface" className={`${deedCardStyles.outlineCard} ${deedCardStyles.deedSurface}`}>
+        <button
+          type="button"
+          className={deedCardStyles.outlineButton}
+          title={actionTitle}
+          aria-label={
+            preview
+              ? `${actionLabel}. ${deed.name}. ${preview}`
+              : `${actionLabel}. ${deed.name}`
+          }
+          disabled={!actionIdle}
+          {...pointerHandlers}
+        >
+          {markIcon}
+          <Text weight="medium" truncate>
+            {deed.name}
+          </Text>
+          {preview ? (
+            <Text size="2" color="gray" className={deedCardStyles.outlinePreview}>
+              {preview}
+            </Text>
+          ) : null}
+        </button>
+        {quickAddError ? <Box px="3" pb="2">{quickAddErrorNode}</Box> : null}
+      </Card>
+    )
+  }
+
   return (
     <Card
-      className={`${deedCardStyles.cardNoPadding} ${deedCardStyles.cardInteractive}${
+      variant="surface"
+      className={`${deedCardStyles.cardNoPadding} ${deedCardStyles.cardInteractive} ${deedCardStyles.deedSurface}${
         layout === 'stack' ? ` ${deedCardStyles.cardStretch}` : ''
       }`}
     >

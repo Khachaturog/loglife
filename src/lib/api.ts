@@ -646,16 +646,18 @@ export const api = {
       return data ?? []
     },
 
-    /** Записи по нескольким делам одним запросом (главная — только за сегодня).
+    /** Записи по нескольким делам одним запросом (главная — сегодня или месяц календаря).
      * @param opts.skipDeedCheck — если true, не проверять deeds (id уже от listWithBlocks); RLS на records всё равно ограничит доступ
-     * @param opts.recordDate — если задан (YYYY-MM-DD), только записи этой даты; без него — вся история */
+     * @param opts.recordDate — если задан (YYYY-MM-DD), только эта дата; иначе можно сузить fromDate/toDate (оба края включительно)
+     * @param opts.fromDate — нижняя граница record_date, если recordDate не задан
+     * @param opts.toDate — верхняя граница record_date, если recordDate не задан */
     async recordsByDeedIds(
       deedIds: string[],
-      opts?: { skipDeedCheck?: boolean; recordDate?: string }
+      opts?: { skipDeedCheck?: boolean; recordDate?: string; fromDate?: string; toDate?: string }
     ): Promise<Record<string, (RecordRow & { record_answers?: RecordAnswerRow[] })[]>> {
       if (deedIds.length === 0) return {}
-      // Дата в ключе: выборка за сегодня не должна слиться с полной историей тех же дел.
-      const cacheKey = `${opts?.recordDate ?? ''}|${deedIds.slice().sort().join(',')}`
+      // Диапазон в ключе: «сегодня», месяц календаря и полная история не должны слиться в один in-flight.
+      const cacheKey = `${opts?.recordDate ?? ''}|${opts?.fromDate ?? ''}|${opts?.toDate ?? ''}|${deedIds.slice().sort().join(',')}`
       const inFlight = inFlightRecordsByDeedIds.get(cacheKey)
       if (inFlight) return inFlight
 
@@ -677,6 +679,10 @@ export const api = {
           .in('deed_id', idsToFetch)
         if (opts?.recordDate) {
           query = query.eq('record_date', opts.recordDate)
+        } else {
+          // Календарь на главной: все дни месяца, пустые строки дорисовывает UI.
+          if (opts?.fromDate) query = query.gte('record_date', opts.fromDate)
+          if (opts?.toDate) query = query.lte('record_date', opts.toDate)
         }
         const { data, error } = await query
           .order('record_date', { ascending: false })

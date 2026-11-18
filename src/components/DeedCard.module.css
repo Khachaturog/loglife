@@ -26,6 +26,7 @@
 /* Только кнопки добавления записи снова интерактивны */
 .cardActionButton {
   pointer-events: auto;
+  box-shadow: none;
 }
 
 /* Сетка карточек: ячейка на всю высоту ряда, текст может сжиматься */
@@ -34,10 +35,46 @@
   min-width: 0;
 }
 
-/* «+» или число на всю ширину карточки в виде сетки */
-.pillActionButton {
-  width: 100%;
+/* Кнопка отметки в списке и в сетке: тот же кружок, что в строке дня. */
+.markButton {
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
+  gap: 8px;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 6px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--gray-a3);
+  color: var(--gray-12);
+  font: inherit;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 140ms ease, transform 140ms ease;
+}
+
+.markButtonWide {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 12px;
+  border-radius: 12px;
+}
+
+@media (hover: hover) {
+  .markButton:hover:not(:disabled) {
+    background: var(--gray-a4);
+  }
+}
+
+.markButton:active:not(:disabled) {
+  background: var(--gray-a5);
+  transform: scale(0.96);
+}
+
+.markButton:disabled {
+  cursor: default;
 }
 
 /* Барабан числа «сегодня»: окно в одну цифру по высоте, лента уезжает вверх */
@@ -77,8 +114,18 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .slotStrip {
+  .slotStrip,
+  .markButton,
+  .outlineButton,
+  .outlineMark {
     transition: none;
+  }
+
+  .markButton:active:not(:disabled),
+  .outlineButton:active:not(:disabled),
+  .markButton:active:not(:disabled) .outlineMark,
+  .outlineButton:active:not(:disabled) .outlineMark {
+    transform: none;
   }
 }
 
@@ -91,6 +138,67 @@
 .stackTitle {
   min-width: 0;
   flex: 1 1 auto;
+}
+
+/* Общий вид карточек списка, сетки и строк дня: мягкая поверхность, скругление, без падающей тени. */
+.deedSurface {
+  --card-border-radius: 16px;
+  border-radius: 16px;
+}
+
+/* Строка дня в календаре: кружок слева, имя и превью в одной линии */
+.outlineCard {
+  --card-padding: 0;
+}
+
+.outlineButton {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 140ms ease, transform 140ms ease;
+}
+
+@media (hover: hover) {
+  .outlineButton:hover {
+    background: var(--gray-a3);
+  }
+}
+
+.outlineButton:active:not(:disabled) {
+  background: var(--gray-a4);
+  transform: scale(0.985);
+}
+
+.outlineMark {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--gray-12);
+  transition: transform 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.markButton:active:not(:disabled) .outlineMark,
+.outlineButton:active:not(:disabled) .outlineMark {
+  transform: scale(0.9);
+}
+
+.outlinePreview {
+  margin-left: auto;
+  min-width: 0;
+  max-width: 46%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
 }
 
 /* Вращение иконки загрузки при быстром добавлении записи «Да/Нет» */

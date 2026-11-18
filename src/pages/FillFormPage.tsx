@@ -66,6 +66,13 @@ function getBlockOptions(block: BlockRow): { id: string; label: string }[] {
   return []
 }
 
+/** Дата из календаря: `navigate(..., { state: { fillRecordDate } })`. */
+function readFillRecordDate(state: unknown): string | undefined {
+  if (!state || typeof state !== 'object' || !('fillRecordDate' in state)) return undefined
+  const value = (state as { fillRecordDate?: unknown }).fillRecordDate
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : undefined
+}
+
 function createFillDraft(
   overrides?: Partial<Pick<FillDraft, 'recordDate' | 'recordTime' | 'answers'>>,
 ): FillDraft {
@@ -627,6 +634,9 @@ export function FillFormPage() {
   const { id: deedId } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const location = useLocation()
+  const fillRecordDate = readFillRecordDate(location.state)
+  const fillRecordDateRef = useRef(fillRecordDate)
+  if (fillRecordDate) fillRecordDateRef.current = fillRecordDate
   /** Один раз подмешиваем дефолты блоков и при необходимости ответы из «Дублировать» в первую запись. */
   const initialAnswersSeededRef = useRef(false)
   /** Пока идёт сохранение — не даём второму сабмиту создать дубликаты. */
@@ -640,7 +650,9 @@ export function FillFormPage() {
   const [deed, setDeed] = useState<DeedWithBlocks | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [drafts, setDrafts] = useState<FillDraft[]>(() => [createFillDraft()])
+  const [drafts, setDrafts] = useState<FillDraft[]>(() => [
+    createFillDraft(fillRecordDate ? { recordDate: fillRecordDate } : undefined),
+  ])
   /** Последние записи дела — источник чипов «недавние значения» для number / single_select. */
   const [recentRecords, setRecentRecords] = useState<RecordWithAnswersForSuggestions[]>([])
   /** После первой попытки отправки показываем ошибки по каждой записи. */
@@ -660,7 +672,11 @@ export function FillFormPage() {
       for (const draft of prev) {
         for (const image of Object.values(draft.pendingImages)) URL.revokeObjectURL(image.previewUrl)
       }
-      return [createFillDraft()]
+      return [
+        createFillDraft(
+          fillRecordDateRef.current ? { recordDate: fillRecordDateRef.current } : undefined,
+        ),
+      ]
     })
     setValidationAttempted(false)
     setSaveError(null)
